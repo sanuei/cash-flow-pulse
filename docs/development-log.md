@@ -111,6 +111,63 @@
 
 ---
 
+## v0.8 — 4 类定期事件卡片（v0.3 完整实现）（2026-06-21）
+
+**Commits**:
+- `f6b39db feat(shared): v0.3 Phase 1 完成 - 4 类定期事件类型 + Zod schema + computeDashboardV2 + 20 个新测试（共 58 个全部通过）`
+- `23ce7f5 feat(api): v0.3 Phase 2 完成 - 4 张新表 schema + 16 个 CRUD 端点 + dashboard V2 + export/import v2`
+- `321ec44 feat(web): v0.3 Phase 3 核心完成 - 4 表单 + Store + Home 主页大改`
+
+**目标**：把 PRD v0.3 的 4 类新卡片（投资/账单/收入/订阅）+ V2 算法落地。
+
+**4 类新资源**：
+| 卡片 | 字段 | 算法 |
+|------|------|------|
+| 固定投资 | name, amount, frequency(daily/weekly/monthly/yearly), start_date, end_date | 按频率算本期内发生次数 |
+| 固定账单 | name, amount, due_day | 与信用卡同算法（isDayActiveInCycle） |
+| 固定收入 | name, amount, frequency(monthly/weekly), pay_day / day_of_week | 遍历周期内所有到账日 |
+| 订阅 | name, amount, billing_day, billing_cycle(monthly/yearly) | 与账单同算法 |
+
+**V2 算法（向后兼容）**：
+- 新公式：`净可用 = 总净现金 + (总收入 - 总支出)`
+- 总支出 = 信用卡 + 账单 + 订阅 + 投资本期内累计
+- 总收入 = 所有收入项本期内到账日金额
+- 无新数据时退化为 V1 公式
+- TDD 抓到 2 个 bug：addMonths 月末溢出、getPaydayInMonth 月份归零陷阱
+
+**4 张新表**：
+```sql
+recurring_investments  -- frequency: daily/weekly/monthly/yearly
+recurring_bills        -- due_day 1-31
+recurring_incomes      -- frequency + pay_day OR day_of_week（CHECK 约束）
+subscriptions         -- billing_day + billing_cycle
+```
+
+**16 个新 API 端点**：
+- `/api/{investments,bills,incomes,subscriptions}` × CRUD
+- Dashboard 升级：并行查询 8 张表 + V2 算法
+- Export/Import v2：version 升级到 2，ImportPayloadSchema 兼容 v1/v2
+
+**前端大改造**：
+- Store：加 4 类资源 actions + V2 dashboard 类型
+- 4 个表单组件：InvestmentForm (4 频率单选) / BillForm / IncomeForm (月/周切换) / SubscriptionForm (月/年 + 分类)
+- Icon 扩展 8 个：investment/bill/income/subscription/chevron-down/right/calendar/trending-up
+- Home 主页完全重写：
+  - 摘要卡新增"本期支出（含订阅）/ 本期收入"两行（可点击展开）
+  - "本期支出明细 / 本期收入明细"两张可折叠汇总卡（按 4 类分组）
+  - 4 张新资源卡：固定投资 / 固定账单 / 固定收入 / 订阅
+  - 每个卡支持新增/编辑/删除模态
+- 设置页导出/导入自动适配 v2
+
+**端到端验证**：
+- ✅ 58/58 单元测试通过
+- ✅ API/Web TS 编译 0 错误
+- ✅ 真实数据测试：现金 ¥60,000 + 信用卡 ¥30,000 + 房租 ¥80,000 + Netflix/Spotify + 每日投资 ¥100 + 工资/副业 ¥320,000
+- ✅ 计算正确：净可用 ¥238,100 → 日均 ¥12,531/日（vs V1 公式的 ¥105/日，差距 100 倍）
+- ✅ 浏览器视觉验证：8 张卡都渲染，hero 大字醒目，折叠卡片工作正常，模态表单可用
+
+---
+
 ## v0.7 — 全面去除 emoji（2026-06-21）
 
 **Commit**: `040d98c feat(web): 全面替换 emoji 为 Lucide icon`
