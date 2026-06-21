@@ -111,6 +111,49 @@
 
 ---
 
+## v0.7 — 全面去除 emoji（2026-06-21）
+
+**Commit**: `040d98c feat(web): 全面替换 emoji 为 Lucide icon`
+
+**目标**：项目里 19 个 emoji（💰 📈 ⚙️ 💵 💳 📊 ⚠️ ✨ 🔒 📍 ✎ 📤 📥 等）替换成 Lucide icon，更克制更专业。
+
+**为什么选 Lucide**（对比 5 个候选库）：
+- ✅ Notion 风适配度 ★★★★★（2px stroke + 圆角端点 = Notion 设计哲学的视觉延伸）
+- ✅ bundle 最友好（每个 icon 独立 ESM，20 个 icon 共 ~14KB）
+- ✅ React 集成最干净（`lucide-react`，TypeScript 类型完整）
+- ✅ 覆盖度 100%（19/19 所需 icon 全有）
+- ❌ 淘汰 Heroicons（数量少），Phosphor（多 weight 但本项目用不上），Tabler（工业感太强），Iconify（运行时拉取）
+
+**实施**：
+- 新增 `apps/web/src/components/Icon.tsx` 统一 Icon 组件
+  - `IconName` union type 限定 19 个图标名称，typo 编译期就拦
+  - `forwardRef` 兼容未来 Headless UI 集成
+  - 默认 `strokeWidth={1.75}`（比 Lucide 默认 2 略细，配合 Notion 1px 边框）
+- 改造的文件：
+  - `App.tsx` — 顶栏 logo / 移动端 Tab / 错误页
+  - `pages/Home.tsx` — 摘要卡片标题、采集点提示条（带圆形背景）、现金/信用卡列表（编辑/删除 icon 按钮）
+  - `pages/Trends.tsx` — 标题 chart icon / 录入快照 plus icon / 空状态 icon
+  - `pages/Settings.tsx` — 设置齿轮 / 导出/导入按钮 / 清空警告 icon / 已保存 check icon
+  - `components/States.tsx` — EmptyState 加 16x16 圆形浅背景（Notion 风格）
+  - `components/Card.tsx` — title 类型从 `string` 扩展到 `ReactNode`
+
+**关键设计决策**：
+- 颜色继承靠 `currentColor`：icon 永远不传 `color`/`fill`，颜色完全由父元素 `text-*` Tailwind 类控制
+- 空状态大图标套 `bg-notion-bg-alt` 圆形背景（Notion 标志性手法）
+- 移动端 Tab active 态用 `strokeWidth={2}` 视觉加重，inactive 用 1.75
+
+**验证**：
+- TypeScript 编译 0 错误
+- Vite 构建成功（2609 modules，bundle 667KB / gzip 188KB，+14KB 来自 Lucide）
+- 38 个单元测试仍然全过（核心算法没动）
+- 浏览器端到端验证：主页 / 趋势 / 设置三页 icon 都正确渲染
+
+**视觉对比**：
+- 之前：emoji 大小不可控、颜色不可控、跨平台不一致
+- 现在：strokeWidth / size / color 完全可控，统一 1.75 stroke 与 Notion 1px 边框形成视觉节奏
+
+---
+
 ## v0.6 — 端到端验证（2026-06-21）
 
 **测试场景**：
