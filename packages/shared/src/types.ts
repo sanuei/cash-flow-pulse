@@ -105,3 +105,127 @@ export interface PayCycle {
   start_date_str: string;         // YYYY-MM-DD
   end_date_str: string;
 }
+
+// === v0.3 新增：定期事件类型 ===
+
+/**
+ * 固定投资（每天/每周/每月/每年自动扣款）
+ * 频率决定 start_date 的语义：
+ *   daily   → start_date 起每天扣一次
+ *   weekly  → start_date 起每周同一天扣一次
+ *   monthly → start_date 起每月同日扣一次
+ *   yearly  → start_date 起每年同月同日扣一次
+ */
+export type InvestmentFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+export interface RecurringInvestment {
+  id: string;
+  user_id: string;
+  name: string;
+  amount: number;                  // ≥ 0
+  frequency: InvestmentFrequency;
+  start_date: string;              // YYYY-MM-DD
+  end_date: string | null;         // YYYY-MM-DD，null = 永久
+  note: string | null;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * 固定账单（房租、水电等每月固定日期自动扣款）
+ * 算法与现有信用卡完全一致（用 due_day 在周期内匹配）
+ */
+export interface RecurringBill {
+  id: string;
+  user_id: string;
+  name: string;
+  amount: number;
+  due_day: number;                 // 1-31
+  note: string | null;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * 固定收入（工资、副业等）
+ * monthly: 用 pay_day 1-31
+ * weekly:  用 day_of_week 0-6（0=周日）
+ */
+export type IncomeFrequency = 'monthly' | 'weekly';
+
+export interface RecurringIncome {
+  id: string;
+  user_id: string;
+  name: string;
+  amount: number;
+  frequency: IncomeFrequency;
+  pay_day: number | null;          // 1-31，monthly 用
+  day_of_week: number | null;      // 0-6，weekly 用
+  start_date: string;              // YYYY-MM-DD
+  end_date: string | null;
+  note: string | null;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * 订阅（Netflix/Spotify 等，每月或每年固定日期自动扣款）
+ */
+export type SubscriptionCycle = 'monthly' | 'yearly';
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  name: string;
+  amount: number;
+  billing_day: number;             // 1-31
+  billing_cycle: SubscriptionCycle;
+  category: string | null;         // 可选分类：影音/工具/云存储
+  note: string | null;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+}
+
+// === v0.3 新增：本期支出/收入展开后的明细项 ===
+
+export interface UpcomingExpenseItem {
+  source_type: 'credit_card' | 'bill' | 'subscription' | 'investment';
+  id: string;
+  name: string;
+  amount: number;                  // 单次金额（投资是单次扣款额）
+  occurrences: number;             // 本期内发生次数（投资专用，其他 = 1）
+  total: number;                   // amount * occurrences
+  due_date: string;                // YYYY-MM-DD，下次/本期内扣款日（投资取首日）
+  days_until: number;              // 距今天数（投资 = 0）
+}
+
+export interface UpcomingIncomeItem {
+  id: string;
+  name: string;
+  amount: number;
+  pay_date: string;                // YYYY-MM-DD
+  days_until: number;
+}
+
+// === v0.3 新增：升级版 DashboardCalc（在原基础上加字段） ===
+
+export interface UpcomingExpenses {
+  credit_cards: ActiveCard[];      // 复用 V1 类型
+  bills: UpcomingExpenseItem[];
+  subscriptions: UpcomingExpenseItem[];
+  investments: UpcomingExpenseItem[];
+  total_credit_card: number;
+  total_bills: number;
+  total_subscriptions: number;
+  total_investments: number;
+  grand_total: number;             // = sum of all 4
+}
+
+export interface UpcomingIncomes {
+  items: UpcomingIncomeItem[];
+  total: number;
+}

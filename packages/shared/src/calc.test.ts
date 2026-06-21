@@ -15,6 +15,12 @@ import {
   detectUnchanged,
   formatYen,
   compareCycles,
+  // v0.3 新增
+  countInvestmentOccurrences,
+  isBillActiveInCycle,
+  isSubscriptionActiveInCycle,
+  sumIncomeInCycle,
+  computeDashboardV2,
 } from './calc.js';
 import type { CashSource, CreditCard, UserConfig, Snapshot } from './types.js';
 
@@ -375,5 +381,403 @@ describe('周期对比', () => {
     const b: Snapshot = { ...a, cycle_id: '2026-06', net_available: 50050 };
     const cmp = compareCycles(a, b);
     expect(cmp.trend).toBe('flat');
+  });
+});
+
+// ============================================================
+// v0.3 测试
+// ============================================================
+
+describe('countInvestmentOccurrences', () => {
+  it('daily: 19 天周期内 = 19 次', () => {
+    const inv = {
+      start_date: '2026-01-01',
+      end_date: null,
+      frequency: 'daily' as const,
+    };
+    const cycleStart = new Date(2026, 5, 21); // 6/21
+    const cycleEnd = new Date(2026, 6, 10); // 7/10
+    expect(countInvestmentOccurrences(inv, cycleStart, cycleEnd)).toBe(19);
+  });
+
+  it('weekly: 19 天周期内 = 3 次', () => {
+    const inv = {
+      start_date: '2026-01-01',
+      end_date: null,
+      frequency: 'weekly' as const,
+    };
+    const cycleStart = new Date(2026, 5, 21);
+    const cycleEnd = new Date(2026, 6, 10);
+    // 19 天 / 7 = 2 余 5 → floor(19/7) + 1 = 2 + 1 = 3
+    expect(countInvestmentOccurrences(inv, cycleStart, cycleEnd)).toBe(3);
+  });
+
+  it('start_date 在未来: 0 次', () => {
+    const inv = {
+      start_date: '2027-01-01',
+      end_date: null,
+      frequency: 'monthly' as const,
+    };
+    const cycleStart = new Date(2026, 5, 21);
+    const cycleEnd = new Date(2026, 6, 10);
+    expect(countInvestmentOccurrences(inv, cycleStart, cycleEnd)).toBe(0);
+  });
+
+  it('end_date 在过去: 0 次', () => {
+    const inv = {
+      start_date: '2025-01-01',
+      end_date: '2026-01-01',
+      frequency: 'daily' as const,
+    };
+    const cycleStart = new Date(2026, 5, 21);
+    const cycleEnd = new Date(2026, 6, 10);
+    expect(countInvestmentOccurrences(inv, cycleStart, cycleEnd)).toBe(0);
+  });
+
+  it('end_date 跨越部分周期', () => {
+    // 从 6/25 开始，到 7/5 结束，周期 6/21-7/10
+    // 实际有效区间 = [6/25, 7/5)，diffDays(6/25, 7/5) = 10 天（6/25-7/4，10 天）
+    // daily = 10 次
+    const inv = {
+      start_date: '2026-06-25',
+      end_date: '2026-07-05',
+      frequency: 'daily' as const,
+    };
+    const cycleStart = new Date(2026, 5, 21);
+    const cycleEnd = new Date(2026, 6, 10);
+    expect(countInvestmentOccurrences(inv, cycleStart, cycleEnd)).toBe(10);
+  });
+});
+
+describe('isBillActiveInCycle', () => {
+  it('bill due_day=1 在周期 [6/21, 7/10) 内活跃', () => {
+    const bill = { due_day: 1 };
+    const cycleStart = new Date(2026, 5, 21);
+    const cycleEnd = new Date(2026, 6, 10);
+    const { active, dueDate } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
+    expect(active).toBe(true);
+    expect(formatDate(dueDate!)).toBe('2026-07-01');
+  });
+
+  it('bill due_day=20 在周期 [6/21, 7/10) 内不活跃（起点月 6/20 < 6/21）', () => {
+    // 周期 [6/21, 7/10)
+    // 起点月（6月）的 6/20 < cycleStart 6/21 → 不通过
+    // 终点月（7月）的 7/20 >= cycleEnd 7/10 → 不通过
+    // 期望 false
+    const bill = { due_day: 20 };
+    const cycleStart = new Date(2026, 5, 21);
+    const cycleEnd = new Date(2026, 6, 10);
+    const { active } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
+    expect(active).toBe(false);
+  });
+
+  it('bill due_day=15 在周期 [6/21, 7/10) 内不活跃（终点月 7/15 >= 7/10）', () => {
+    // 周期 [6/21, 7/10)
+    // 起点月（6月）的 6/15 < cycleStart → 不通过
+    // 终点月（7月）的 7/15 >= cycleEnd 7/10 → 不通过
+    // 期望 false
+    const bill = { due_day: 15 };
+    const cycleStart = new Date(2026, 5, 21);
+    const cycleEnd = new Date(2026, 6, 10);
+    const { active } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
+    expect(active).toBe(false);
+  });
+
+  it('bill due_day=5 在周期 [6/1, 7/10) 内活跃两次（6/5 + 7/5）', () => {
+    // 起点月 6/5 在 [6/1, 7/10) → 通过
+    // 终点月 7/5 在 [6/1, 7/10) → 通过
+    // 但 isDayActiveInCycle 只返回一个 dueDate（先找到的）
+    const bill = { due_day: 5 };
+    const cycleStart = new Date(2026, 5, 1);
+    const cycleEnd = new Date(2026, 6, 10);
+    const { active, dueDate } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
+    expect(active).toBe(true);
+    expect(formatDate(dueDate!)).toBe('2026-06-05');
+  });
+
+  it('bill due_day=10 在周期 [6/21, 7/10) 内不活跃（等于 end）', () => {
+    const bill = { due_day: 10 };
+    const cycleStart = new Date(2026, 5, 21);
+    const cycleEnd = new Date(2026, 6, 10);
+    const { active } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
+    expect(active).toBe(false);
+  });
+
+  it('bill due_day=31 处理月末（取 6/30）', () => {
+    const bill = { due_day: 31 };
+    const cycleStart = new Date(2026, 5, 1);
+    const cycleEnd = new Date(2026, 6, 1);
+    const { active, dueDate } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
+    expect(active).toBe(true);
+    expect(formatDate(dueDate!)).toBe('2026-06-30');
+  });
+});
+
+describe('sumIncomeInCycle', () => {
+  it('monthly 收入 + 单次到账', () => {
+    const incomes = [
+      {
+        id: 'i1',
+        user_id: 'default',
+        name: '工资',
+        amount: 300000,
+        frequency: 'monthly' as const,
+        pay_day: 25,
+        day_of_week: null,
+        start_date: '2025-01-01',
+        end_date: null,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    // 周期 [6/21, 7/10)，pay_day=25 落在 7/25 (在区间外)... 实际 6/25 也小于 6/21
+    // 让我用 6/22 测试
+    const cycleStart = new Date(2026, 5, 1);
+    const cycleEnd = new Date(2026, 6, 10);
+    const { total, items } = sumIncomeInCycle(incomes, cycleStart, cycleEnd);
+    // 6/25 在 [6/1, 7/10) 内 → 算入
+    expect(total).toBe(300000);
+    expect(items.length).toBe(1);
+    expect(items[0]!.pay_date).toBe('2026-06-25');
+  });
+
+  it('monthly 收入 + 跨月两次到账（6/25 + 7/5）', () => {
+    const incomes = [
+      {
+        id: 'i1',
+        user_id: 'default',
+        name: '副业',
+        amount: 20000,
+        frequency: 'monthly' as const,
+        pay_day: 5,
+        day_of_week: null,
+        start_date: '2025-01-01',
+        end_date: null,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    const cycleStart = new Date(2026, 5, 1);
+    const cycleEnd = new Date(2026, 6, 10);
+    // 6/5 和 7/5 都在 [6/1, 7/10) 内
+    const { total, items } = sumIncomeInCycle(incomes, cycleStart, cycleEnd);
+    expect(total).toBe(40000);
+    expect(items.length).toBe(2);
+    expect(items[0]!.pay_date).toBe('2026-06-05');
+    expect(items[1]!.pay_date).toBe('2026-07-05');
+  });
+
+  it('weekly 收入 + 多个周几匹配', () => {
+    const incomes = [
+      {
+        id: 'i1',
+        user_id: 'default',
+        name: '周末副业',
+        amount: 5000,
+        frequency: 'weekly' as const,
+        pay_day: null,
+        day_of_week: 6, // 周六
+        start_date: '2025-01-01',
+        end_date: null,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    const cycleStart = new Date(2026, 5, 1); // 6/1 是周一
+    const cycleEnd = new Date(2026, 5, 16); // 6/16 是周二（15 天内）
+    // 6/6 (周六), 6/13 (周六) → 2 次
+    const { total, items } = sumIncomeInCycle(incomes, cycleStart, cycleEnd);
+    expect(total).toBe(10000);
+    expect(items.length).toBe(2);
+  });
+
+  it('空收入列表 → total=0', () => {
+    const cycleStart = new Date(2026, 5, 21);
+    const cycleEnd = new Date(2026, 6, 10);
+    const { total, items } = sumIncomeInCycle([], cycleStart, cycleEnd);
+    expect(total).toBe(0);
+    expect(items.length).toBe(0);
+  });
+});
+
+describe('computeDashboardV2 向后兼容', () => {
+  it('无新数据时退化为 V1 公式', () => {
+    // V1 基础数据：total_balance=60000, total_locked=30000, total_net_cash=30000
+    // sampleCards 有 1 张 (30000, due_day=25)，6/25 在 [6/21, 7/10) 内活跃
+    // V1: net_available = 30000 - 30000 = 0; daily_budget = 0
+    const today = new Date(2026, 5, 21);
+    const v1 = computeDashboard(today, baseConfig, sampleCash, sampleCards);
+    const v2 = computeDashboardV2(today, baseConfig, sampleCash, sampleCards);
+    expect(v2.net_available).toBe(v1.net_available);
+    expect(v2.daily_budget).toBe(v1.daily_budget);
+    expect(v2.total_expense).toBe(v1.total_due); // 只有信用卡
+    expect(v2.total_income).toBe(0);
+    expect(v2.net_flow).toBe(-v1.total_due); // 净流出（只有支出）
+  });
+
+  it('有订阅时影响日均预算', () => {
+    const today = new Date(2026, 5, 21); // 6/21
+    const subs = [
+      {
+        id: 's1',
+        user_id: 'default',
+        name: 'Netflix',
+        amount: 1490,
+        billing_day: 25,
+        billing_cycle: 'monthly' as const,
+        category: null,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    const v2 = computeDashboardV2(today, baseConfig, sampleCash, sampleCards, [], [], [], [], subs);
+    // 6/25 在 [6/21, 7/10) 内 → 算入
+    // V1: total_net_cash=30000 (cash 60000 - locked 30000), total_due=30000
+    // V1: net_available = 30000 - 30000 = 0
+    // V2: total_expense = 30000 (信用卡) + 1490 (订阅) = 31490
+    //      netFlow = 0 - 31490 = -31490
+    //      net_available = v1.total_net_cash + netFlow = 30000 + (-31490) = -1490
+    //      daily_budget = max(0, floor(-1490/19)) = 0
+    expect(v2.total_expense).toBe(30000 + 1490);
+    expect(v2.net_available).toBe(-1490);
+    expect(v2.daily_budget).toBe(0); // max(0, ...) 保证非负
+    expect(v2.net_flow).toBe(-31490);
+  });
+
+  it('有收入时大幅提升日均预算', () => {
+    const today = new Date(2026, 5, 21); // 6/21
+    const incomes = [
+      {
+        id: 'i1',
+        user_id: 'default',
+        name: '工资',
+        amount: 300000,
+        frequency: 'monthly' as const,
+        pay_day: 25,
+        day_of_week: null,
+        start_date: '2025-01-01',
+        end_date: null,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    const v2 = computeDashboardV2(today, baseConfig, sampleCash, sampleCards, [], [], [], incomes);
+    // 6/25 在 [6/21, 7/10) 内 → 算入
+    // V2: net_available = 0 + 300000 = 300000; daily_budget = 300000/19 = 15789
+    expect(v2.total_income).toBe(300000);
+    expect(v2.net_available).toBe(300000);
+    expect(v2.daily_budget).toBe(Math.floor(300000 / 19));
+  });
+
+  it('每日投资本期内 19 次', () => {
+    const today = new Date(2026, 5, 21); // 6/21
+    const investments = [
+      {
+        id: 'inv1',
+        user_id: 'default',
+        name: '基金定投',
+        amount: 100,
+        frequency: 'daily' as const,
+        start_date: '2026-01-01',
+        end_date: null,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    const v2 = computeDashboardV2(today, baseConfig, sampleCash, sampleCards, [], investments, [], [], []);
+    // 周期 6/21 - 7/10 = 19 天（diffDays = 18，+1 = 19），daily = 19 次
+    // 总投资额 = 19 × 100 = 1900
+    expect(v2.total_expense).toBe(30000 + 1900);
+    expect(v2.upcoming_expenses.investments.length).toBe(1);
+    expect(v2.upcoming_expenses.investments[0]!.occurrences).toBe(19);
+    expect(v2.upcoming_expenses.investments[0]!.total).toBe(1900);
+  });
+
+  it('组合场景：信用卡 + 房租 + 订阅 + 收入 + 投资', () => {
+    const today = new Date(2026, 5, 21); // 6/21
+    const bills = [
+      {
+        id: 'b1',
+        user_id: 'default',
+        name: '房租',
+        amount: 80000,
+        due_day: 1,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    const incomes = [
+      {
+        id: 'i1',
+        user_id: 'default',
+        name: '工资',
+        amount: 300000,
+        frequency: 'monthly' as const,
+        pay_day: 25,
+        day_of_week: null,
+        start_date: '2025-01-01',
+        end_date: null,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+      {
+        id: 'i2',
+        user_id: 'default',
+        name: '副业',
+        amount: 20000,
+        frequency: 'monthly' as const,
+        pay_day: 25,
+        day_of_week: null,
+        start_date: '2025-01-01',
+        end_date: null,
+        note: null,
+        sort_order: 1,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    const investments = [
+      {
+        id: 'inv1',
+        user_id: 'default',
+        name: '基金',
+        amount: 100,
+        frequency: 'daily' as const,
+        start_date: '2026-01-01',
+        end_date: null,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    const v2 = computeDashboardV2(today, baseConfig, sampleCash, sampleCards, [], investments, bills, incomes);
+    // v1.total_net_cash = 30000 (cash 60000 - locked 30000)
+    // 本期总支出 = 30000 (信用卡) + 80000 (房租 7/1) + 1900 (19次 × 100) = 111900
+    // 本期总收入 = 300000 + 20000 = 320000
+    // 净流入 = 320000 - 111900 = +208100
+    // 净可用 = v1.total_net_cash + netFlow = 30000 + 208100 = 238100
+    // 日均 = 238100 / 19 = 12531
+    expect(v2.total_expense).toBe(30000 + 80000 + 1900);
+    expect(v2.total_income).toBe(320000);
+    expect(v2.net_flow).toBe(208100);
+    expect(v2.net_available).toBe(238100);
+    expect(v2.daily_budget).toBe(Math.floor(238100 / 19));
   });
 });

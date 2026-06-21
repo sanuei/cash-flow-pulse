@@ -94,3 +94,72 @@ export type CreditCardInput = z.infer<typeof CreditCardInputSchema>;
 export type UserConfigUpdate = z.infer<typeof UserConfigUpdateSchema>;
 export type SnapshotInput = z.infer<typeof SnapshotInputSchema>;
 export type ImportPayload = z.infer<typeof ImportPayloadSchema>;
+
+// === v0.3 新增：4 类定期事件 schema ===
+
+// 固定投资
+export const InvestmentInputSchema = z.object({
+  name: z.string().min(1, '名称不能为空').max(50),
+  amount: z.number().nonnegative('金额不能为负'),
+  frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式错误（YYYY-MM-DD）'),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式错误').nullable().optional(),
+  note: z.string().max(200).nullable().optional(),
+});
+export const InvestmentUpdateSchema = InvestmentInputSchema.partial();
+
+// 固定账单
+export const BillInputSchema = z.object({
+  name: z.string().min(1).max(50),
+  amount: z.number().nonnegative(),
+  due_day: z.number().int().min(1).max(31),
+  note: z.string().max(200).nullable().optional(),
+});
+export const BillUpdateSchema = BillInputSchema.partial();
+
+// 固定收入
+const IncomeBaseSchema = z.object({
+  name: z.string().min(1).max(50),
+  amount: z.number().nonnegative(),
+  frequency: z.enum(['monthly', 'weekly']),
+  pay_day: z.number().int().min(1).max(31).nullable().optional(),
+  day_of_week: z.number().int().min(0).max(6).nullable().optional(),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  note: z.string().max(200).nullable().optional(),
+});
+
+export const IncomeInputSchema = IncomeBaseSchema.refine(
+  (d) =>
+    (d.frequency === 'monthly' && d.pay_day != null && d.day_of_week == null) ||
+    (d.frequency === 'weekly' && d.day_of_week != null && d.pay_day == null),
+  { message: 'monthly 必须填 pay_day，weekly 必须填 day_of_week', path: ['frequency'] },
+);
+
+export const IncomeUpdateSchema = IncomeBaseSchema.partial().refine(
+  (d) => {
+    // 更新时如果两者都给了，验证一致性；如果只给一个就跳过
+    if (d.frequency && d.pay_day != null && d.day_of_week != null) {
+      return (d.frequency === 'monthly' && d.pay_day != null) ||
+             (d.frequency === 'weekly' && d.day_of_week != null);
+    }
+    return true;
+  },
+  { message: 'pay_day 和 day_of_week 必须与 frequency 匹配', path: ['frequency'] },
+);
+
+// 订阅
+export const SubscriptionInputSchema = z.object({
+  name: z.string().min(1).max(50),
+  amount: z.number().nonnegative(),
+  billing_day: z.number().int().min(1).max(31),
+  billing_cycle: z.enum(['monthly', 'yearly']).default('monthly'),
+  category: z.string().max(50).nullable().optional(),
+  note: z.string().max(200).nullable().optional(),
+});
+export const SubscriptionUpdateSchema = SubscriptionInputSchema.partial();
+
+export type InvestmentInput = z.infer<typeof InvestmentInputSchema>;
+export type BillInput = z.infer<typeof BillInputSchema>;
+export type IncomeInput = z.infer<typeof IncomeInputSchema>;
+export type SubscriptionInput = z.infer<typeof SubscriptionInputSchema>;

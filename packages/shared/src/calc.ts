@@ -19,6 +19,15 @@ import type {
   Snapshot,
   SnapshotPrompt,
   PayCycle,
+  RecurringInvestment,
+  RecurringBill,
+  RecurringIncome,
+  Subscription,
+  UpcomingExpenseItem,
+  UpcomingIncomeItem,
+  UpcomingExpenses,
+  UpcomingIncomes,
+  InvestmentFrequency,
 } from './types.js';
 
 // ============================================================
@@ -442,5 +451,330 @@ export function compareCycles(a: Snapshot, b: Snapshot): CycleComparison {
     daily_budget_diff: diffDB,
     daily_budget_pct: pctDB,
     trend,
+  };
+}
+
+// ============================================================
+// v0.3 新增：4 类定期事件算法
+// ============================================================
+
+/**
+ * 频率 → 天数映射（粗略，用于估算本期内发生次数）
+ * daily = 1, weekly = 7, monthly = 30, yearly = 365
+ */
+const FREQUENCY_INTERVAL_DAYS: Record<InvestmentFrequency, number> = {
+  daily: 1,
+  weekly: 7,
+  monthly: 30,
+  yearly: 365,
+};
+
+/**
+ * 计算投资在指定周期内的发生次数
+ *
+ * @param inv 投资记录（必须有 start_date + frequency）
+ * @param cycleStart 周期起点（含）
+ * @param cycleEnd 周期终点（不含）
+ * @returns 发生次数（≥ 0）
+ *
+ * 算法：
+ *   - 起点 = max(cycleStart, inv.start_date)
+ *   - 终点 = min(cycleEnd, inv.end_date || cycleEnd)
+ *   - 间隔天数 = FREQUENCY_INTERVAL_DAYS[inv.frequency]
+ *   - 次数 = floor((终点 - 起点) / 间隔) + 1
+ *
+ * 注：这是一个简化估算（按 30/365 算月/年），精确算法需要按自然月/年迭代。
+ */
+export function countInvestmentOccurrences(
+  inv: Pick<RecurringInvestment, 'start_date' | 'end_date' | 'frequency'>,
+  cycleStart: Date,
+  cycleEnd: Date,
+): number {
+  if (!inv.start_date) return 0;
+
+  const startDate = parseDate(inv.start_date);
+  const endDate = inv.end_date ? parseDate(inv.end_date) : null;
+
+  // 起点和终点都收敛到周期内
+  const effectiveStart = startDate > cycleStart ? startDate : cycleStart;
+  const effectiveEnd = endDate && endDate < cycleEnd ? endDate : cycleEnd;
+
+  if (effectiveStart >= effectiveEnd) return 0;
+
+  const intervalDays = FREQUENCY_INTERVAL_DAYS[inv.frequency];
+  if (intervalDays <= 0) return 0;
+
+  // 区间内总天数（半开区间 [start, end) 不含 end）
+  // diffDays(start, end) 返回 end - start 的天数差（不含端点）
+  // 例：diffDays(6/21, 7/10) = 19，表示 19 天（6/21, 22, ..., 7/9）
+  const totalDays = diffDays(effectiveStart, effectiveEnd);
+
+  // 区间内每天/周/月/年一次
+  // 例：19 天 daily → 19 次；19 天 weekly → ceil(19/7) = 3 次
+  return Math.ceil(totalDays / intervalDays);
+}
+
+/**
+ * 计算订阅/账单在指定周期内是否活跃（与信用卡算法一致）
+ */
+function isDayActiveInCycle(
+  dueDay: number,
+  cycleStart: Date,
+  cycleEnd: Date,
+): { active: boolean; dueDate: Date | null } {
+  // 在周期起点所在月找
+  const monthStart = getPaydayInMonth(cycleStart.getFullYear(), cycleStart.getMonth(), dueDay);
+  if (monthStart >= cycleStart && monthStart < cycleEnd) {
+    return { active: true, dueDate: monthStart };
+  }
+  // 周期终点所在月
+  const monthEnd = getPaydayInMonth(cycleEnd.getFullYear(), cycleEnd.getMonth(), dueDay);
+  if (monthEnd >= cycleStart && monthEnd < cycleEnd) {
+    return { active: true, dueDate: monthEnd };
+  }
+  return { active: false, dueDate: null };
+}
+
+/**
+ * 账单在指定周期内是否活跃
+ */
+export function isBillActiveInCycle(
+  bill: Pick<RecurringBill, 'due_day'>,
+  cycleStart: Date,
+  cycleEnd: Date,
+) {
+  return isDayActiveInCycle(bill.due_day, cycleStart, cycleEnd);
+}
+
+/**
+ * 订阅在指定周期内是否活跃（如果是 yearly 订阅，需要判断 toString 标记）
+ */
+export function isSubscriptionActiveInCycle(
+  sub: Pick<Subscription, 'billing_day' | 'billing_cycle'>,
+  cycleStart: Date,
+  cycleEnd: Date,
+): { active: boolean; dueDate: Date | null } {
+  // 简化处理：yearly 订阅也按 monthly 处理（每月检查是否到了扣款日）
+  // 实际上 yearly 订阅应该用类似投资的算法，这里 V1 简化处理
+  return isDayActiveInCycle(sub.billing_day, cycleStart, cycleEnd);
+}
+
+/**
+ * 汇总收入在指定周期内所有到账日的总金额
+ *
+ * monthly: 找周期内所有 pay_day（最多 2 次：起点月 + 终点月）
+ * weekly:  遍历周期内每一天，找出 day_of_week 匹配的天
+ */
+export function sumIncomeInCycle(
+  incomes: RecurringIncome[],
+  cycleStart: Date,
+  cycleEnd: Date,
+): { total: number; items: UpcomingIncomeItem[] } {
+  let total = 0;
+  const items: UpcomingIncomeItem[] = [];
+
+  for (const inc of incomes) {
+    if (inc.frequency === 'monthly' && inc.pay_day != null) {
+      // 起点月
+      const d1 = getPaydayInMonth(cycleStart.getFullYear(), cycleStart.getMonth(), inc.pay_day);
+      if (d1 >= cycleStart && d1 < cycleEnd) {
+        total += inc.amount;
+        items.push({
+          id: inc.id,
+          name: inc.name,
+          amount: inc.amount,
+          pay_date: formatDate(d1),
+          days_until: Math.max(0, diffDays(cycleStart, d1)),
+        });
+      }
+      // 终点月
+      const d2 = getPaydayInMonth(cycleEnd.getFullYear(), cycleEnd.getMonth(), inc.pay_day);
+      if (d2 >= cycleStart && d2 < cycleEnd && d2.getTime() !== d1.getTime()) {
+        total += inc.amount;
+        items.push({
+          id: inc.id,
+          name: inc.name,
+          amount: inc.amount,
+          pay_date: formatDate(d2),
+          days_until: Math.max(0, diffDays(cycleStart, d2)),
+        });
+      }
+    } else if (inc.frequency === 'weekly' && inc.day_of_week != null) {
+      // 遍历周期内每一天
+      const startDate = inc.start_date ? parseDate(inc.start_date) : null;
+      const endDate = inc.end_date ? parseDate(inc.end_date) : null;
+      for (let d = new Date(cycleStart); d < cycleEnd; d = addDays(d, 1)) {
+        if (d.getDay() !== inc.day_of_week) continue;
+        if (startDate && d < startDate) continue;
+        if (endDate && d > endDate) continue;
+        total += inc.amount;
+        items.push({
+          id: inc.id,
+          name: inc.name,
+          amount: inc.amount,
+          pay_date: formatDate(d),
+          days_until: Math.max(0, diffDays(cycleStart, d)),
+        });
+      }
+    }
+  }
+
+  // 按 days_until 升序排序
+  items.sort((a, b) => a.days_until - b.days_until);
+  return { total, items };
+}
+
+// ============================================================
+// v0.3 新增：升级版 computeDashboard（向后兼容）
+// ============================================================
+
+/**
+ * V2 版仪表盘计算：在 V1 基础上加上 4 类定期事件的"净流入"
+ *
+ * 新公式：
+ *   本期总支出 = V1.total_due + Σbills + Σsubs + Σinvestments
+ *   本期总收入 = sumIncomeInCycle(incomes, ...)
+ *   净流入     = 本期总收入 - 本期总支出
+ *   净可用     = V1.total_net_cash + 净流入
+ *   日均预算   = max(0, 净可用 ÷ V1.days_to_payday)
+ *
+ * 向后兼容：如果 investments/bills/incomes/subscriptions 为空数组，
+ *           公式退化为 V1。
+ */
+export function computeDashboardV2(
+  today: Date,
+  config: UserConfig,
+  cashSources: CashSource[],
+  creditCards: CreditCard[],
+  snapshots: Snapshot[] = [],
+  investments: RecurringInvestment[] = [],
+  bills: RecurringBill[] = [],
+  incomes: RecurringIncome[] = [],
+  subscriptions: Subscription[] = [],
+): DashboardCalc & {
+  upcoming_expenses: UpcomingExpenses;
+  upcoming_incomes: UpcomingIncomes;
+  total_expense: number;
+  total_income: number;
+  net_flow: number;
+} {
+  // 1. 调用 V1（保持完全向后兼容）
+  const v1 = computeDashboard(today, config, cashSources, creditCards, snapshots);
+
+  // 2. 本期区间 = [今天, 下个发薪日)
+  const cycleStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const cycleEnd = getNextPayday(today, config.pay_day);
+
+  // 3. 计算本期支出明细
+  // 3a. 信用卡（已在 V1 中算过，复用）
+  const upcomingCreditCards: ActiveCard[] = v1.active_cards;
+
+  // 3b. 账单
+  const billItems: UpcomingExpenseItem[] = [];
+  let totalBills = 0;
+  for (const bill of bills) {
+    const { active, dueDate } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
+    if (active && dueDate) {
+      const days = Math.max(0, diffDays(today, dueDate));
+      billItems.push({
+        source_type: 'bill',
+        id: bill.id,
+        name: bill.name,
+        amount: bill.amount,
+        occurrences: 1,
+        total: bill.amount,
+        due_date: formatDate(dueDate),
+        days_until: days,
+      });
+      totalBills += bill.amount;
+    }
+  }
+
+  // 3c. 订阅
+  const subscriptionItems: UpcomingExpenseItem[] = [];
+  let totalSubs = 0;
+  for (const sub of subscriptions) {
+    const { active, dueDate } = isSubscriptionActiveInCycle(sub, cycleStart, cycleEnd);
+    if (active && dueDate) {
+      const days = Math.max(0, diffDays(today, dueDate));
+      const item: UpcomingExpenseItem = {
+        source_type: 'subscription',
+        id: sub.id,
+        name: sub.name,
+        amount: sub.amount,
+        occurrences: 1,
+        total: sub.amount,
+        due_date: formatDate(dueDate),
+        days_until: days,
+      };
+      subscriptionItems.push(item);
+      totalSubs += sub.amount;
+    }
+  }
+
+  // 3d. 投资（按频率 × 本期内次数）
+  const investmentItems: UpcomingExpenseItem[] = [];
+  let totalInvestments = 0;
+  for (const inv of investments) {
+    const occurrences = countInvestmentOccurrences(inv, cycleStart, cycleEnd);
+    if (occurrences > 0) {
+      const totalAmt = occurrences * inv.amount;
+      // due_date 取首日（start_date 在本周期内的最早一天）
+      const startDate = parseDate(inv.start_date);
+      const firstOccur = startDate > cycleStart ? startDate : cycleStart;
+      investmentItems.push({
+        source_type: 'investment',
+        id: inv.id,
+        name: inv.name,
+        amount: inv.amount,
+        occurrences,
+        total: totalAmt,
+        due_date: formatDate(firstOccur),
+        days_until: 0, // 投资是连续发生，没有具体某一天
+      });
+      totalInvestments += totalAmt;
+    }
+  }
+
+  // 按 days_until 升序排序
+  billItems.sort((a, b) => a.days_until - b.days_until);
+  subscriptionItems.sort((a, b) => a.days_until - b.days_until);
+
+  // 4. 计算本期总收入
+  const { total: totalIncome, items: incomeItems } = sumIncomeInCycle(incomes, cycleStart, cycleEnd);
+
+  // 5. 本期总支出（信用卡 + 账单 + 订阅 + 投资）
+  const totalCreditCards = v1.total_due;
+  const totalExpense = totalCreditCards + totalBills + totalSubs + totalInvestments;
+
+  // 6. 净流入 + 净可用
+  const netFlow = totalIncome - totalExpense;
+  const netAvailable = v1.total_net_cash + netFlow;
+  const safeDays = Math.max(1, v1.days_to_payday);
+  const dailyBudget = Math.max(0, Math.floor(netAvailable / safeDays));
+
+  return {
+    ...v1,
+    upcoming_expenses: {
+      credit_cards: upcomingCreditCards,
+      bills: billItems,
+      subscriptions: subscriptionItems,
+      investments: investmentItems,
+      total_credit_card: totalCreditCards,
+      total_bills: totalBills,
+      total_subscriptions: totalSubs,
+      total_investments: totalInvestments,
+      grand_total: totalExpense,
+    },
+    upcoming_incomes: {
+      items: incomeItems,
+      total: totalIncome,
+    },
+    total_expense: totalExpense,
+    total_income: totalIncome,
+    net_flow: netFlow,
+    // 覆盖 V1 的 net_available 和 daily_budget（用 V2 公式重算）
+    net_available: netAvailable,
+    daily_budget: dailyBudget,
   };
 }
