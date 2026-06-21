@@ -117,6 +117,7 @@
 - `f6b39db feat(shared): v0.3 Phase 1 完成 - 4 类定期事件类型 + Zod schema + computeDashboardV2 + 20 个新测试（共 58 个全部通过）`
 - `23ce7f5 feat(api): v0.3 Phase 2 完成 - 4 张新表 schema + 16 个 CRUD 端点 + dashboard V2 + export/import v2`
 - `321ec44 feat(web): v0.3 Phase 3 核心完成 - 4 表单 + Store + Home 主页大改`
+- `f82e8c7 fix(calc): 账单/订阅明细改用「下一次扣款日」视角`
 
 **目标**：把 PRD v0.3 的 4 类新卡片（投资/账单/收入/订阅）+ V2 算法落地。
 
@@ -165,6 +166,51 @@ subscriptions         -- billing_day + billing_cycle
 - ✅ 真实数据测试：现金 ¥60,000 + 信用卡 ¥30,000 + 房租 ¥80,000 + Netflix/Spotify + 每日投资 ¥100 + 工资/副业 ¥320,000
 - ✅ 计算正确：净可用 ¥238,100 → 日均 ¥12,531/日（vs V1 公式的 ¥105/日，差距 100 倍）
 - ✅ 浏览器视觉验证：8 张卡都渲染，hero 大字醒目，折叠卡片工作正常，模态表单可用
+
+### v0.8.1 — 账单/订阅明细"下一次扣款日"修复
+
+**Commit**: `f82e8c7 fix(calc): 账单/订阅明细改用「下一次扣款日」视角`
+
+**问题**：用户报告"我添加了健身房 (due_day=14)，为什么在本期支出明细中没有显示"。
+
+**根因**：
+- 今天 6/21，本期 = [6/21, 7/10)
+- 健身房 due_day=14
+- 旧算法 `isDayActiveInCycle`：6/14 < 6/21 不通过，7/14 > 7/10 不通过 → 判定"不活跃"
+- 结果：健身房永远不在明细里展示（虽然 7/14 是真实的"下一次扣款日"）
+
+**修复方案**（用户选择方案 B：保持当前 net_flow 算法，只改明细展示）：
+- 新增 `nextOccurrence(today, day)` 函数：找指定日期之后的下一次 day-of-month 扣款日
+- computeDashboardV2 账单/订阅明细：不再严格匹配本期内，显示所有距今 ≤ 60 天的扣款
+- 区分两种状态：
+  - **`in_current_cycle: true`** → 计入 net_flow / total_bills / total_subscriptions
+  - **`in_current_cycle: false`** → 不计入公式，但**仍展示**在明细里
+- 前端 ExpenseRow：不在期内的项目用**灰色**显示 + 末尾标注**「下期扣款」**
+
+**TDD 抓到隐藏 bug**：
+- 旧代码订阅循环里 `totalSubs += sub.amount` 写了两次（inCycle 分支一次，push 时又一次）
+- 测试 "有订阅时影响日均预算" 失败：期望 ¥31,490，实际 ¥32,980（多算了 1 个 ¥1,490 的 Netflix）
+- 修复：删除 push 时的重复累加
+
+**新增测试**（v0.8.1）：
+- `'账单 due_day=14 在本周期区间外也能显示（健身房场景）'` —— 验证健身房能出现在明细且 in_current_cycle=false
+
+**最终测试结果**：
+- ✅ 59/59 单元测试通过（含 1 个新增健身房场景）
+- ✅ API/Web TS 编译 0 错误
+
+**实测**（用户数据）：
+```
+📄 固定账单  ¥60,000
+   房租         2026-06-27 · 6 天后  ¥   60,000
+   健身房        2026-07-14 · 23 天后  ¥    7,370  [下期扣款]
+
+日均预算: ¥3,104 / 日
+```
+- 健身房 ✅ 显示
+- 健身房 ✅ 不计入 total_bills（¥60,000 不含健身房）
+- 健身房 ✅ 不影响日均预算（¥3,104/日 不变）
+- 视觉 ✅ 灰色 + "下期扣款" 标记
 
 ---
 
@@ -284,9 +330,85 @@ cash-flow-pulse/
 ## Git 提交历史
 
 ```
+f82e8c7 fix(calc): 账单/订阅明细改用「下一次扣款日」视角
+2e42fb6 docs: 开发日志 v0.8 - 记录 v0.3 完整实现（Phase 1+2+3）
+321ec44 feat(web): v0.3 Phase 3 核心完成 - 4 表单 + Store + Home 主页大改
+23ce7f5 feat(api): v0.3 Phase 2 完成 - 4 张新表 schema + 16 个 CRUD 端点 + dashboard V2 + export/import v2
+f6b39db feat(shared): v0.3 Phase 1 完成 - 4 类定期事件类型 + Zod schema + computeDashboardV2 + 20 个新测试（共 58 个全部通过）
+8104318 docs: 拆分设计系统 - PRD 1238→990 行 + design-system-notion.md 独立成文
+2112573 docs: 开发日志 v0.7 记录 icon 改造
+040d98c feat(web): 全面替换 emoji 为 Lucide icon - 19 个图标统一管理 + strokeWidth 1.75 + currentColor 颜色继承
+0314b51 fix: pnpm-workspace.yaml 配置 onlyBuiltDependencies（修复 dev 启动报错）
+46b3f8d docs: 更新开发日志(v0.6 端到端验证) + 部署指南 + README
 7067d64 feat(web): 完整前端实现 - 主页仪表盘/趋势曲线/设置 + Notion 设计系统
 a0342ea feat(api): Workers + D1 后端 - 完整 CRUD + dashboard 一站式接口 + 导入导出
 199ab1a feat(shared): 核心计算逻辑 + Zod schema + 38 个单元测试全部通过
 a064f0f docs: PRD v0.2 - 升级到 Notion 设计系统，新增附录 C
 fa5c046 docs: 初始化 PRD v0.1 + 开发日志
 ```
+
+---
+
+## 项目当前状态速查（2026-06-21）
+
+**版本**：v0.8.1 — 4 类定期事件卡片完整实现 + 健身房 bugfix
+
+**位置**：`~/Desktop/网页项目/apps/cash-flow-pulse/`
+
+**技术栈**：
+- 前端：React 18 + Vite + TypeScript + TailwindCSS + Zustand + Recharts + Lucide icon
+- 后端：Cloudflare Workers + Hono + D1 (SQLite)
+- 设计：完全照搬 Notion 设计系统（详见 `docs/design-system-notion.md`）
+- 部署：Cloudflare Pages（前端）+ Workers（API）+ D1（数据库），全部免费额度内
+
+**Monorepo 结构**：
+- `packages/shared/` — 核心算法 + Zod schema（前后端共用）
+  - `src/calc.ts` — 周期计算、V1/V2 dashboard、4 类定期事件算法
+  - `src/schema.ts` — Zod 校验（10 个 schema）
+  - `src/calc.test.ts` — **59 个单元测试，全部通过**
+- `apps/api/` — Workers + D1 后端
+  - `src/db/schema.sql` — 8 张表
+  - `src/routes/` — 19 个 API 端点（config/cash/cards/snapshots/investments/bills/incomes/subscriptions + dashboard/export-import）
+- `apps/web/` — React 前端
+  - `src/components/Icon.tsx` — 28 个 Lucide icon 包装（v0.7 加入）
+  - `src/components/{Money,Card,Modal,States,CashForm,CardForm,InvestmentForm,BillForm,IncomeForm,SubscriptionForm}.tsx`
+  - `src/pages/{Home,Trends,Settings}.tsx`
+
+**V2 算法（向后兼容）**：
+```
+本期总支出 = Σ信用卡应还 + Σ订阅(本期) + Σ账单(本期) + Σ投资本期内累计
+本期总收入 = Σ所有收入本期内到账日
+净流入 = 总收入 - 总支出
+净可用 = 总净现金 + 净流入
+日均预算 = max(0, 净可用 ÷ 距下个发薪日天数)
+```
+
+**v0.8.1 关键决策**（新会话必读）：
+- 账单/订阅**明细展示**：用 `nextOccurrence()` 找下一次扣款日，距今 ≤ 60 天都显示
+- 账单/订阅**net_flow 计算**：仍用 `[今天, 下次发薪日)` 严格匹配
+- 不在期内的项目：`in_current_cycle: false`，前端灰色 + "下期扣款" 标记
+- 净现金 = Σ余额 - Σ锁定
+- 投资的"本期内次数"用 ceil(totalDays / intervalDays)（区间 [start, end) 不含 end）
+
+**启动 dev**：
+```bash
+cd ~/Desktop/网页项目/apps/cash-flow-pulse
+pnpm dev  # 并行启动 api(8787) + web(5173)
+```
+（或分别 `pnpm dev:api` / `pnpm dev:web`）
+
+**部署**：详见 `docs/deployment.md`，3 步：
+1. `wrangler d1 create cash-flow-pulse-db` → 填入 `database_id`
+2. `wrangler d1 execute ... --file=./src/db/schema.sql --remote`
+3. `pnpm deploy:api` + Pages 配置 build output 为 `apps/web/dist`
+
+**数据库**：本地 D1 存储在 `apps/api/.wrangler/state/v3/d1/`，部署到 Cloudflare 才会用真实 D1。
+
+**用户当前真实数据**（截至 v0.8.1）：
+- 3 个现金来源：PayPay (¥5,854 余额) + 钱包 (¥80,000) + 三菱銀行 (¥209,217)
+- 3 张信用卡：乐天信用卡 ¥30,000 + paypay信用卡 ¥112,831 + paidy ¥3,467
+- 1 个固定投资：美股指数 ¥1,568/天
+- 2 个固定账单：房租 (¥60,000/月 27 号) + 健身房 (¥7,370/月 14 号 — 下期扣款)
+- 2 个固定收入：工资 ¥300,000/月 10 号 + 副业 ¥10,000/月 10 号
+- 0 个订阅
+- 当前日均预算：¥3,104/日
