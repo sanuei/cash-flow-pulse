@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.wrangler/
+.miniflare/
+
+# Environment
+.env
+.env.local
+.dev.vars
+.dev.vars.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Local dev databases
+*.sqlite
+*.db
+*.sqlite3
+
+# Coverage
+coverage/
+.nyc_output/

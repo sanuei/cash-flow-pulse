@@ -1,0 +1,23 @@
+{
+  "name": "cash-flow-pulse",
+  "version": "0.1.0",
+  "private": true,
+  "description": "个人现金流可视化工具 - 日均可用预算 + 月度趋势曲线",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:api": "pnpm --filter @cfp/api dev",
+    "dev:web": "pnpm --filter @cfp/web dev",
+    "build": "pnpm -r run build",
+    "deploy:api": "pnpm --filter @cfp/api deploy",
+    "deploy:web": "pnpm --filter @cfp/web deploy",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
