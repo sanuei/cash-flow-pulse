@@ -10,16 +10,21 @@
 import { z } from 'zod';
 
 // === 现金来源 ===
-export const CashSourceInputSchema = z.object({
+const CashSourceBaseSchema = z.object({
   name: z.string().min(1, '名称不能为空').max(50),
   balance: z.number().nonnegative('余额不能为负'),
   locked_amount: z.number().nonnegative('锁定金额不能为负'),
-}).refine((data) => data.locked_amount <= data.balance, {
-  message: '锁定金额不能超过余额',
-  path: ['locked_amount'],
 });
 
-export const CashSourceUpdateSchema = CashSourceInputSchema.partial();
+export const CashSourceInputSchema = CashSourceBaseSchema.refine(
+  (data) => data.locked_amount <= data.balance,
+  { message: '锁定金额不能超过余额', path: ['locked_amount'] }
+);
+
+export const CashSourceUpdateSchema = CashSourceBaseSchema.partial().refine(
+  (data) => data.locked_amount === undefined || data.balance === undefined || data.locked_amount <= data.balance,
+  { message: '锁定金额不能超过余额', path: ['locked_amount'] }
+);
 
 // === 信用卡 ===
 export const CreditCardInputSchema = z.object({
