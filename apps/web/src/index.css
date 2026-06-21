@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Notion 设计系统：基础样式 */
+:root {
+  --notion-text: rgba(0, 0, 0, 0.95);
+  --notion-text-secondary: #615d59;
+  --notion-text-muted: #a39e98;
+  --notion-bg: #ffffff;
+  --notion-bg-alt: #f6f5f4;
+  --notion-blue: #0075de;
+  --notion-blue-hover: #005bab;
+  --notion-blue-soft: #f2f9ff;
+  --notion-blue-text: #097fe8;
+  --notion-warning: #dd5b00;
+  --notion-success: #1aae39;
+  --notion-border: rgba(0, 0, 0, 0.1);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-family: 'Inter', -apple-system, system-ui, 'PingFang SC', 'Microsoft YaHei',
+    Helvetica, Arial, sans-serif;
+  /* 启用 Inter 的等宽数字特性（金额数字不抖动） */
+  font-feature-settings: 'lnum', 'locl';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--notion-bg);
+  color: var(--notion-text);
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* 数字专用：等宽数字 */
+.font-numeric {
+  font-feature-settings: 'tnum', 'lnum'; /* tabular-nums + lining-nums */
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* 通用按钮基础 */
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-micro px-4 py-2
+           bg-notion-blue text-white text-[15px] font-semibold leading-tight
+           transition-all duration-150 active:scale-95
+           hover:bg-notion-blue-hover;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-micro px-4 py-2
+           bg-black/[0.05] text-notion-text text-[15px] font-semibold leading-tight
+           transition-all duration-150 active:scale-95
+           hover:bg-black/[0.08];
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 px-2 py-1
+           text-notion-text-secondary text-[14px] font-medium
+           transition-colors hover:text-notion-text;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-pill px-2 py-1
+           bg-notion-blue-soft text-notion-blue-text
+           text-[12px] font-semibold leading-tight tracking-[0.125px];
+  }
+  .badge-warning {
+    @apply bg-[#fff4eb] text-notion-warning;
+  }
+  .badge-muted {
+    @apply bg-notion-bg-alt text-notion-text-muted;
+  }
+  .card {
+    @apply bg-white border border-notion-border rounded-comfortable shadow-card;
+  }
+  .input {
+    @apply w-full bg-white border border-[#dddddd] rounded-micro px-2 py-1.5
+           text-[16px] text-notion-text
+           focus:outline-none focus:border-notion-blue focus:ring-2 focus:ring-notion-blue/20
+           placeholder:text-notion-text-muted;
+  }
+  .label {
+    @apply block text-[14px] font-medium text-notion-text-secondary mb-1.5;
+  }
+}
+
+/* Recharts 文字颜色覆盖 */
+.recharts-cartesian-axis-tick text,
+.recharts-legend-item-text {
+  fill: var(--notion-text-secondary) !important;
+  color: var(--notion-text-secondary) !important;
+  font-size: 12px;
+}
