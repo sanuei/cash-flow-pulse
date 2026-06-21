@@ -515,7 +515,71 @@ export function countInvestmentOccurrences(
 }
 
 /**
+ * 计算指定 day-of-month 在指定日期之后（不含）的下一次发生日期
+ *
+ * 例：today=6/21, day=14 → 下次扣款日是 7/14
+ *     today=6/21, day=25 → 下次扣款日是 6/25（如果 today < 6/25）否则下月
+ *     today=6/25, day=14 → 下次扣款日是 7/14（6/14 已过）
+ *
+ * 不限制搜索范围，调用方决定看多远
+ */
+function nextOccurrence(today: Date, day: number): Date {
+  // 当月
+  const thisMonth = getPaydayInMonth(today.getFullYear(), today.getMonth(), day);
+  if (thisMonth >= today) return thisMonth;
+  // 下月
+  const nextMonthDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  return getPaydayInMonth(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), day);
+}
+
+/**
+ * 账单下次扣款日（相对今天）
+ */
+export function getBillNextDueDate(
+  bill: Pick<RecurringBill, 'due_day'>,
+  today: Date
+): Date {
+  return nextOccurrence(today, bill.due_day);
+}
+
+/**
+ * 订阅下次扣款日
+ */
+export function getSubscriptionNextDueDate(
+  sub: Pick<Subscription, 'billing_day'>,
+  today: Date
+): Date {
+  return nextOccurrence(today, sub.billing_day);
+}
+
+/**
+ * 账单的下一次扣款日是否在 [from, to) 区间内（用于"本期内即将发生"判断）
+ */
+export function isBillDueInRange(
+  bill: Pick<RecurringBill, 'due_day'>,
+  today: Date,
+  from: Date,
+  to: Date
+): { inRange: boolean; dueDate: Date } {
+  const due = nextOccurrence(today, bill.due_day);
+  return { inRange: due >= from && due < to, dueDate: due };
+}
+
+export function isSubscriptionDueInRange(
+  sub: Pick<Subscription, 'billing_day'>,
+  today: Date,
+  from: Date,
+  to: Date
+): { inRange: boolean; dueDate: Date } {
+  const due = nextOccurrence(today, sub.billing_day);
+  return { inRange: due >= from && due < to, dueDate: due };
+}
+
+/**
  * 计算订阅/账单在指定周期内是否活跃（与信用卡算法一致）
+ *
+ * 注：这个函数保留用于"严格按周期匹配"的场景（如老逻辑验证）
+ * 推荐用 isBillDueInRange / isSubscriptionDueInRange 来找"下一次扣款"
  */
 function isDayActiveInCycle(
   dueDay: number,
@@ -536,7 +600,7 @@ function isDayActiveInCycle(
 }
 
 /**
- * 账单在指定周期内是否活跃
+ * 账单在指定周期内是否活跃（严格匹配）
  */
 export function isBillActiveInCycle(
   bill: Pick<RecurringBill, 'due_day'>,
@@ -547,15 +611,13 @@ export function isBillActiveInCycle(
 }
 
 /**
- * 订阅在指定周期内是否活跃（如果是 yearly 订阅，需要判断 toString 标记）
+ * 订阅在指定周期内是否活跃（严格匹配）
  */
 export function isSubscriptionActiveInCycle(
   sub: Pick<Subscription, 'billing_day' | 'billing_cycle'>,
   cycleStart: Date,
   cycleEnd: Date,
 ): { active: boolean; dueDate: Date | null } {
-  // 简化处理：yearly 订阅也按 monthly 处理（每月检查是否到了扣款日）
-  // 实际上 yearly 订阅应该用类似投资的算法，这里 V1 简化处理
   return isDayActiveInCycle(sub.billing_day, cycleStart, cycleEnd);
 }
 
@@ -672,12 +734,22 @@ export function computeDashboardV2(
   const upcomingCreditCards: ActiveCard[] = v1.active_cards;
 
   // 3b. 账单
+  // V2.1: 改为"下一次扣款日"视角 —— 不限在本期内，展示所有账单的最近一次扣款
+  // 这样健身房 (due_day=14, 今天 6/21) 也能显示为"7/14 扣款"
   const billItems: UpcomingExpenseItem[] = [];
   let totalBills = 0;
   for (const bill of bills) {
-    const { active, dueDate } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
-    if (active && dueDate) {
-      const days = Math.max(0, diffDays(today, dueDate));
+    // 找下一次扣款日（用 nextOccurrence，跳过严格匹配）
+    const dueDate = nextOccurrence(today, bill.due_day);
+    // 判断是否在本期内（用于 net_flow 计算）
+    const inCycle = dueDate >= cycleStart && dueDate < cycleEnd;
+    if (inCycle) {
+      totalBills += bill.amount;
+    }
+    // 显示：总是展示（即使不在本期，但能"即将发生"就显示）
+    // 限制：日期距今天不超过 60 天（避免显示太远的）
+    const days = diffDays(today, dueDate);
+    if (days <= 60) {
       billItems.push({
         source_type: 'bill',
         id: bill.id,
@@ -686,19 +758,23 @@ export function computeDashboardV2(
         occurrences: 1,
         total: bill.amount,
         due_date: formatDate(dueDate),
-        days_until: days,
+        days_until: Math.max(0, days),
+        in_current_cycle: inCycle,
       });
-      totalBills += bill.amount;
     }
   }
 
-  // 3c. 订阅
+  // 3c. 订阅（同样改用"下一次扣款日"）
   const subscriptionItems: UpcomingExpenseItem[] = [];
   let totalSubs = 0;
   for (const sub of subscriptions) {
-    const { active, dueDate } = isSubscriptionActiveInCycle(sub, cycleStart, cycleEnd);
-    if (active && dueDate) {
-      const days = Math.max(0, diffDays(today, dueDate));
+    const dueDate = nextOccurrence(today, sub.billing_day);
+    const inCycle = dueDate >= cycleStart && dueDate < cycleEnd;
+    if (inCycle) {
+      totalSubs += sub.amount;
+    }
+    const days = diffDays(today, dueDate);
+    if (days <= 60) {
       const item: UpcomingExpenseItem = {
         source_type: 'subscription',
         id: sub.id,
@@ -708,9 +784,10 @@ export function computeDashboardV2(
         total: sub.amount,
         due_date: formatDate(dueDate),
         days_until: days,
+        in_current_cycle: inCycle,
       };
       subscriptionItems.push(item);
-      totalSubs += sub.amount;
+      // 注意：不再重复 totalSubs += ，已在上面 inCycle 分支加过了
     }
   }
 

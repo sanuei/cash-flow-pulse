@@ -236,6 +236,7 @@ export function Home() {
                       amount={s.total}
                       date={s.due_date}
                       daysUntil={s.days_until}
+                      inCurrentCycle={s.in_current_cycle ?? true}
                     />
                   ))}
                 </SubCategory>
@@ -250,6 +251,7 @@ export function Home() {
                       amount={b.total}
                       date={b.due_date}
                       daysUntil={b.days_until}
+                      inCurrentCycle={b.in_current_cycle ?? true}
                     />
                   ))}
                 </SubCategory>
@@ -967,23 +969,30 @@ function ExpenseRow({
   amount,
   date,
   daysUntil,
+  inCurrentCycle = true,
 }: {
   name: string;
   amount: number;
   date: string;
   daysUntil: number;
+  inCurrentCycle?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between text-sm">
       <div className="flex-1 min-w-0">
-        <span className="text-notion-text">{name}</span>
+        <span className={inCurrentCycle ? 'text-notion-text' : 'text-notion-text-muted'}>
+          {name}
+        </span>
         <span className="text-notion-text-muted ml-2 text-xs">
           {date}
           {daysUntil > 0 && <span> · {daysUntil} 天后</span>}
           {daysUntil === 0 && <span> · 今天</span>}
+          {!inCurrentCycle && <span className="ml-1 text-notion-text-muted">· 下期扣款</span>}
         </span>
       </div>
-      <span className="font-numeric text-notion-warning">{formatYen(amount)}</span>
+      <span className={`font-numeric ${inCurrentCycle ? 'text-notion-warning' : 'text-notion-text-muted'}`}>
+        {formatYen(amount)}
+      </span>
     </div>
   );
 }

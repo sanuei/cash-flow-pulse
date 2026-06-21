@@ -621,7 +621,7 @@ describe('computeDashboardV2 向后兼容', () => {
     expect(v2.net_flow).toBe(-v1.total_due); // 净流出（只有支出）
   });
 
-  it('有订阅时影响日均预算', () => {
+  it('订阅 due_day=25 在本期内', () => {
     const today = new Date(2026, 5, 21); // 6/21
     const subs = [
       {
@@ -640,16 +640,38 @@ describe('computeDashboardV2 向后兼容', () => {
     ];
     const v2 = computeDashboardV2(today, baseConfig, sampleCash, sampleCards, [], [], [], [], subs);
     // 6/25 在 [6/21, 7/10) 内 → 算入
-    // V1: total_net_cash=30000 (cash 60000 - locked 30000), total_due=30000
-    // V1: net_available = 30000 - 30000 = 0
-    // V2: total_expense = 30000 (信用卡) + 1490 (订阅) = 31490
-    //      netFlow = 0 - 31490 = -31490
-    //      net_available = v1.total_net_cash + netFlow = 30000 + (-31490) = -1490
-    //      daily_budget = max(0, floor(-1490/19)) = 0
-    expect(v2.total_expense).toBe(30000 + 1490);
-    expect(v2.net_available).toBe(-1490);
-    expect(v2.daily_budget).toBe(0); // max(0, ...) 保证非负
-    expect(v2.net_flow).toBe(-31490);
+    expect(v2.upcoming_expenses.subscriptions.length).toBe(1);
+    expect(v2.upcoming_expenses.subscriptions[0]!.in_current_cycle).toBe(true);
+  });
+
+  it('账单 due_day=14 在本周期区间外也能显示（健身房场景）', () => {
+    // 今天 6/21，账单 due_day=14
+    // 旧逻辑：6/14 < 6/21 不活跃，7/14 > 7/10 也不活跃 → 不显示 ❌
+    // 新逻辑：用 nextOccurrence 找下次扣款日 = 7/14，距离 23 天 ≤ 60 → 显示
+    const today = new Date(2026, 5, 21); // 6/21
+    const bills = [
+      {
+        id: 'b1',
+        user_id: 'default',
+        name: '健身房',
+        amount: 7370,
+        due_day: 14,
+        note: null,
+        sort_order: 0,
+        created_at: 0,
+        updated_at: 0,
+      },
+    ];
+    const v2 = computeDashboardV2(today, baseConfig, sampleCash, sampleCards, [], [], bills);
+    // 显示健身房（找到下次扣款日 7/14）
+    expect(v2.upcoming_expenses.bills.length).toBe(1);
+    expect(v2.upcoming_expenses.bills[0]!.name).toBe('健身房');
+    expect(v2.upcoming_expenses.bills[0]!.due_date).toBe('2026-07-14');
+    // 但 in_current_cycle=false（不在 [6/21, 7/10) 内）
+    expect(v2.upcoming_expenses.bills[0]!.in_current_cycle).toBe(false);
+    // totalBills = 0（不计入日均预算）
+    expect(v2.upcoming_expenses.total_bills).toBe(0);
+    expect(v2.total_expense).toBe(30000); // 只有信用卡算入
   });
 
   it('有收入时大幅提升日均预算', () => {

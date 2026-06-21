@@ -203,6 +203,8 @@ export interface UpcomingExpenseItem {
   days_until: number;              // 距今天数（投资 = 0）
   // v0.3.1: 投资专用
   frequency?: InvestmentFrequency;
+  // v0.3.2: 标记是否在本期内（用于前端视觉标记"下期扣款"）
+  in_current_cycle?: boolean;
 }
 
 export interface UpcomingIncomeItem {
