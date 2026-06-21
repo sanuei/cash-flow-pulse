@@ -9,23 +9,24 @@ import { Hono } from 'hono';
 import { UserConfigUpdateSchema } from '@cfp/shared';
 import type { Env } from '../index';
 
-const USER_ID = 'default';
+// userId 改为 c.get('user').id（v1.0+ 多用户）
 
 export const configRoute = new Hono<{ Bindings: Env }>();
 
 // 获取配置
 configRoute.get('/', async (c) => {
+  const userId = c.get('user')!.id;
   const db = c.env.DB;
-  let row = await db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(USER_ID).first<any>();
+  let row = await db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>();
 
   if (!row) {
     // 首次访问：创建默认配置
     const now = Date.now();
     await db
       .prepare('INSERT INTO user_config (user_id, pay_day, snapshot_offsets, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-      .bind(USER_ID, 10, '[0,7,14,21]', now, now)
+      .bind(userId, 10, '[0,7,14,21]', now, now)
       .run();
-    row = await db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(USER_ID).first<any>();
+    row = await db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>();
   }
 
   return c.json({
@@ -39,6 +40,7 @@ configRoute.get('/', async (c) => {
 
 // 更新配置
 configRoute.put('/', async (c) => {
+  const userId = c.get('user')!.id;
   const body = await c.req.json();
   const parsed = UserConfigUpdateSchema.safeParse(body);
   if (!parsed.success) {
@@ -46,12 +48,12 @@ configRoute.put('/', async (c) => {
   }
 
   const now = Date.now();
-  const current = await c.env.DB.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(USER_ID).first<any>();
+  const current = await c.env.DB.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>();
 
   if (!current) {
     await c.env.DB
       .prepare('INSERT INTO user_config (user_id, pay_day, snapshot_offsets, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-      .bind(USER_ID, parsed.data.pay_day ?? 10, JSON.stringify(parsed.data.snapshot_offsets ?? [0, 7, 14, 21]), now, now)
+      .bind(userId, parsed.data.pay_day ?? 10, JSON.stringify(parsed.data.snapshot_offsets ?? [0, 7, 14, 21]), now, now)
       .run();
   } else {
     const updates: string[] = [];
@@ -66,7 +68,7 @@ configRoute.put('/', async (c) => {
     }
     updates.push('updated_at = ?');
     values.push(now);
-    values.push(USER_ID);
+    values.push(userId);
     await c.env.DB.prepare(`UPDATE user_config SET ${updates.join(', ')} WHERE user_id = ?`).bind(...values).run();
   }
 

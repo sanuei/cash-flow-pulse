@@ -9,12 +9,13 @@
 import { Hono } from 'hono';
 import { ImportPayloadSchema } from '@cfp/shared';
 import type { Env } from '../index';
-import { generateId, now, USER_ID } from '../lib/utils';
+import { generateId, now } from '../lib/utils';
 
 export const exportImportRoutes = new Hono<{ Bindings: Env }>();
 
 // 导出 JSON
 exportImportRoutes.get('/export', async (c) => {
+  const userId = c.get('user')!.id;
   const db = c.env.DB;
   const [
     config,
@@ -26,14 +27,14 @@ exportImportRoutes.get('/export', async (c) => {
     incomes,
     subscriptions,
   ] = await Promise.all([
-    db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(USER_ID).first<any>(),
-    db.prepare('SELECT * FROM cash_sources WHERE user_id = ? ORDER BY sort_order').bind(USER_ID).all<any>(),
-    db.prepare('SELECT * FROM credit_cards WHERE user_id = ? ORDER BY sort_order').bind(USER_ID).all<any>(),
-    db.prepare('SELECT * FROM snapshots WHERE user_id = ? ORDER BY snapshot_date').bind(USER_ID).all<any>(),
-    db.prepare('SELECT * FROM recurring_investments WHERE user_id = ? ORDER BY sort_order').bind(USER_ID).all<any>(),
-    db.prepare('SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY sort_order').bind(USER_ID).all<any>(),
-    db.prepare('SELECT * FROM recurring_incomes WHERE user_id = ? ORDER BY sort_order').bind(USER_ID).all<any>(),
-    db.prepare('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY sort_order').bind(USER_ID).all<any>(),
+    db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>(),
+    db.prepare('SELECT * FROM cash_sources WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
+    db.prepare('SELECT * FROM credit_cards WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
+    db.prepare('SELECT * FROM snapshots WHERE user_id = ? ORDER BY snapshot_date').bind(userId).all<any>(),
+    db.prepare('SELECT * FROM recurring_investments WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
+    db.prepare('SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
+    db.prepare('SELECT * FROM recurring_incomes WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
+    db.prepare('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
   ]);
 
   const payload = {
@@ -106,9 +107,10 @@ exportImportRoutes.get('/export', async (c) => {
 
 // 导出 CSV（快照）
 exportImportRoutes.get('/export/snapshots.csv', async (c) => {
+  const userId = c.get('user')!.id;
   const result = await c.env.DB
     .prepare('SELECT * FROM snapshots WHERE user_id = ? ORDER BY snapshot_date DESC')
-    .bind(USER_ID)
+    .bind(userId)
     .all<any>();
 
   const rows = result.results || [];
@@ -126,6 +128,7 @@ exportImportRoutes.get('/export/snapshots.csv', async (c) => {
 
 // 导入
 exportImportRoutes.post('/import', async (c) => {
+  const userId = c.get('user')!.id;
   const body = await c.req.json();
   const parsed = ImportPayloadSchema.safeParse(body);
   if (!parsed.success) {
@@ -147,62 +150,62 @@ exportImportRoutes.post('/import', async (c) => {
     if (mode === 'overwrite') {
       // 清空所有数据（包括 4 个新表）
       await db.batch([
-        db.prepare('DELETE FROM snapshots WHERE user_id = ?').bind(USER_ID),
-        db.prepare('DELETE FROM subscriptions WHERE user_id = ?').bind(USER_ID),
-        db.prepare('DELETE FROM recurring_incomes WHERE user_id = ?').bind(USER_ID),
-        db.prepare('DELETE FROM recurring_bills WHERE user_id = ?').bind(USER_ID),
-        db.prepare('DELETE FROM recurring_investments WHERE user_id = ?').bind(USER_ID),
-        db.prepare('DELETE FROM credit_cards WHERE user_id = ?').bind(USER_ID),
-        db.prepare('DELETE FROM cash_sources WHERE user_id = ?').bind(USER_ID),
+        db.prepare('DELETE FROM snapshots WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM subscriptions WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM recurring_incomes WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM recurring_bills WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM recurring_investments WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM credit_cards WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM cash_sources WHERE user_id = ?').bind(userId),
       ]);
     }
 
     // 1. 更新配置
     await db
       .prepare('UPDATE user_config SET pay_day = ?, snapshot_offsets = ?, updated_at = ? WHERE user_id = ?')
-      .bind(config.pay_day, JSON.stringify(config.snapshot_offsets), ts, USER_ID)
+      .bind(config.pay_day, JSON.stringify(config.snapshot_offsets), ts, userId)
       .run();
 
     // 2. 现金来源
     const cashStmts = cash_sources.map((cs, i) =>
       db.prepare('INSERT OR REPLACE INTO cash_sources (id, user_id, name, balance, locked_amount, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), USER_ID, cs.name, cs.balance, cs.locked_amount, i, ts, ts)
+        .bind(generateId(), userId, cs.name, cs.balance, cs.locked_amount, i, ts, ts)
     );
 
     // 3. 信用卡
     const cardStmts = credit_cards.map((cc, i) =>
       db.prepare('INSERT OR REPLACE INTO credit_cards (id, user_id, name, statement_amount, due_day, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), USER_ID, cc.name, cc.statement_amount, cc.due_day, i, ts, ts)
+        .bind(generateId(), userId, cc.name, cc.statement_amount, cc.due_day, i, ts, ts)
     );
 
     // 4. 投资
     const investmentStmts = investments.map((inv: any, i: number) =>
       db.prepare('INSERT OR REPLACE INTO recurring_investments (id, user_id, name, amount, frequency, start_date, end_date, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), USER_ID, inv.name, inv.amount, inv.frequency, inv.start_date, inv.end_date ?? null, inv.note ?? null, i, ts, ts)
+        .bind(generateId(), userId, inv.name, inv.amount, inv.frequency, inv.start_date, inv.end_date ?? null, inv.note ?? null, i, ts, ts)
     );
 
     // 5. 账单
     const billStmts = bills.map((b: any, i: number) =>
       db.prepare('INSERT OR REPLACE INTO recurring_bills (id, user_id, name, amount, due_day, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), USER_ID, b.name, b.amount, b.due_day, b.note ?? null, i, ts, ts)
+        .bind(generateId(), userId, b.name, b.amount, b.due_day, b.note ?? null, i, ts, ts)
     );
 
     // 6. 收入
     const incomeStmts = incomes.map((inc: any, i: number) =>
       db.prepare('INSERT OR REPLACE INTO recurring_incomes (id, user_id, name, amount, frequency, pay_day, day_of_week, start_date, end_date, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), USER_ID, inc.name, inc.amount, inc.frequency, inc.pay_day ?? null, inc.day_of_week ?? null, inc.start_date, inc.end_date ?? null, inc.note ?? null, i, ts, ts)
+        .bind(generateId(), userId, inc.name, inc.amount, inc.frequency, inc.pay_day ?? null, inc.day_of_week ?? null, inc.start_date, inc.end_date ?? null, inc.note ?? null, i, ts, ts)
     );
 
     // 7. 订阅
     const subscriptionStmts = subscriptions.map((s: any, i: number) =>
       db.prepare('INSERT OR REPLACE INTO subscriptions (id, user_id, name, amount, billing_day, billing_cycle, category, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), USER_ID, s.name, s.amount, s.billing_day, s.billing_cycle ?? 'monthly', s.category ?? null, s.note ?? null, i, ts, ts)
+        .bind(generateId(), userId, s.name, s.amount, s.billing_day, s.billing_cycle ?? 'monthly', s.category ?? null, s.note ?? null, i, ts, ts)
     );
 
     // 8. 快照
     const snapStmts = (snapshots ?? []).map((s) =>
       db.prepare('INSERT OR REPLACE INTO snapshots (id, user_id, cycle_id, offset_index, snapshot_date, total_balance, total_locked, total_due, net_available, daily_budget, days_to_payday, note, data_unchanged, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
-        .bind(generateId(), USER_ID, s.cycle_id, s.offset_index, s.snapshot_date, s.total_balance, s.total_locked, s.total_due, s.net_available, s.daily_budget, s.days_to_payday, s.note ?? null, ts)
+        .bind(generateId(), userId, s.cycle_id, s.offset_index, s.snapshot_date, s.total_balance, s.total_locked, s.total_due, s.net_available, s.daily_budget, s.days_to_payday, s.note ?? null, ts)
     );
 
     await db.batch([

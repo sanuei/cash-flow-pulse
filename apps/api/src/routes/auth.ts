@@ -54,7 +54,8 @@ authRoutes.get('/callback/google', async (c) => {
 
   // 错误回调（用户拒绝授权等）
   if (errorParam) {
-    return c.redirect(`/?auth_error=${encodeURIComponent(errorParam)}`, 302);
+    const appUrl = c.env.APP_URL || 'https://cashflow.soniclab.cc';
+    return c.redirect(`${appUrl}/?auth_error=${encodeURIComponent(errorParam)}`, 302);
   }
 
   if (!code || !state) {
@@ -83,13 +84,15 @@ authRoutes.get('/callback/google', async (c) => {
     // 4. 创建 session
     const { id: sessionId, expiresAt } = await createSession(c.env, user.id, c.req.raw);
 
-    // 5. 302 回首页（带 session cookie + 清掉 state cookie）
+    // 5. 302 回前端首页（带 session cookie + 清掉 state cookie）
     const isSecure = c.req.url.startsWith('https://');
     const sessionCookie = buildSessionCookie(sessionId, expiresAt, isSecure);
     const clearStateCookie = buildClearStateCookie(isSecure);
     // Cloudflare Workers 不支持单 header 多 cookie 用 \n 合并，必须 append 多次
     const headers = new Headers();
-    headers.set('Location', migration.migrated ? '/?welcome=migrated' : '/');
+    // 重定向到前端 Web App，不能用相对路径（/）否则会跳到 API Worker 根路径返回 404
+    const appUrl = c.env.APP_URL || 'https://cashflow.soniclab.cc';
+    headers.set('Location', migration.migrated ? `${appUrl}/?welcome=migrated` : `${appUrl}/`);
     headers.append('Set-Cookie', sessionCookie);
     headers.append('Set-Cookie', clearStateCookie);
     return new Response(null, { status: 302, headers });

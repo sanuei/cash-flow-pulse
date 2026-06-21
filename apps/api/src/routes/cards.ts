@@ -5,19 +5,21 @@
 import { Hono } from 'hono';
 import { CreditCardInputSchema } from '@cfp/shared';
 import type { Env } from '../index';
-import { generateId, now, USER_ID } from '../lib/utils';
+import { generateId, now } from '../lib/utils';
 
 export const cardRoutes = new Hono<{ Bindings: Env }>();
 
 cardRoutes.get('/', async (c) => {
+  const userId = c.get('user')!.id;
   const result = await c.env.DB
     .prepare('SELECT * FROM credit_cards WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC')
-    .bind(USER_ID)
+    .bind(userId)
     .all<any>();
   return c.json(result.results || []);
 });
 
 cardRoutes.post('/', async (c) => {
+  const userId = c.get('user')!.id;
   const body = await c.req.json();
   const parsed = CreditCardInputSchema.safeParse(body);
   if (!parsed.success) {
@@ -28,18 +30,19 @@ cardRoutes.post('/', async (c) => {
   const ts = now();
   const maxOrder = await c.env.DB
     .prepare('SELECT COALESCE(MAX(sort_order), -1) as max_order FROM credit_cards WHERE user_id = ?')
-    .bind(USER_ID)
+    .bind(userId)
     .first<any>();
 
   await c.env.DB
     .prepare('INSERT INTO credit_cards (id, user_id, name, statement_amount, due_day, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, USER_ID, parsed.data.name, parsed.data.statement_amount, parsed.data.due_day, (maxOrder?.max_order ?? -1) + 1, ts, ts)
+    .bind(id, userId, parsed.data.name, parsed.data.statement_amount, parsed.data.due_day, (maxOrder?.max_order ?? -1) + 1, ts, ts)
     .run();
 
   return c.json({ id, ...parsed.data, sort_order: (maxOrder?.max_order ?? -1) + 1, created_at: ts, updated_at: ts }, 201);
 });
 
 cardRoutes.put('/:id', async (c) => {
+  const userId = c.get('user')!.id;
   const id = c.req.param('id');
   const body = await c.req.json();
   const parsed = CreditCardInputSchema.partial().safeParse(body);
@@ -54,7 +57,7 @@ cardRoutes.put('/:id', async (c) => {
   if (parsed.data.statement_amount !== undefined) { updates.push('statement_amount = ?'); values.push(parsed.data.statement_amount); }
   if (parsed.data.due_day !== undefined) { updates.push('due_day = ?'); values.push(parsed.data.due_day); }
   updates.push('updated_at = ?'); values.push(ts);
-  values.push(id, USER_ID);
+  values.push(id, userId);
 
   const result = await c.env.DB
     .prepare(`UPDATE credit_cards SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`)
@@ -66,10 +69,11 @@ cardRoutes.put('/:id', async (c) => {
 });
 
 cardRoutes.delete('/:id', async (c) => {
+  const userId = c.get('user')!.id;
   const id = c.req.param('id');
   const result = await c.env.DB
     .prepare('DELETE FROM credit_cards WHERE id = ? AND user_id = ?')
-    .bind(id, USER_ID)
+    .bind(id, userId)
     .run();
 
   if (result.meta.changes === 0) return c.json({ error: 'Not Found' }, 404);

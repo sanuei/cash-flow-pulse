@@ -30,7 +30,17 @@ type DashboardCalcV2 = DashboardCalc & {
   total_income: number;
   net_flow: number;
 };
-import { apiGet, apiPost, apiPut, apiDelete } from './api';
+import { apiGet, apiPost, apiPut, apiDelete, ApiError } from './api';
+
+// v1.0+ 多用户
+export interface CurrentUser {
+  id: string;
+  email: string;
+  name: string | null;
+  picture: string | null;
+  tier: 'free' | 'pro';
+  is_admin: boolean;
+}
 
 interface AppState {
   // ===== V1 数据 =====
@@ -53,6 +63,10 @@ interface AppState {
   // ===== 状态 =====
   loading: boolean;
   error: string | null;
+
+  // ===== Auth (v1.0+) =====
+  currentUser: CurrentUser | null;
+  authStatus: 'unknown' | 'authenticated' | 'unauthenticated';  // 初始化时 unknown，check 后确定
 
   // ===== V1 Actions =====
   loadDashboard: () => Promise<void>;
@@ -81,9 +95,14 @@ interface AppState {
   addSubscription: (data: Partial<Subscription>) => Promise<void>;
   updateSubscription: (id: string, data: Partial<Subscription>) => Promise<void>;
   deleteSubscription: (id: string) => Promise<void>;
+
+  // ===== Auth Actions (v1.0+) =====
+  checkSession: () => Promise<void>;
+  logout: () => Promise<void>;
+  startGoogleLogin: () => void;  // window.location.href = '/api/auth/google'
 }
 
-export const useStore = create<AppState>((set) => ({
+export const useStore = create<AppState>((set, get) => ({
   // ===== V1 =====
   config: null,
   cashSources: [],
@@ -101,6 +120,9 @@ export const useStore = create<AppState>((set) => ({
   // ===== 状态 =====
   loading: false,
   error: null,
+  // ===== Auth =====
+  currentUser: null,
+  authStatus: 'unknown',
 
   async loadDashboard() {
     set({ loading: true, error: null });
@@ -135,8 +157,55 @@ export const useStore = create<AppState>((set) => ({
         loading: false,
       });
     } catch (e) {
+      // 401 = session 失效，跳登录页（App.tsx 会处理）
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        set({ currentUser: null, authStatus: 'unauthenticated', loading: false });
+        return;
+      }
       set({ error: (e as Error).message, loading: false });
     }
+  },
+
+  // ===== Auth Actions =====
+  async checkSession() {
+    try {
+      const me = await apiGet<CurrentUser>('/auth/me');
+      set({ currentUser: me, authStatus: 'authenticated' });
+      return;
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        set({ currentUser: null, authStatus: 'unauthenticated' });
+        return;
+      }
+      // 网络错误等：保持 unknown，不跳登录
+      console.warn('checkSession error:', e);
+    }
+  },
+
+  async logout() {
+    try {
+      // apiPost 带 cookie，但 /api/auth/logout 路径需要特殊处理（fetchWithCreds 已支持）
+      await apiPost('/auth/logout', {});
+    } catch (e) {
+      console.warn('logout API error (cookie may still be cleared):', e);
+    }
+    // 清 store + 跳登录
+    set({
+      currentUser: null,
+      authStatus: 'unauthenticated',
+      config: null,
+      cashSources: [], creditCards: [], snapshots: [],
+      investments: [], bills: [], incomes: [], subscriptions: [],
+      calc: null, prompt: null, generatedAt: null,
+      error: null,
+    });
+  },
+
+  startGoogleLogin() {
+    // 使用自定义域名，Google consent screen 显示 cashflow.soniclab.cc 而非 workers.dev
+    // cashflow.soniclab.cc/api/* → CF Workers Route → cash-flow-pulse-api Worker
+    // Google Console 里 redirect_uri 必须配 https://cashflow.soniclab.cc/api/auth/callback/google
+    window.location.href = 'https://cashflow.soniclab.cc/api/auth/google';
   },
 
   // ===== V1 Actions =====

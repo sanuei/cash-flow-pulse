@@ -14,7 +14,9 @@
  * - 生产：硬编码 PRODUCTION_API_BASE（注入 .env.production 也可，但当前 build 时已知）
  */
 
-const PRODUCTION_API_BASE = 'https://cash-flow-pulse-api.sonic980828.workers.dev/api';
+// 使用自定义域名：同域下 cookie 更可靠，Google consent 显示 cashflow.soniclab.cc
+// cashflow.soniclab.cc/api/* → Workers Route → cash-flow-pulse-api Worker
+const PRODUCTION_API_BASE = 'https://cashflow.soniclab.cc/api';
 
 // 根据 hostname 决定 API base：
 // - localhost → 相对路径（Vite proxy 转发到 8787）
@@ -34,14 +36,22 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase();
 
+// 通用 fetch 包装（v1.0+ 加 credentials:'include' 带 cookie）
+async function fetchWithCreds(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${API_BASE}${path}`, {
+    ...init,
+    credentials: 'include',  // 重要：跨域带 cookie（CORS 需 Access-Control-Allow-Credentials）
+  });
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+  const res = await fetchWithCreds(path);
   if (!res.ok) throw new ApiError(res.status, await res.text());
   return res.json();
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetchWithCreds(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -51,7 +61,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetchWithCreds(path, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -61,7 +71,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiDelete<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE' });
+  const res = await fetchWithCreds(path, { method: 'DELETE' });
   if (!res.ok) throw new ApiError(res.status, await res.text());
   return res.json();
 }

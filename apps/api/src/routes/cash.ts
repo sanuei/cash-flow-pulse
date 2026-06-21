@@ -5,21 +5,23 @@
 import { Hono } from 'hono';
 import { CashSourceInputSchema, CashSourceUpdateSchema } from '@cfp/shared';
 import type { Env } from '../index';
-import { generateId, now, USER_ID } from '../lib/utils';
+import { generateId, now } from '../lib/utils';
 
 export const cashRoutes = new Hono<{ Bindings: Env }>();
 
 // 列表
 cashRoutes.get('/', async (c) => {
+  const userId = c.get('user')!.id;
   const result = await c.env.DB
     .prepare('SELECT * FROM cash_sources WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC')
-    .bind(USER_ID)
+    .bind(userId)
     .all<any>();
   return c.json(result.results || []);
 });
 
 // 新增
 cashRoutes.post('/', async (c) => {
+  const userId = c.get('user')!.id;
   const body = await c.req.json();
   const parsed = CashSourceInputSchema.safeParse(body);
   if (!parsed.success) {
@@ -30,13 +32,13 @@ cashRoutes.post('/', async (c) => {
   const ts = now();
   const maxOrder = await c.env.DB
     .prepare('SELECT COALESCE(MAX(sort_order), -1) as max_order FROM cash_sources WHERE user_id = ?')
-    .bind(USER_ID)
+    .bind(userId)
     .first<any>();
 
   try {
     await c.env.DB
       .prepare('INSERT INTO cash_sources (id, user_id, name, balance, locked_amount, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, USER_ID, parsed.data.name, parsed.data.balance, parsed.data.locked_amount, (maxOrder?.max_order ?? -1) + 1, ts, ts)
+      .bind(id, userId, parsed.data.name, parsed.data.balance, parsed.data.locked_amount, (maxOrder?.max_order ?? -1) + 1, ts, ts)
       .run();
   } catch (e: any) {
     if (e.message?.includes('UNIQUE')) {
@@ -50,6 +52,7 @@ cashRoutes.post('/', async (c) => {
 
 // 更新
 cashRoutes.put('/:id', async (c) => {
+  const userId = c.get('user')!.id;
   const id = c.req.param('id');
   const body = await c.req.json();
   const parsed = CashSourceUpdateSchema.safeParse(body);
@@ -64,7 +67,7 @@ cashRoutes.put('/:id', async (c) => {
   if (parsed.data.balance !== undefined) { updates.push('balance = ?'); values.push(parsed.data.balance); }
   if (parsed.data.locked_amount !== undefined) { updates.push('locked_amount = ?'); values.push(parsed.data.locked_amount); }
   updates.push('updated_at = ?'); values.push(ts);
-  values.push(id, USER_ID);
+  values.push(id, userId);
 
   const result = await c.env.DB
     .prepare(`UPDATE cash_sources SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`)
@@ -80,10 +83,11 @@ cashRoutes.put('/:id', async (c) => {
 
 // 删除
 cashRoutes.delete('/:id', async (c) => {
+  const userId = c.get('user')!.id;
   const id = c.req.param('id');
   const result = await c.env.DB
     .prepare('DELETE FROM cash_sources WHERE id = ? AND user_id = ?')
-    .bind(id, USER_ID)
+    .bind(id, userId)
     .run();
 
   if (result.meta.changes === 0) {

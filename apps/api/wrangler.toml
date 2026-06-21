@@ -4,6 +4,17 @@ compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
+# 每日自动快照（UTC 15:00 = 日本时间 0:00）
+[triggers]
+crons = ["0 15 * * *"]
+
+# 让 cashflow.soniclab.cc/api/* 也由这个 Worker 处理
+# CF Workers Route 优先级高于 Pages，不会影响前端 SPA 路由
+# 这样 redirect_uri 可以用 cashflow.soniclab.cc，Google consent 显示自定义域名
+[[routes]]
+pattern = "cashflow.soniclab.cc/api/*"
+zone_name = "soniclab.cc"
+
 # D1 数据库绑定
 # 首次部署前需要先创建 D1 实例：
 #   wrangler d1 create cash-flow-pulse-db
@@ -17,5 +28,7 @@ database_id = "222e5633-5a2c-4af7-8efb-dbb0f7d5d6b5"
 # ALLOWED_ORIGIN 支持逗号分隔多域名
 # 开发：http://localhost:5173 / http://localhost:8787
 # 生产：https://cash.soniclab.cc / https://cash-flow-pulse.pages.dev / https://cashflow.soniclab.cc
+# APP_URL：OAuth 登录成功后跳回的前端地址（本地开发可在 .dev.vars 覆盖为 http://localhost:5173）
 [vars]
 ALLOWED_ORIGIN = "http://localhost:5173,http://localhost:8787,https://cash.soniclab.cc,https://cash-flow-pulse.pages.dev,https://cashflow.soniclab.cc"
+APP_URL = "https://cashflow.soniclab.cc"

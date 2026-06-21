@@ -1,20 +1,55 @@
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { Home } from './pages/Home';
+import { Overview } from './pages/Overview';
+import { IncomesPage } from './pages/IncomesPage';
+import { InvestmentsPage } from './pages/InvestmentsPage';
+import { ExpensesPage } from './pages/ExpensesPage';
 import { Trends } from './pages/Trends';
 import { Settings } from './pages/Settings';
+import { Login } from './pages/Login';
 import { useStore } from './lib/store';
 import { useEffect } from 'react';
-import { Icon } from './components/Icon';
+import { Icon, type IconName } from './components/Icon';
 
 function App() {
+  const authStatus = useStore((s) => s.authStatus);
+  const currentUser = useStore((s) => s.currentUser);
+  const checkSession = useStore((s) => s.checkSession);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const loading = useStore((s) => s.loading);
   const error = useStore((s) => s.error);
 
+  // 1. 启动时 check session（一次）
   useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+    checkSession();
+  }, [checkSession]);
 
+  // 2. auth 状态确定后，加载 dashboard（已登录）或跳 Login
+  useEffect(() => {
+    if (authStatus === 'authenticated') {
+      loadDashboard();
+    }
+  }, [authStatus, loadDashboard]);
+
+  // 加载中：显示 spinner
+  if (authStatus === 'unknown') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Icon name="loading" size={32} className="text-notion-text-secondary animate-spin" strokeWidth={1.5} />
+      </div>
+    );
+  }
+
+  // 未登录：渲染 Login
+  if (authStatus === 'unauthenticated') {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  // 已登录：渲染主应用
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
@@ -34,34 +69,69 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-notion-bg">
-      {/* 顶栏（桌面端） */}
+      {/* 顶栏（桌面端：6 项文字 Tab） */}
       <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border bg-white">
         <div className="flex items-center gap-2 font-bold text-notion-text">
           <Icon name="wallet" size={20} className="text-notion-text" />
           <span>Cash Flow Pulse</span>
         </div>
         <nav className="flex items-center gap-1">
-          <NavTab to="/">主页</NavTab>
+          <NavTab to="/">总览</NavTab>
+          <NavTab to="/incomes">收入</NavTab>
+          <NavTab to="/investments">投资</NavTab>
+          <NavTab to="/expenses">消费</NavTab>
           <NavTab to="/trends">曲线</NavTab>
           <NavTab to="/settings">设置</NavTab>
         </nav>
       </header>
 
+      {/* 顶栏（移动端：Logo + 曲线/设置图标） */}
+      <header className="sm:hidden flex items-center justify-between px-4 h-12 border-b border-notion-border bg-white">
+        <div className="flex items-center gap-2 font-bold text-notion-text text-sm">
+          <Icon name="wallet" size={16} className="text-notion-text" />
+          <span>Cash Flow Pulse</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <NavLink
+            to="/trends"
+            className={({ isActive }) =>
+              `p-2 rounded-micro transition-colors ${isActive ? 'text-notion-blue' : 'text-notion-text-secondary hover:text-notion-text'}`
+            }
+            aria-label="曲线"
+          >
+            <Icon name="chart" size={20} strokeWidth={1.75} />
+          </NavLink>
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `p-2 rounded-micro transition-colors ${isActive ? 'text-notion-blue' : 'text-notion-text-secondary hover:text-notion-text'}`
+            }
+            aria-label="设置"
+          >
+            <Icon name="settings" size={20} strokeWidth={1.75} />
+          </NavLink>
+        </div>
+      </header>
+
       {/* 内容 */}
       <main className={`flex-1 ${loading ? 'opacity-60' : ''} transition-opacity`}>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Overview />} />
+          <Route path="/incomes" element={<IncomesPage />} />
+          <Route path="/investments" element={<InvestmentsPage />} />
+          <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/trends" element={<Trends />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
-      {/* 底部 Tab（移动端） */}
+      {/* 底部 Tab（移动端：4 个主要页面） */}
       <nav className="sm:hidden flex items-center justify-around border-t border-notion-border bg-white sticky bottom-0 h-14">
-        <NavTabMobile to="/" icon="home" label="主页" />
-        <NavTabMobile to="/trends" icon="chart" label="曲线" />
-        <NavTabMobile to="/settings" icon="settings" label="设置" />
+        <NavTabMobile to="/" icon="home" label="总览" />
+        <NavTabMobile to="/incomes" icon="income" label="收入" />
+        <NavTabMobile to="/investments" icon="investment" label="投资" />
+        <NavTabMobile to="/expenses" icon="bill" label="消费" />
       </nav>
     </div>
   );
@@ -83,7 +153,7 @@ function NavTab({ to, children }: { to: string; children: React.ReactNode }) {
   );
 }
 
-function NavTabMobile({ to, icon, label }: { to: string; icon: 'home' | 'chart' | 'settings'; label: string }) {
+function NavTabMobile({ to, icon, label }: { to: string; icon: IconName; label: string }) {
   return (
     <NavLink
       to={to}

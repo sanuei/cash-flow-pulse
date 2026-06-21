@@ -28,6 +28,10 @@ import {
   ChevronRight,    // 折叠收起
   CalendarDays,    // 日历/周期
   TrendingUp,      // 上涨
+  // v1.0 新增
+  User,            // 用户头像
+  LogOut,          // 注销
+  Loader2,         // 加载 spinner
   type LucideIcon,
 } from 'lucide-react';
 import { forwardRef } from 'react';
@@ -67,7 +71,11 @@ export type IconName =
   | 'chevron-down'// 折叠展开
   | 'chevron-right'// 折叠收起
   | 'calendar'    // 日历/周期
-  | 'trending-up';// 上涨
+  | 'trending-up'// 上涨
+  // v1.0 新增
+  | 'user'       // 用户
+  | 'logout'     // 注销
+  | 'loading';   // 加载
 
 const map: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -99,6 +107,10 @@ const map: Record<IconName, LucideIcon> = {
   'chevron-right': ChevronRight,
   calendar: CalendarDays,
   'trending-up': TrendingUp,
+  // v1.0 新增
+  user: User,
+  logout: LogOut,
+  loading: Loader2,
 };
 
 type Props = {

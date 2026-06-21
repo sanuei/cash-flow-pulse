@@ -48,12 +48,13 @@ CREATE TABLE IF NOT EXISTS credit_cards (
 
 CREATE INDEX IF NOT EXISTS idx_cards_user ON credit_cards(user_id);
 
--- === 快照表 ===
+-- === 快照表（v1.1 重建：唯一键改为 snapshot_date，新增收入/投资/消费字段）===
+-- 迁移脚本见 db/migrate_snapshots_v1.1.sql
 CREATE TABLE IF NOT EXISTS snapshots (
   id              TEXT PRIMARY KEY,
   user_id         TEXT NOT NULL DEFAULT 'default',
   cycle_id        TEXT NOT NULL,
-  offset_index    INTEGER NOT NULL,
+  offset_index    INTEGER NOT NULL DEFAULT 0,  -- 手动采集点标记（0=发薪日，自动每日=0）
   snapshot_date   TEXT NOT NULL,
   total_balance   REAL NOT NULL,
   total_locked    REAL NOT NULL,
@@ -63,8 +64,12 @@ CREATE TABLE IF NOT EXISTS snapshots (
   days_to_payday  INTEGER NOT NULL,
   note            TEXT,
   data_unchanged  INTEGER NOT NULL DEFAULT 0,
+  -- v1.1 新增：月度等效收入/投资/消费（用于曲线对比）
+  total_income    REAL NOT NULL DEFAULT 0,
+  total_investment REAL NOT NULL DEFAULT 0,
+  total_expense   REAL NOT NULL DEFAULT 0,
   created_at      INTEGER NOT NULL,
-  UNIQUE(user_id, cycle_id, offset_index)
+  UNIQUE(user_id, snapshot_date)  -- 每天一条，自动采集 upsert
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_cycle ON snapshots(user_id, cycle_id);
@@ -141,3 +146,53 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   updated_at    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
+
+-- ============================================================
+-- v1.0 新增表：多用户 + Auth（Google OAuth）
+-- ============================================================
+
+-- === 用户表 ===
+CREATE TABLE IF NOT EXISTS users (
+  id            TEXT PRIMARY KEY,                -- UUID
+  email         TEXT NOT NULL UNIQUE,            -- Google 邮箱
+  name          TEXT,                            -- Google display name
+  picture       TEXT,                            -- 头像 URL
+  provider      TEXT NOT NULL DEFAULT 'google',  -- 预留扩展（未来 apple/github）
+  provider_sub  TEXT NOT NULL,                   -- Google sub（OAuth unique user ID）
+  tier          TEXT NOT NULL DEFAULT 'free',    -- 'free' | 'pro'
+  stripe_customer_id TEXT,                        -- Stripe 客户 ID（付费后回填）
+  is_admin      INTEGER NOT NULL DEFAULT 0,      -- 创始用户标记（绕过 rate limit）
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL,
+  last_login_at INTEGER,
+  UNIQUE(provider, provider_sub)                 -- 同一 provider 内 sub 唯一
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- === 会话表（替代 cookie 内的 JWT，服务端可控）===
+CREATE TABLE IF NOT EXISTS sessions (
+  id            TEXT PRIMARY KEY,                -- session UUID（存 HttpOnly cookie）
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at    INTEGER NOT NULL,                -- unix ms
+  created_at    INTEGER NOT NULL,
+  ip            TEXT,
+  user_agent    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+-- === Stripe 订阅历史（M1 第二阶段用）===
+-- 改名 stripe_subscriptions 避免与上面 v0.3 的 subscriptions 表冲突
+CREATE TABLE IF NOT EXISTS stripe_subscriptions (
+  id                   TEXT PRIMARY KEY,
+  user_id              TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stripe_subscription_id TEXT NOT NULL UNIQUE,
+  tier                 TEXT NOT NULL,            -- 'pro'
+  status               TEXT NOT NULL,            -- 'active' | 'canceled' | 'past_due' | 'incomplete'
+  current_period_start INTEGER,
+  current_period_end   INTEGER,
+  cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+  created_at           INTEGER NOT NULL,
+  updated_at           INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_stripe_subs_user ON stripe_subscriptions(user_id);
