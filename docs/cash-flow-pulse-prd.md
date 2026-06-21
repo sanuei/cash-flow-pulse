@@ -303,15 +303,12 @@ function isCardActive(card, today, payDay) {
   - 桌面：`> 1024px`（三列 + 侧边栏）
 
 ### 5.2 视觉风格
-- **配色**：
-  - 主色：`#1E40AF`（深蓝，象征稳定）
-  - 辅色：`#F59E0B`（暖橙，用于预算）
-  - 警示：`#DC2626`（信用卡应还）
-  - 中性：`#6B7280`、`#E5E7EB`
+- - **配色**（详见附录 C：Notion 设计系统）
 - **字体**：
-  - 数字：`Inter` 或 `SF Pro Display`（等宽数字，避免抖动）
+  - 数字 / 英文：`Inter`（Notion 自定义 NotionInter 是 Inter 微调版）
   - 中文：`PingFang SC` / `Microsoft YaHei`
-- **风格参考**：Linear、Notion、Monzo 银行 App
+  - 启用 OpenType：`lnum`（等宽数字）+ `locl`（本地化字形）
+- **设计风格**：完全照搬 Notion 设计系统（暖中性色 + 耳语边框 + 多层极淡阴影）
 
 ### 5.3 页面结构
 
@@ -557,7 +554,6 @@ function shouldShowSnapshotPrompt(today, payDay, snapshotOffsets, existingSnapsh
 - [ ] 桌面端（Chrome）显示正常
 
 ---
-
 ## 附录 A：术语速查
 
 - **D1**：Cloudflare 的 SQLite 兼容数据库服务
@@ -578,8 +574,267 @@ function shouldShowSnapshotPrompt(today, payDay, snapshotOffsets, existingSnapsh
 
 ---
 
+## 附录 C：设计系统（基于 Notion）
+
+> 本项目的视觉规范完全照搬 Notion 设计系统。下表是可直接复制到 CSS Variables / Tailwind Config 的 token 值。
+
+### C.1 颜色 Token
+
+```css
+:root {
+  /* === Primary === */
+  --color-text-primary: rgba(0, 0, 0, 0.95);    /* 主文字：暖近黑 */
+  --color-bg-primary: #ffffff;                   /* 主背景：纯白 */
+  --color-accent: #0075de;                       /* Notion 蓝：CTA、链接 */
+  --color-accent-hover: #005bab;                 /* 蓝按钮按下 */
+
+  /* === Brand Secondary === */
+  --color-deep-navy: #213183;                    /* 强调区（罕用） */
+  --color-focus-ring: #097fe8;                   /* 焦点环 */
+
+  /* === Warm Neutral Scale（暖中性） === */
+  --color-bg-alt: #f6f5f4;                       /* 暖白：区块交替 */
+  --color-surface-dark: #31302e;                 /* 暖深：深色面 */
+  --color-text-secondary: #615d59;               /* 暖灰 500：次文字 */
+  --color-text-muted: #a39e98;                   /* 暖灰 300：占位 */
+
+  /* === Semantic Accent（语义色，少用） === */
+  --color-success: #1aae39;                      /* 成功：预算充裕 */
+  --color-warning: #dd5b00;                      /* 警告：信用卡待还 */
+  --color-info: #2a9d99;                         /* 信息：提示 */
+  --color-decorative: #ff64c8;                   /* 装饰粉：罕用 */
+  --color-premium: #391c57;                      /* 高级紫：罕用 */
+
+  /* === Interactive === */
+  --color-link: #0075de;                         /* 链接 */
+  --color-link-hover: #005bab;                   /* 链接 hover */
+  --color-badge-bg: #f2f9ff;                     /* 徽章背景：淡蓝 */
+  --color-badge-text: #097fe8;                   /* 徽章文字 */
+
+  /* === Border === */
+  --border-whisper: 1px solid rgba(0, 0, 0, 0.1); /* 标准耳语边框 */
+  --border-input: 1px solid #dddddd;             /* 输入框边框 */
+}
+```
+
+### C.2 字体 Token
+
+```css
+:root {
+  --font-sans: 'Inter', -apple-system, system-ui, 'Segoe UI',
+               'PingFang SC', 'Microsoft YaHei', Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+               'Liberation Mono', 'Courier New', monospace;
+
+  /* 启用 OpenType 特性：等宽数字 + 本地化字形 */
+  --font-features: 'lnum', 'locl';
+}
+```
+
+| 角色 | 尺寸 | 字重 | 行高 | 字距 | 用途 |
+|------|------|------|------|------|------|
+| Display Hero | 64px | 700 | 1.00 | -2.125px | 主仪表盘日均预算（最大字号）|
+| Section Heading | 48px | 700 | 1.00 | -1.5px | 区块大标题 |
+| Sub-heading | 26px | 700 | 1.23 | -0.625px | 区块副标题 |
+| Card Title | 22px | 700 | 1.27 | -0.25px | 卡片标题 |
+| Body Large | 20px | 600 | 1.40 | -0.125px | 引导文案 |
+| Body | 16px | 400 | 1.50 | normal | 正文 |
+| Body Medium | 16px | 500 | 1.50 | normal | 导航 / 强调 UI |
+| Nav / Button | 15px | 600 | 1.33 | normal | 按钮文字 |
+| Caption | 14px | 500 | 1.43 | normal | 元信息 |
+| Badge | 12px | 600 | 1.33 | 0.125px | 徽章 / 状态标签 |
+
+### C.3 间距与圆角 Token
+
+```css
+:root {
+  /* 8px 基准 */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 24px;
+  --space-8: 32px;
+  --space-9: 48px;
+  --space-10: 64px;
+
+  /* 圆角 */
+  --radius-micro: 4px;      /* 按钮、输入框 */
+  --radius-subtle: 5px;     /* 链接、菜单项 */
+  --radius-standard: 8px;   /* 小卡片 */
+  --radius-comfortable: 12px; /* 标准卡片、图片顶部 */
+  --radius-large: 16px;     /* Hero 卡片 */
+  --radius-pill: 9999px;    /* 徽章、标签 */
+}
+```
+
+### C.4 阴影 Token（多层极淡叠加）
+
+```css
+:root {
+  /* Level 1: 耳语边框（默认） */
+  /* border: 1px solid rgba(0, 0, 0, 0.1); */
+
+  /* Level 2: 软卡片（4 层叠加，单层 ≤ 0.04） */
+  --shadow-card:
+    rgba(0, 0, 0, 0.04) 0px 4px 18px,
+    rgba(0, 0, 0, 0.027) 0px 2.025px 7.85px,
+    rgba(0, 0, 0, 0.02) 0px 0.8px 2.93px,
+    rgba(0, 0, 0, 0.01) 0px 0.175px 1.04px;
+
+  /* Level 3: 深卡片（5 层，模态框） */
+  --shadow-deep:
+    rgba(0, 0, 0, 0.01) 0px 1px 3px,
+    rgba(0, 0, 0, 0.02) 0px 3px 7px,
+    rgba(0, 0, 0, 0.02) 0px 7px 15px,
+    rgba(0, 0, 0, 0.04) 0px 14px 28px,
+    rgba(0, 0, 0, 0.05) 0px 23px 52px;
+}
+```
+
+### C.5 组件样式示例
+
+**Primary Button（Notion 蓝）**
+```css
+.btn-primary {
+  background: var(--color-accent);
+  color: #ffffff;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: 600 15px/1.33 var(--font-sans);
+  transition: transform 0.1s, background 0.15s;
+}
+.btn-primary:hover { background: var(--color-accent-hover); }
+.btn-primary:active { transform: scale(0.95); }
+.btn-primary:focus-visible { outline: 2px solid var(--color-focus-ring); }
+```
+
+**Secondary Button（半透明灰）**
+```css
+.btn-secondary {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-text-primary);
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: 600 15px/1.33 var(--font-sans);
+}
+.btn-secondary:hover { background: rgba(0, 0, 0, 0.08); }
+.btn-secondary:active { transform: scale(0.95); }
+```
+
+**Pill Badge（胶囊徽章）**
+```css
+.badge {
+  background: var(--color-badge-bg);
+  color: var(--color-badge-text);
+  padding: 4px 8px;
+  border-radius: 9999px;
+  font: 600 12px/1.33 var(--font-sans);
+  letter-spacing: 0.125px;
+}
+```
+
+**Card（标准卡片）**
+```css
+.card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+}
+```
+
+**Input（输入框）**
+```css
+.input {
+  background: #ffffff;
+  color: var(--color-text-primary);
+  border: 1px solid #dddddd;
+  border-radius: 4px;
+  padding: 6px;
+  font: 400 16px/1.50 var(--font-sans);
+}
+.input:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 0;
+}
+```
+
+### C.6 关键设计原则（应用此项目时）
+
+1. **暖中性优先**：所有灰都带黄棕底色（`#f6f5f4` 米白），禁止使用冷灰（如 `#e5e7eb`）
+2. **耳语边框**：默认边框用 `rgba(0,0,0,0.1)`，不要用实色灰
+3. **唯一饱和色**：只有 Notion 蓝 `#0075de` 用作强调；信用卡应还可用警告橙 `#dd5b00`，但仅在真正需要警示时
+4. **多层极淡阴影**：单层 opacity 不超过 0.05，4-5 层叠加
+5. **等宽数字**：所有金额数字启用 Inter 的 `lnum` 特性，避免宽度抖动
+6. **字距随字号缩放**：64px → -2.125px，16px → normal
+7. **区块交替**：白色 `#ffffff` 与暖白 `#f6f5f4` 交替，不使用硬边框分割
+8. **块级留白**：大区块之间垂直 padding 64-80px，不要堆砌
+
+### C.7 Tailwind Config 示例
+
+```javascript
+// tailwind.config.js
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        'notion-text': 'rgba(0, 0, 0, 0.95)',
+        'notion-text-secondary': '#615d59',
+        'notion-text-muted': '#a39e98',
+        'notion-bg': '#ffffff',
+        'notion-bg-alt': '#f6f5f4',
+        'notion-blue': '#0075de',
+        'notion-blue-hover': '#005bab',
+        'notion-blue-soft': '#f2f9ff',
+        'notion-warning': '#dd5b00',
+        'notion-success': '#1aae39',
+        'notion-border': 'rgba(0, 0, 0, 0.1)',
+      },
+      borderRadius: {
+        'micro': '4px',
+        'subtle': '5px',
+        'standard': '8px',
+        'comfortable': '12px',
+        'large': '16px',
+        'pill': '9999px',
+      },
+      boxShadow: {
+        'card': 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2.025px 7.85px, rgba(0,0,0,0.02) 0px 0.8px 2.93px, rgba(0,0,0,0.01) 0px 0.175px 1.04px',
+        'deep': 'rgba(0,0,0,0.01) 0px 1px 3px, rgba(0,0,0,0.02) 0px 3px 7px, rgba(0,0,0,0.02) 0px 7px 15px, rgba(0,0,0,0.04) 0px 14px 28px, rgba(0,0,0,0.05) 0px 23px 52px',
+      },
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'system-ui', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
+      },
+      fontFeatureSettings: {
+        'lining-nums': '"lnum", "locl"',
+      },
+    },
+  },
+};
+```
+
+### C.8 此项目特定应用
+
+| 场景 | 使用 Token |
+|------|-----------|
+| 主页日均预算大字 | `--color-text-primary` + `font-feature-settings: lnum` |
+| 净可用现金卡片 | `--shadow-card` 软阴影 + `--color-bg-primary` |
+| 活跃信用卡提示 | `--color-warning` 文字 + `--color-badge-bg` 风格徽章 |
+| 采集点提示条 | `--color-bg-alt` 暖白底 + `--color-accent` 强调 |
+| 区块交替 | 白 `#ffffff` ↔ 暖白 `#f6f5f4` |
+| 数据未变快照点 | `--color-text-muted` `#a39e98` 浅灰 |
+
+---
+
 **变更记录**
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
 | v0.1 | 2026-06-21 | 初始草案，需求已收敛 |
+| v0.2 | 2026-06-21 | 视觉风格升级为 Notion 设计系统，新增附录 C（含完整 token、组件示例、Tailwind 配置） |

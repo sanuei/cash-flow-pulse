@@ -21,3 +21,11 @@
 - [ ] 编写 D1 schema 并初始化
 - [ ] 实现核心计算逻辑 + 单元测试
 - [ ] 搭建前端页面骨架
+
+### v0.2 - 视觉系统升级
+- 决定使用 Notion 设计系统作为视觉规范
+- 发现本地 `popular-web-designs` skill 已有完整 Notion 设计 token 资料
+- 完成 PRD 附录 C：完整颜色 / 字体 / 间距 / 圆角 / 阴影 / 组件样式 token
+- 提供可直接复制的 CSS Variables + Tailwind Config 示例
+- 配套组件样式（按钮、徽章、卡片、输入框）
+- 项目特定应用映射表（哪些场景用什么 token）
