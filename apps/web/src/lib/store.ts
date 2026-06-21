@@ -1,28 +1,60 @@
 /**
  * 全局状态管理（Zustand）
  *
- * 把所有数据集中在一个 store 里，简单清晰。
+ * 把所有数据集中在一个 store 里。
+ * v0.3 升级：新增 4 类资源 actions + dashboard V2 字段
  */
 
 import { create } from 'zustand';
-import type { DashboardData, CashSource, CreditCard, UserConfig, Snapshot } from '@cfp/shared';
+import type {
+  CashSource,
+  CreditCard,
+  UserConfig,
+  Snapshot,
+  SnapshotPrompt,
+  RecurringInvestment,
+  RecurringBill,
+  RecurringIncome,
+  Subscription,
+  DashboardCalc,
+  UpcomingExpenses,
+  UpcomingIncomes,
+} from '@cfp/shared';
+// v0.3: 计算结果使用 V2 类型（包含 upcoming_expenses/incomes）
+type DashboardCalcV2 = DashboardCalc & {
+  prompt: SnapshotPrompt | null;
+  currentSnapshots: Snapshot[];
+  upcoming_expenses: UpcomingExpenses;
+  upcoming_incomes: UpcomingIncomes;
+  total_expense: number;
+  total_income: number;
+  net_flow: number;
+};
 import { apiGet, apiPost, apiPut, apiDelete } from './api';
 
 interface AppState {
-  // 数据
+  // ===== V1 数据 =====
   config: UserConfig | null;
   cashSources: CashSource[];
   creditCards: CreditCard[];
   snapshots: Snapshot[];
-  calc: DashboardData['calc'] | null;
-  prompt: DashboardData['prompt'];
+
+  // ===== v0.3 新增数据 =====
+  investments: RecurringInvestment[];
+  bills: RecurringBill[];
+  incomes: RecurringIncome[];
+  subscriptions: Subscription[];
+
+  // ===== 计算结果 =====
+  calc: DashboardCalcV2 | null;
+  prompt: DashboardCalcV2['prompt'] | null;
   generatedAt: number | null;
 
-  // 状态
+  // ===== 状态 =====
   loading: boolean;
   error: string | null;
 
-  // Actions
+  // ===== V1 Actions =====
   loadDashboard: () => Promise<void>;
   addCash: (data: { name: string; balance: number; locked_amount: number }) => Promise<void>;
   updateCash: (id: string, data: Partial<CashSource>) => Promise<void>;
@@ -32,30 +64,70 @@ interface AppState {
   deleteCard: (id: string) => Promise<void>;
   updateConfig: (data: Partial<Pick<UserConfig, 'pay_day' | 'snapshot_offsets'>>) => Promise<void>;
   recordSnapshot: (cycleId: string, offsetIndex: number, note?: string) => Promise<void>;
+
+  // ===== v0.3 Actions =====
+  addInvestment: (data: Partial<RecurringInvestment>) => Promise<void>;
+  updateInvestment: (id: string, data: Partial<RecurringInvestment>) => Promise<void>;
+  deleteInvestment: (id: string) => Promise<void>;
+
+  addBill: (data: Partial<RecurringBill>) => Promise<void>;
+  updateBill: (id: string, data: Partial<RecurringBill>) => Promise<void>;
+  deleteBill: (id: string) => Promise<void>;
+
+  addIncome: (data: Partial<RecurringIncome>) => Promise<void>;
+  updateIncome: (id: string, data: Partial<RecurringIncome>) => Promise<void>;
+  deleteIncome: (id: string) => Promise<void>;
+
+  addSubscription: (data: Partial<Subscription>) => Promise<void>;
+  updateSubscription: (id: string, data: Partial<Subscription>) => Promise<void>;
+  deleteSubscription: (id: string) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set) => ({
+  // ===== V1 =====
   config: null,
   cashSources: [],
   creditCards: [],
   snapshots: [],
+  // ===== v0.3 =====
+  investments: [],
+  bills: [],
+  incomes: [],
+  subscriptions: [],
+  // ===== 计算 =====
   calc: null,
   prompt: null,
   generatedAt: null,
-
+  // ===== 状态 =====
   loading: false,
   error: null,
 
   async loadDashboard() {
     set({ loading: true, error: null });
     try {
-      // 后端 /dashboard 返回 DashboardData + generated_at
-      type DashboardResponse = Omit<DashboardData, never> & { generated_at: number };
+      // dashboard 端点返回 DashboardData + generated_at + 4 类新数据
+      type DashboardResponse = {
+        config: UserConfig;
+        cash_sources: CashSource[];
+        credit_cards: CreditCard[];
+        investments: RecurringInvestment[];
+        bills: RecurringBill[];
+        incomes: RecurringIncome[];
+        subscriptions: Subscription[];
+        calc: DashboardCalcV2;
+        snapshots: Snapshot[];
+        prompt: DashboardCalcV2['prompt'] | null;
+        generated_at: number;
+      };
       const data = await apiGet<DashboardResponse>('/dashboard');
       set({
         config: data.config,
         cashSources: data.cash_sources,
         creditCards: data.credit_cards,
+        investments: data.investments ?? [],
+        bills: data.bills ?? [],
+        incomes: data.incomes ?? [],
+        subscriptions: data.subscriptions ?? [],
         snapshots: data.snapshots,
         calc: data.calc,
         prompt: data.prompt,
@@ -67,6 +139,7 @@ export const useStore = create<AppState>((set) => ({
     }
   },
 
+  // ===== V1 Actions =====
   async addCash(data) {
     await apiPost('/cash', data);
   },
@@ -93,5 +166,49 @@ export const useStore = create<AppState>((set) => ({
 
   async recordSnapshot(cycleId, offsetIndex, note) {
     await apiPost('/snapshots', { cycle_id: cycleId, offset_index: offsetIndex, note });
+  },
+
+  // ===== v0.3 Actions: Investments =====
+  async addInvestment(data) {
+    await apiPost('/investments', data);
+  },
+  async updateInvestment(id, data) {
+    await apiPut(`/investments/${id}`, data);
+  },
+  async deleteInvestment(id) {
+    await apiDelete(`/investments/${id}`);
+  },
+
+  // ===== v0.3 Actions: Bills =====
+  async addBill(data) {
+    await apiPost('/bills', data);
+  },
+  async updateBill(id, data) {
+    await apiPut(`/bills/${id}`, data);
+  },
+  async deleteBill(id) {
+    await apiDelete(`/bills/${id}`);
+  },
+
+  // ===== v0.3 Actions: Incomes =====
+  async addIncome(data) {
+    await apiPost('/incomes', data);
+  },
+  async updateIncome(id, data) {
+    await apiPut(`/incomes/${id}`, data);
+  },
+  async deleteIncome(id) {
+    await apiDelete(`/incomes/${id}`);
+  },
+
+  // ===== v0.3 Actions: Subscriptions =====
+  async addSubscription(data) {
+    await apiPost('/subscriptions', data);
+  },
+  async updateSubscription(id, data) {
+    await apiPut(`/subscriptions/${id}`, data);
+  },
+  async deleteSubscription(id) {
+    await apiDelete(`/subscriptions/${id}`);
   },
 }));

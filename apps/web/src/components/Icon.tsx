@@ -19,6 +19,15 @@ import {
   Upload,
   Download,
   Check,
+  // v0.3 新增
+  TrendingDown,    // 投资（钱流出）
+  Receipt,         // 账单
+  Briefcase,       // 收入/工作
+  Tv,              // 订阅/娱乐
+  ChevronDown,     // 折叠展开
+  ChevronRight,    // 折叠收起
+  CalendarDays,    // 日历/周期
+  TrendingUp,      // 上涨
   type LucideIcon,
 } from 'lucide-react';
 import { forwardRef } from 'react';
@@ -49,7 +58,16 @@ export type IconName =
   | 'export-csv'  // 📊 导出 CSV
   | 'import'      // 📤 导入
   | 'download'    // ⬇ 下载
-  | 'check';      // ✓ 完成
+  | 'check'       // ✓ 完成
+  // v0.3 新增
+  | 'investment'  // 投资（钱流出）
+  | 'bill'        // 账单
+  | 'income'      // 收入/工作
+  | 'subscription'// 订阅/娱乐
+  | 'chevron-down'// 折叠展开
+  | 'chevron-right'// 折叠收起
+  | 'calendar'    // 日历/周期
+  | 'trending-up';// 上涨
 
 const map: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -72,6 +90,15 @@ const map: Record<IconName, LucideIcon> = {
   import: Upload,
   download: Download,
   check: Check,
+  // v0.3 新增
+  investment: TrendingDown,
+  bill: Receipt,
+  income: Briefcase,
+  subscription: Tv,
+  'chevron-down': ChevronDown,
+  'chevron-right': ChevronRight,
+  calendar: CalendarDays,
+  'trending-up': TrendingUp,
 };
 
 type Props = {

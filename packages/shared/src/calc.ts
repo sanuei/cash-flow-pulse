@@ -652,6 +652,8 @@ export function computeDashboardV2(
   incomes: RecurringIncome[] = [],
   subscriptions: Subscription[] = [],
 ): DashboardCalc & {
+  prompt: SnapshotPrompt | null;
+  currentSnapshots: Snapshot[];
   upcoming_expenses: UpcomingExpenses;
   upcoming_incomes: UpcomingIncomes;
   total_expense: number;
@@ -731,6 +733,7 @@ export function computeDashboardV2(
         total: totalAmt,
         due_date: formatDate(firstOccur),
         days_until: 0, // 投资是连续发生，没有具体某一天
+        frequency: inv.frequency,
       });
       totalInvestments += totalAmt;
     }

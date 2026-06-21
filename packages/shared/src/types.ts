@@ -201,6 +201,8 @@ export interface UpcomingExpenseItem {
   total: number;                   // amount * occurrences
   due_date: string;                // YYYY-MM-DD，下次/本期内扣款日（投资取首日）
   days_until: number;              // 距今天数（投资 = 0）
+  // v0.3.1: 投资专用
+  frequency?: InvestmentFrequency;
 }
 
 export interface UpcomingIncomeItem {
