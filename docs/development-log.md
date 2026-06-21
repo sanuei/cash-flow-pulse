@@ -313,6 +313,13 @@ subscriptions         -- billing_day + billing_cycle
    - 新增 `apps/web/.env.production` 写入 API URL
    - 新增 `apps/web/.env.development` 显式声明 dev 用 `/api`
 4. ✅ Pages re-deploy（手动触发）→ 增量上传 → 新 chunk hash → URL 注入验证通过
+5. ❌ **本地数据导入线上失败**：`D1_ERROR: 10 values for 9 columns`
+   - 根因：`apps/api/src/routes/export-import.ts` line 186 — `INSERT INTO recurring_bills VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` **10 个 ? 但表只有 9 列**
+   - 影响：所有含 `bills` 字段的导入都会整批回滚（含 DELETE 已清空的数据 → 数据丢失！）
+   - 修复：删 1 个 `?`（保留 9 个匹配表列数）
+   - 防护教训：未来 import route 应加单元测试覆盖每张表的 INSERT 语句
+   - **应急回滚**：先备份线上 → overwrite 模式 DELETE 失败 → 用备份 JSON 重新导入恢复
+6. ⚠️ `wrangler 3 vs 4` 混淆：apps/api/package.json 里 `wrangler: ^3.99.0`，但 PATH 全局是 4.65.0。在 apps/api 目录下 `npx wrangler` 跑 wrangler 3（行为可能不同）。后续脚本应显式用 `/opt/homebrew/bin/wrangler`（wrangler 4）
 
 **端到端验证**：
 - ✅ Pages 主域 200

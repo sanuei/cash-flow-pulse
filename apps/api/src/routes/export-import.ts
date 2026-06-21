@@ -183,7 +183,7 @@ exportImportRoutes.post('/import', async (c) => {
 
     // 5. 账单
     const billStmts = bills.map((b: any, i: number) =>
-      db.prepare('INSERT OR REPLACE INTO recurring_bills (id, user_id, name, amount, due_day, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      db.prepare('INSERT OR REPLACE INTO recurring_bills (id, user_id, name, amount, due_day, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(generateId(), USER_ID, b.name, b.amount, b.due_day, b.note ?? null, i, ts, ts)
     );
 
