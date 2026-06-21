@@ -7,12 +7,15 @@ workers_dev = true
 # D1 数据库绑定
 # 首次部署前需要先创建 D1 实例：
 #   wrangler d1 create cash-flow-pulse-db
-# 然后将生成的 database_id 填到下方
+# 然后将生成的 database_id 填到下方（脚本会自动回填）
 [[d1_databases]]
 binding = "DB"
 database_name = "cash-flow-pulse-db"
-database_id = "REPLACE_WITH_REAL_ID"
+database_id = "222e5633-5a2c-4af7-8efb-dbb0f7d5d6b5"
 
 # 环境变量
+# ALLOWED_ORIGIN 支持逗号分隔多域名
+# 开发：http://localhost:5173 / http://localhost:8787
+# 生产：https://cash.soniclab.cc / https://cash-flow-pulse.pages.dev
 [vars]
-ALLOWED_ORIGIN = "http://localhost:5173"
+ALLOWED_ORIGIN = "http://localhost:5173,http://localhost:8787,https://cash.soniclab.cc,https://cash-flow-pulse.pages.dev"

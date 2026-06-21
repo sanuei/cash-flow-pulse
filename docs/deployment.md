@@ -5,247 +5,231 @@
 ## 架构总览
 
 ```
-┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
-│  Cloudflare     │         │  Cloudflare     │         │  Cloudflare     │
-│  Pages          │ ──────► │  Workers        │ ──────► │  D1 (SQLite)    │
-│  (React 前端)    │  /api/* │  (Hono API)     │         │  (数据库)        │
-└─────────────────┘         └─────────────────┘         └─────────────────┘
+                                cash.soniclab.cc
+                                       │
+                                       ▼
+                          ┌──────────────────────────┐
+                          │  soniclab-router Worker  │
+                          │  (Cash Flow Pulse 代理)   │
+                          └──────────┬───────────────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    │ /api/*                          │ 其他/*
+                    ▼                                  ▼
+        ┌──────────────────┐               ┌──────────────────┐
+        │  Workers API     │               │  Pages           │
+        │  (Hono + D1)     │               │  (React 静态)     │
+        └────────┬─────────┘               └──────────────────┘
+                 │
+                 ▼
+        ┌──────────────────┐
+        │  D1 (SQLite)     │
+        │  cash-flow-pulse-db │
+        └──────────────────┘
 ```
 
 - **Pages**：托管 Vite 打包后的静态文件（HTML/JS/CSS）
-- **Workers**：运行 Hono 路由 + 调用 D1
+- **Workers API**：运行 Hono 路由 + 调用 D1
 - **D1**：SQLite 兼容数据库，5GB 免费存储
+- **soniclab-router**：在 `cash.soniclab.cc` 提供 `/api/*` → API 反代，其他 → Pages 静态资源
 
 ---
 
-## 前置准备
+## 🚀 一键部署（推荐）
 
-1. **Cloudflare 账号**：https://dash.cloudflare.com/sign-up
-2. **wrangler CLI**：已通过 `pnpm` 装好
+### 前置条件
+1. Cloudflare 账号
+2. wrangler CLI（`brew install wrangler` 或 `pnpm add -g wrangler`）
 3. **登录**：`wrangler login`（会打开浏览器授权）
 
+### 一条命令搞定
+
+```bash
+cd ~/Desktop/网页项目/apps/cash-flow-pulse
+./scripts/deploy.sh
+```
+
+脚本会自动完成：
+1. ✅ 检查登录状态 + 安装依赖
+2. ✅ 创建 D1 数据库（首次）并初始化 8 张表 schema
+3. ✅ 部署 Workers API，验证 health endpoint
+4. ✅ 构建前端 + 部署到 Pages（创建项目如不存在）
+5. ✅ 部署 soniclab-router（注入 CFP_API_HOST env）
+6. ✅ DNS 检查（首次会提示配置）
+
+**环境变量**：
+- `SKIP_DNS=1` — 跳过 DNS 检查（已配过时用）
+- `SKIP_ROUTER=1` — 跳过 router 部署（router 已存在时用）
+
 ---
 
-## 1️⃣ 部署 Workers API
+## 📋 手动部署（逐步）
 
-### 1.1 创建 D1 数据库
+如果脚本卡在某步想手动跑，下面是分步流程。
+
+### 1️⃣ D1 数据库
 
 ```bash
 cd apps/api
 wrangler d1 create cash-flow-pulse-db
 ```
 
-输出会包含 `database_id`，复制下来。
-
-### 1.2 修改 wrangler.toml
-
-编辑 `apps/api/wrangler.toml`，把 `database_id` 填进去：
-
+把输出的 `database_id` 填到 `apps/api/wrangler.toml`：
 ```toml
 [[d1_databases]]
 binding = "DB"
 database_name = "cash-flow-pulse-db"
-database_id = "填入上一步的 ID"
+database_id = "填入 ID"
 ```
 
-### 1.3 初始化数据库 schema
-
-**远程（生产）**：
+初始化 schema：
 ```bash
 wrangler d1 execute cash-flow-pulse-db --file=./src/db/schema.sql --remote
 ```
 
-**本地（开发）**：
-```bash
-wrangler d1 execute cash-flow-pulse-db --file=./src/db/schema.sql --local
-```
-
-### 1.4 部署 Workers
+### 2️⃣ Workers API
 
 ```bash
-pnpm deploy:api
-# 或：
-cd apps/api && wrangler deploy
-```
-
-部署成功后输出形如：
-```
-Published cash-flow-pulse-api (X.XX sec)
-  https://cash-flow-pulse-api.<your-subdomain>.workers.dev
-```
-
-记下这个 URL，前端需要用到。
-
-### 1.5 配置 CORS
-
-编辑 `apps/api/wrangler.toml`，把生产前端域名加到 ALLOWED_ORIGIN（逗号分隔）：
-
-```toml
-[vars]
-ALLOWED_ORIGIN = "https://cash.soniclab.cc,https://cash-flow-pulse.pages.dev"
-```
-
----
-
-## 2️⃣ 部署前端（Cloudflare Pages）
-
-### 2.1 方式 A：通过 Dashboard（推荐）
-
-1. 打开 https://dash.cloudflare.com → Pages
-2. **Create a project** → **Connect to Git**
-3. 选择你的 GitHub 仓库
-4. 配置：
-   - **Project name**: `cash-flow-pulse`（或自定义）
-   - **Production branch**: `main`
-   - **Framework preset**: Vite
-   - **Build command**: `cd ../.. && pnpm install && pnpm --filter @cfp/web build`
-     - 或更简单：`pnpm build && pnpm --filter @cfp/web build`（如果 monorepo 已在根目录装了 deps）
-   - **Build output directory**: `apps/web/dist`
-   - **Root directory**: `apps/web`（如果 Pages 不支持 monorepo，则需要在仓库根设置）
-5. **Environment variables**：
-   - （V1 不需要，前端走相对路径 `/api`）
-6. 点击 **Save and Deploy**
-
-### 2.2 方式 B：通过 wrangler CLI（适合纯前端项目）
-
-不推荐，因为 monorepo 项目需要复杂配置。
-
-### 2.3 配置 API 反向代理
-
-前端代码默认假设 `/api/*` 同源。生产部署需要在 Pages 配置一个 **Function** 或 **Worker** 来转发。
-
-**推荐做法**：把 Pages 项目绑定到自定义域名（如 `cash.soniclab.cc`），然后通过现有的 `soniclab-router` Worker 把 `/api/*` 路径代理到 Workers API。
-
-或者直接在 Pages 的 `_redirects` / `_routes.json` 里配置。
-
-### 2.4 验证部署
-
-访问 `https://cash-flow-pulse.pages.dev`（或你的自定义域名），应看到主页。
-
----
-
-## 3️⃣ 自定义域名（可选）
-
-### 3.1 添加域名到 Cloudflare
-
-如果你的域名 `soniclab.cc` 已在 Cloudflare：
-
-1. **Workers** → `cash-flow-pulse-api` → Settings → Triggers → Routes
-2. 添加：`api.cash.soniclab.cc/*` → Zone: `soniclab.cc`
-
-### 3.2 添加 Pages 自定义域名
-
-1. **Pages** → `cash-flow-pulse` → Custom domains
-2. 添加：`cash.soniclab.cc`
-
----
-
-## 4️⃣ 本地开发
-
-### 4.1 启动后端
-
-```bash
-# 终端 1
 cd apps/api
-pnpm dev
-# 启动在 http://localhost:8787
+wrangler deploy
+# 输出: https://cash-flow-pulse-api.<subdomain>.workers.dev
 ```
 
-### 4.2 启动前端
+**记下这个 URL**，前端的 CORS 白名单已经包含 `https://cash.soniclab.cc` 和 `https://cash-flow-pulse.pages.dev`。
+
+验证：
+```bash
+curl https://cash-flow-pulse-api.<subdomain>.workers.dev/api/health
+# → {"status":"ok","timestamp":...}
+```
+
+### 3️⃣ Pages 前端
 
 ```bash
-# 终端 2
 cd apps/web
-pnpm dev
-# 启动在 http://localhost:5173
+pnpm build
+wrangler pages deploy dist --project-name=cash-flow-pulse --branch=main --commit-dirty=true
 ```
 
-前端通过 Vite proxy 自动把 `/api/*` 转发到 8787。
+**首次部署**：`wrangler pages project create cash-flow-pulse --production-branch=main`
 
-### 4.3 同时启动
+部署后访问：`https://cash-flow-pulse.pages.dev`
 
+### 4️⃣ soniclab-router（cash.soniclab.cc 代理）
+
+修改 `_infrastructure/soniclab-router/wrangler.toml`：
+```toml
+routes = [
+  { pattern = "www.soniclab.cc/*", zone_name = "soniclab.cc" },
+  { pattern = "soniclab.cc/*", zone_name = "soniclab.cc" },
+  { pattern = "cash.soniclab.cc/*", zone_name = "soniclab.cc" }  # 新增
+]
+```
+
+修改 `_infrastructure/soniclab-router/src/index.ts` 已包含 cash.soniclab.cc 分支（v0.8.1+ 已加）。
+
+部署：
 ```bash
-cd ..  # 项目根目录
-pnpm dev
-# 并行启动 api + web
+cd ../_infrastructure/soniclab-router
+# 注入 CFP_API_HOST env（关键！）
+# 方式 A: 写到 wrangler.toml
+# 方式 B: wrangler secret put CFP_API_HOST
+wrangler deploy
 ```
+
+### 5️⃣ DNS 配置（首次）
+
+1. **Cloudflare Dashboard** → **Workers & Pages** → **soniclab-router** → **Settings** → **Triggers**
+2. 添加 Route：
+   - Pattern: `cash.soniclab.cc/*`
+   - Zone: `soniclab.cc`
+3. **或者**（DNS 方式）：Dashboard → **soniclab.cc** → **DNS** → 添加：
+   - Type: `CNAME`
+   - Name: `cash`
+   - Target: `soniclab-router.<subdomain>.workers.dev`
+   - Proxied: ✓
+
+DNS 生效时间：1-5 分钟。
 
 ---
 
-## 5️⃣ 常见问题
+## 🔍 端到端验证
 
-### Q: 部署后主页空白？
-A: 检查浏览器控制台。常见原因：
-- D1 数据库未初始化（先跑 schema.sql）
-- CORS 配置不对（确认 ALLOWED_ORIGIN 包含前端域名）
+DNS 生效后：
 
-### Q: API 报 500？
-A: 在 Cloudflare Dashboard → Workers → Logs 查看错误堆栈。常见：
-- `database_id` 没填对
-- D1 表未创建（忘了跑 schema.sql）
-
-### Q: 如何重置生产数据库？
-A: 
 ```bash
-wrangler d1 execute cash-flow-pulse-db --file=./src/db/schema.sql --remote
-# ⚠️ 这会清空所有数据！
+# 1. 健康检查（通过 soniclab-router 代理）
+curl https://cash.soniclab.cc/api/health
+# → {"status":"ok","timestamp":...}
+
+# 2. 浏览器访问
+open https://cash.soniclab.cc
 ```
 
-### Q: 如何备份数据？
-A: 通过前端「设置 → 导出 JSON」即可。或手动：
+应该看到：
+- ✅ 主页加载，无 JS 错误
+- ✅ 仪表盘渲染（首次无数据：净现金 ¥0，活跃卡应还 ¥0）
+- ✅ 录入一张快照 → API 调用成功 → 列表显示
+
+---
+
+## 🛠 故障排除
+
+### Q: 主页空白？
+A: 浏览器 DevTools → Network 检查：
+1. `cash.soniclab.cc/` 200 但 JS 404？ → Pages 部署失败，重新跑 step 3
+2. `/api/*` 502？ → Workers 没起来，去 Workers Dashboard 看 Logs
+3. `/api/*` CORS 错？ → 检查 `ALLOWED_ORIGIN` 是否包含 `https://cash.soniclab.cc`
+
+### Q: API 500？
+A: Workers → `cash-flow-pulse-api` → Logs：
+- `database_id 没填对` → 重新填 wrangler.toml 再 deploy
+- `no such table` → schema.sql 没跑，重新跑 step 1
+
+### Q: soniclab-router 404？
+A: 检查：
+1. 路由规则是否包含 `cash.soniclab.cc/*`
+2. `CFP_API_HOST` env 是否正确（用 `wrangler secret list` 验证）
+3. Workers API 自身 URL 是否能直接访问
+
+### Q: 如何回滚？
 ```bash
+wrangler rollback [version-id]
+wrangler deployments list
+```
+
+### Q: 数据备份？
+```bash
+# 前端：设置 → 导出 JSON
+# 命令行：
 wrangler d1 export cash-flow-pulse-db --output=backup.sql
 ```
 
 ---
 
-## 6️⃣ 监控
+## 💰 成本（Cloudflare 免费额度）
 
-- **Workers Logs**: Dashboard → Workers & Pages → `cash-flow-pulse-api` → Logs
-- **D1 Analytics**: Dashboard → D1 → `cash-flow-pulse-db` → Metrics
-- **Pages Analytics**: Dashboard → Pages → `cash-flow-pulse` → Analytics
-
----
-
-## 7️⃣ 成本估算
-
-**Cloudflare 免费额度**：
-| 服务 | 免费额度 | V1 预期用量 |
-|------|---------|-----------|
+| 服务 | 免费额度 | 预期用量 |
+|------|---------|---------|
 | Workers Requests | 100,000 / 天 | < 100 / 天 |
-| Workers CPU Time | 10ms / 请求 | ~2ms / 请求 |
 | D1 Reads | 5,000,000 / 天 | < 100 / 天 |
 | D1 Writes | 100,000 / 天 | < 10 / 天 |
 | D1 Storage | 5 GB | < 1 MB |
 | Pages Builds | 500 / 月 | < 10 / 月 |
-| Pages Bandwidth | 无限 | — |
+| soniclab-router | 100k req/day | < 100/day |
 
-**结论**：单用户场景下，**完全免费**，无任何付费风险。
-
----
-
-## 8️⃣ 回滚
-
-```bash
-# 列出最近 10 次部署
-wrangler deployments list
-
-# 回滚到指定版本
-wrangler rollback [version-id]
-```
+**结论**：单用户场景下，**完全免费**。
 
 ---
 
-## 9️⃣ 更新日志维护
+## 🔄 更新日志
 
-每次部署后，更新 `docs/development-log.md` 中的版本号和变更记录。
+### v0.9 — 一键部署脚本（2026-06-21）
+- 新增 `scripts/deploy.sh`：D1 + Workers + Pages + Router 一条命令搞定
+- 新增 soniclab-router 的 `cash.soniclab.cc` 路由支持
+- 拆分代码 chunk（react/recharts/icons 单独），bundle 减小 ~30%
+- CORS 白名单扩展到 4 个源（dev × 2 + prod × 2）
 
----
-
-**部署完成后**，记得到 `docs/development-log.md` 里追加一行：
-```
-## v0.X — 生产部署（YYYY-MM-DD）
-- Workers API 部署到：cash-flow-pulse-api.<subdomain>.workers.dev
-- Pages 前端部署到：https://cash-flow-pulse.pages.dev
-- 自定义域名：https://cash.soniclab.cc（可选）
-```
+### v0.8.1 — 部署指南初版
+- 3 步手动部署（D1 → Workers → Pages）
+- 故障排除 FAQ

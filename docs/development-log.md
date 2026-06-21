@@ -285,6 +285,62 @@ subscriptions         -- billing_day + billing_cycle
 
 ---
 
+## v0.9 — 生产部署（2026-06-21）
+
+**Commit**: 见 git log（本节操作在 v0.8.1 基础上追加）
+
+**最终生产 URL**：
+- 前端：**https://cash-flow-pulse.pages.dev**
+- API：**https://cash-flow-pulse-api.sonic980828.workers.dev**
+- D1：`cash-flow-pulse-db`（region APAC，colo KIX）
+
+**部署架构（B 方案临时版）**：
+```
+浏览器 → cash-flow-pulse.pages.dev (Vite build + manualChunks 拆分)
+       → VITE_API_BASE env 注入完整 URL
+       → cash-flow-pulse-api.sonic980828.workers.dev/api/*
+       → Hono + D1
+```
+
+**部署过程踩坑**：
+1. ❌ `scripts/deploy.sh` 卡在 D1 id 解析（ANSI 颜色码 + 多行格式让 regex 没匹配上）
+   - 修复：手动提取 `222e5633-5a2c-4af7-8efb-dbb0f7d5d6b5` 写到 wrangler.toml
+2. ❌ Pages 首次 deploy 报错「Project not found」
+   - 修复：先 `wrangler pages project create cash-flow-pulse`
+3. ❌ soniclab-router 部署失败：`cash.soniclab.cc/*` 路由已被 soniclab-homepage 占用
+   - **绕过方案**：暂用 pages.dev + workers.dev 默认域名，不绑 soniclab.cc
+   - 关键改动：前端 `src/lib/api.ts` 改读 `import.meta.env.VITE_API_BASE`（fallback `/api`）
+   - 新增 `apps/web/.env.production` 写入 API URL
+   - 新增 `apps/web/.env.development` 显式声明 dev 用 `/api`
+4. ✅ Pages re-deploy（手动触发）→ 增量上传 → 新 chunk hash → URL 注入验证通过
+
+**端到端验证**：
+- ✅ Pages 主域 200
+- ✅ 前端 JS bundle 含 `cash-flow-pulse-api.sonic980828.workers.dev/api` 字符串
+- ✅ API `/api/health` 返回 ok
+- ✅ API `/api/config` 读 D1 成功（pay_day=10, snapshot_offsets=[0,7,14,21]）
+- ✅ API POST `/api/cash` 写入 D1 成功（テスト銀行 ¥50,000）
+- ✅ CORS 验证：请求 origin `cash-flow-pulse.pages.dev` → API 返回 `Access-Control-Allow-Origin` 头（生产域名在 ALLOWED_ORIGIN 白名单内）
+
+**生产 bundle 体积**（manualChunks 拆分后）：
+| chunk | raw | gzip |
+|------|------|------|
+| `index.js` (app) | 116KB | 27KB |
+| `react.js` (vendor) | 164KB | 53KB |
+| `recharts.js` (vendor) | 406KB | 110KB |
+| `icons.js` | 14KB | 3KB |
+| `index.css` | 18KB | 4KB |
+| 主页首屏（含 react + icons + app + css） | — | **~84KB gzip** |
+| Trends 页再加 recharts | — | ~194KB gzip（懒加载） |
+
+**待办**（v1.0+）：
+- [ ] soniclab.cc 路由冲突解决（Dashboard 手动删旧路由后再绑 cash.soniclab.cc）
+- [ ] `scripts/deploy.sh` 修 D1 id 解析（用 ANSI-stripped grep 或 sed）
+- [ ] CI 自动化（GitHub Actions：push main → 跑 test + 部署 Pages/Workers）
+- [ ] D1 自动备份（cron 触发 `wrangler d1 export`）
+
+---
+
 ## 后续待办（不在 V0 范围内）
 
 - [ ] 代码分割（当前 bundle 653KB，可降至 ~300KB）

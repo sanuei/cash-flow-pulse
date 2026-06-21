@@ -1,11 +1,16 @@
 /**
  * API 客户端（fetch 封装）
  *
- * 所有请求走 Vite dev proxy（/api → http://localhost:8787）
- * 生产部署时 Cloudflare Pages 会通过 Functions/Workers 反向代理到 API
+ * dev 环境：相对路径 /api → Vite proxy 转发到 http://localhost:8787
+ * prod 环境：从 .env.production 读 VITE_API_BASE（如 https://xxx.workers.dev/api）
+ *
+ * 配置方式：
+ * - 开发：在 apps/web/.env.development 里不写，走相对路径
+ * - 生产：在 apps/web/.env.production 里写 VITE_API_BASE=https://xxx.workers.dev/api
+ *   （CD 时由 CI/脚本注入）
  */
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
