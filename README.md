@@ -22,7 +22,8 @@
 ```
 cash-flow-pulse/
 ├── docs/                            # 文档
-│   ├── cash-flow-pulse-prd.md       # 产品需求文档（含设计 token）
+│   ├── cash-flow-pulse-prd.md       # 产品需求文档（v0.3）
+│   ├── design-system-notion.md      # Notion 设计系统（独立文件，从 PRD 附录 C 拆出）
 │   ├── development-log.md           # 开发日志
 │   └── deployment.md                # 部署指南
 ├── packages/shared/                 # 核心算法 + 类型（前后端共用）

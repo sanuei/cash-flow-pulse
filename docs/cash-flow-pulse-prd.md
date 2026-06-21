@@ -43,17 +43,33 @@
 | **信用卡 (CreditCard)** | 待还款的信用卡账单，每张卡有独立的扣款日 |
 | **活跃信用卡 (Active Card)** | 「下一个扣款日」在当前发薪周期内的卡（即本期需要还的） |
 | **本期应还 (Period Due)** | 所有活跃信用卡的账单金额之和 |
-| **净可用现金 (Net Available)** | `总净现金 - 本期应还`（这就是用户真正能花的） |
+| **本期总支出 (Total Expense, v0.3)** | Σ 信用卡应还 + Σ 订阅月费 + Σ 固定账单 + Σ 投资本期内累计额 |
+| **本期总收入 (Total Income, v0.3)** | Σ 所有收入项目本期内到账日的金额 |
+| **净流入 (Net Flow, v0.3)** | 本期总收入 - 本期总支出 |
+| **净可用现金 (Net Available)** | `总净现金 - 本期应还`（V1）/ `总净现金 + 净流入`（V2） |
 | **日均预算 (Daily Budget)** | `净可用现金 ÷ 距下个发薪日的天数` |
 | **发薪周期 (Pay Cycle)** | 两次发薪日之间的时间段 |
 | **采集点 (Snapshot Point)** | 每个发薪周期内的固定采样时刻（默认 4 个） |
+| **定期事件 (Recurring Event, v0.3)** | 未来会自动发生的现金进出，分 4 类（投资/账单/收入/订阅） |
 
 ### 2.2 关键公式
 
+**V1 公式（基础）**：
 ```
 净可用现金 = Σ(现金来源.余额 - 现金来源.锁定金额) - Σ(活跃信用卡.账单金额)
 日均预算   = 净可用现金 ÷ 距下个发薪日的天数
 ```
+
+**V2 公式（v0.3 升级，向后兼容）**：
+```
+本期总支出 = Σ活跃信用卡应还 + Σ本期内订阅 + Σ本期内固定账单 + Σ本期内投资累计
+本期总收入 = Σ所有收入项目本期内到账日的金额
+净流入     = 本期总收入 - 本期总支出
+净可用     = Σ(现金来源.余额 - 锁定金额) + 净流入
+日均预算   = max(0, 净可用 ÷ 距下个发薪日的天数)
+```
+
+> 当没有任何新卡片数据时，V2 公式退化为 V1。
 
 ---
 
@@ -188,6 +204,164 @@
 - 隐私声明（强调：所有数据仅存储在你的 Cloudflare D1 中，不上传任何第三方）
 - 开源协议
 
+### 3.6 扩展功能：定期事件（v0.3 新增）
+
+> **核心思路**：把所有"未来会自动发生"的现金进出（支出 + 收入）统一抽象为**定期事件（Recurring Event）**，但数据模型上分成 4 类独立管理，算法层统一处理。
+>
+> **向后兼容**：现有"信用卡"分类保持不动（账单金额每月变），新加 4 类为**固定金额 + 固定日期**型。
+
+#### 3.6.1 四类新卡片概览
+
+| 卡片 | 类型 | 频率 | 字段 | 示例 |
+|------|------|------|------|------|
+| **固定投资** | 支出（自动） | 每天 / 每周 / 每月 / 每年 | `name, amount, frequency, day_of_period` | "每日基金定投 ¥100" |
+| **固定房租支出** | 支出（自动） | 每月 | `name, amount, due_day` | "房租 ¥80,000 每月 1 号" |
+| **固定收入** | 收入 | 每月 / 每周 | `name, amount, frequency, day_of_period` | "工资 ¥300,000 每月 25 号" |
+| **订阅** | 支出（自动） | 每月 / 每年 | `name, amount, billing_day` | "Netflix ¥1,490 每月 15 号" |
+
+#### 3.6.2 「本期支出」汇总卡（折中展示方案）
+
+> **设计哲学**：4 类数据独立存储，但在主页上**视觉聚合**为"本期支出 / 本期收入"两张可折叠汇总卡，让用户一眼看到全部未来现金流。
+
+**主页新增 2 张汇总卡**：
+
+```
+┌─ 本期支出 ────────────────────────────┐
+│                                       │
+│  信用卡账单        -¥142,303         │
+│  订阅              -¥1,620           │
+│  固定账单（房租等）-¥80,000          │
+│  固定投资          -¥1,900           │
+│  ─────────                           │
+│  总支出            -¥225,823         │
+│                                       │
+│  ▼ 展开明细（点击展开）               │
+│                                       │
+└───────────────────────────────────────┘
+
+┌─ 本期收入 ────────────────────────────┐
+│                                       │
+│  工资              +¥300,000          │
+│  副业              +¥20,000           │
+│  ─────────                           │
+│  总收入            +¥320,000          │
+│                                       │
+│  ▼ 展开明细                           │
+└───────────────────────────────────────┘
+```
+
+**视觉规则**：
+- 总支出：橙色（`text-notion-warning`），醒目提示
+- 总收入：绿色（`text-notion-success`）
+- 默认**折叠**，点击展开看明细
+- 明细按"扣款天数从近到远"排序，让用户优先看到"马上要扣的"
+
+#### 3.6.3 升级版日均预算算法（Q1=C 折中方案）
+
+**新公式**：
+
+```
+本期总支出 = Σ(本期活跃信用卡应还)
+           + Σ(扣款日在本期内订阅的月费)
+           + Σ(扣款日在本期内固定账单金额)
+           + Σ(本期内所有固定投资的发生额)
+
+本期总收入 = Σ(到账日在本期内收入的金额)
+
+净流入     = 本期总收入 - 本期总支出
+
+净可用     = Σ(现金余额 - 锁定金额) + 净流入
+
+日均预算   = max(0, 净可用 ÷ 距下个发薪日天数)
+```
+
+**关键点**：
+- **"本期"**定义为 `[今天, 下个发薪日)`（不是 `[发薪日, 发薪日)`），因为现在关心的是"未来现金流"
+- **向后兼容**：如果没有任何新数据，公式退化为 V1 的 `总净现金 - 信用卡应还` ÷ 天数
+- **净流入为负**：表示"现金不够覆盖未来支出"，日均预算归零（不展示负数）
+- **净流入为正**：表示"未来还有进账"，日均预算可能比 V1 更高
+
+**举个例子**（今天 6/21，发薪日 7/10，19 天后）：
+```
+现金余额: ¥152,768
+锁定金额: ¥0
+本期活跃信用卡: ¥142,303
+订阅:
+  - Netflix ¥1,490 (扣款日 6/30, 在本期内 ✓)
+  - iCloud+ ¥130 (扣款日 7/3, 在本期内 ✓)
+固定账单:
+  - 房租 ¥80,000 (扣款日 7/1, 在本期内 ✓)
+固定投资:
+  - 每日基金 ¥100 (本期内 19 次 = ¥1,900)
+收入:
+  - 工资 ¥300,000 (到账日 7/5, 在本期内 ✓)
+  - 副业 ¥20,000 (到账日 6/25, 在本期内 ✓)
+
+本期总支出 = 142,303 + 1,490 + 130 + 80,000 + 1,900 = ¥225,823
+本期总收入 = 300,000 + 20,000 = ¥320,000
+净流入     = 320,000 - 225,823 = +¥94,177
+净可用     = 152,768 + 94,177 = ¥246,945
+日均预算   = 246,945 ÷ 19 = ¥12,997 / 日
+```
+
+对比 V1 公式（忽略新数据）：日均 = (152,768 - 142,303) ÷ 19 = **¥551 / 日**。差距 **24 倍**，新算法更准确。
+
+#### 3.6.4 各卡片独立管理
+
+**固定投资**：
+- 字段：`name, amount, frequency (daily/weekly/monthly/yearly), start_date`
+- 例子：每日基金定投 ¥100（2026-01-01 开始）
+- 系统自动计算：本期内发生次数 = `(min(今天+19天, 永远) - max(开始日, 今天)) ÷ 频率间隔`
+- 频率到天数的映射：
+  - `daily` → 每天
+  - `weekly` → 每 7 天
+  - `monthly` → 每月 `start_date.getDate()` 号
+  - `yearly` → 每年 `start_date.getMonth()+1` 月 `start_date.getDate()` 号
+- **UI**：表单提供"每天/每周/每月/每年"4 个预设按钮（Q8=A）
+
+**固定房租支出**：
+- 字段：`name, amount, due_day (1-31)`
+- 例子：房租 ¥80,000 每月 1 号
+- 算法与现有信用卡完全一致（用 `isCardActiveInCycle` 函数）
+
+**固定收入**：
+- 字段：`name, amount, frequency (monthly/weekly), pay_day (1-31 for monthly) / day_of_week (0-6 for weekly)`
+- 例子：工资 ¥300,000 每月 25 号
+- 算法：找本期内所有到账日，累加
+
+**订阅**：
+- 字段：`name, amount, billing_day (1-31), billing_cycle (monthly/yearly)`
+- 例子：Netflix ¥1,490 每月 15 号扣款
+- 算法与房租完全一致
+
+#### 3.6.5 主页摘要卡片升级
+
+**V1 摘要**（5 行）：
+```
+现金来源总额    ¥XX,XXX
+锁定金额        -¥X,XXX
+本期应还（信用卡）-¥XX,XXX
+净可用现金      ¥XX,XXX
+日均预算        ¥XX,XXX / 日  ← 高亮
+```
+
+**V2 摘要**（保留 V1，新增一行）：
+```
+现金来源总额       ¥XX,XXX
+锁定金额           -¥X,XXX
+本期支出（含订阅）-¥XXX,XXX  ← 新增
+本期收入           +¥XXX,XXX  ← 新增
+─────────────────
+净可用现金         ¥XXX,XXX
+日均预算           ¥XX,XXX / 日  ← 高亮
+```
+
+**新增的两行带 icon**：
+- 本期支出：warning icon（橙色）
+- 本期收入：trending-up icon（绿色）
+
+点击"本期支出 / 本期收入"两行 → 展开"本期支出 / 本期收入"汇总卡（折叠形式）。
+
 ---
 
 ## 4. 数据模型
@@ -280,12 +454,180 @@ function daysToNextPayday(today, payDay) {
 }
 
 // 卡片是否活跃（本期需还）
-function isCardActive(card, today, payDay) {
+function isCardActiveInCycle(card, today, payDay) {
   const nextPayday = getNextPayday(today, payDay);
   const prevPayday = subtractMonths(nextPayday, 1);
   const dueDateThisCycle = new Date(prevPayday.getFullYear(), prevPayday.getMonth(), card.dueDay);
   // 简化逻辑：扣款日落在 [prevPayday, nextPayday) 区间内 → 活跃
   return dueDateThisCycle >= prevPayday && dueDateThisCycle < nextPayday;
+}
+```
+
+### 4.3 v0.3 新增表 Schema
+
+```sql
+-- === 定期事件：固定投资（自动扣款，每天/每周/每月/每年）===
+CREATE TABLE IF NOT EXISTS recurring_investments (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL DEFAULT 'default',
+  name        TEXT NOT NULL,
+  amount      REAL NOT NULL CHECK (amount >= 0),
+  frequency   TEXT NOT NULL CHECK (frequency IN ('daily','weekly','monthly','yearly')),
+  start_date  TEXT NOT NULL,           -- YYYY-MM-DD，首次扣款日
+  end_date    TEXT,                    -- YYYY-MM-DD，结束日（null = 永久）
+  note        TEXT,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+CREATE INDEX idx_investments_user ON recurring_investments(user_id);
+
+-- === 定期事件：固定账单（房租水电等，每月固定日期）===
+CREATE TABLE IF NOT EXISTS recurring_bills (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL DEFAULT 'default',
+  name        TEXT NOT NULL,
+  amount      REAL NOT NULL CHECK (amount >= 0),
+  due_day     INTEGER NOT NULL CHECK (due_day >= 1 AND due_day <= 31),
+  note        TEXT,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+CREATE INDEX idx_bills_user ON recurring_bills(user_id);
+
+-- === 定期事件：固定收入（工资、副业等）===
+CREATE TABLE IF NOT EXISTS recurring_incomes (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL DEFAULT 'default',
+  name        TEXT NOT NULL,
+  amount      REAL NOT NULL CHECK (amount >= 0),
+  frequency   TEXT NOT NULL CHECK (frequency IN ('monthly','weekly')),
+  -- monthly: pay_day 1-31；weekly: day_of_week 0-6（0=周日）
+  pay_day     INTEGER CHECK (pay_day >= 1 AND pay_day <= 31),
+  day_of_week INTEGER CHECK (day_of_week >= 0 AND day_of_week <= 6),
+  start_date  TEXT NOT NULL,
+  end_date    TEXT,
+  note        TEXT,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  CHECK (
+    (frequency = 'monthly' AND pay_day IS NOT NULL) OR
+    (frequency = 'weekly'  AND day_of_week IS NOT NULL)
+  )
+);
+CREATE INDEX idx_incomes_user ON recurring_incomes(user_id);
+
+-- === 定期事件：订阅（Netflix/Spotify 等，每月或每年）===
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL DEFAULT 'default',
+  name          TEXT NOT NULL,
+  amount        REAL NOT NULL CHECK (amount >= 0),
+  billing_day   INTEGER NOT NULL CHECK (billing_day >= 1 AND billing_day <= 31),
+  billing_cycle TEXT NOT NULL DEFAULT 'monthly' CHECK (billing_cycle IN ('monthly','yearly')),
+  category      TEXT,                  -- 可选：影音/工具/云存储等
+  note          TEXT,
+  sort_order    INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+CREATE INDEX idx_subscriptions_user ON subscriptions(user_id);
+```
+
+### 4.4 v0.3 升级版计算逻辑（核心算法）
+
+```javascript
+// 4.4.1 固定投资的"本期内发生次数"
+function countInvestmentOccurrences(inv, cycleStart, cycleEnd) {
+  // inv: { frequency, start_date, end_date, amount }
+  const intervalDays = { daily: 1, weekly: 7, monthly: 30, yearly: 365 }[inv.frequency];
+  const firstOccur = max(parseDate(inv.start_date), cycleStart);
+  const lastOccur = inv.end_date ? min(parseDate(inv.end_date), cycleEnd) : cycleEnd;
+
+  if (firstOccur >= lastOccur) return 0;
+
+  // 简化算法：按 30/365 月/年估算，更精确的实现需要按每月实际日期
+  // （V1 用估算，V2 再优化）
+  const days = diffDays(firstOccur, lastOccur);
+  return Math.floor(days / intervalDays) + 1;
+}
+
+// 4.4.2 固定账单的本期内发生（与信用卡算法一致）
+function isBillActiveInCycle(bill, cycleStart, cycleEnd) {
+  const dueDate = getPaydayInMonth(cycleStart.getFullYear(), cycleStart.getMonth(), bill.due_day);
+  if (dueDate >= cycleStart && dueDate < cycleEnd) return true;
+  const dueDate2 = getPaydayInMonth(cycleEnd.getFullYear(), cycleEnd.getMonth(), bill.due_day);
+  return dueDate2 >= cycleStart && dueDate2 < cycleEnd;
+}
+
+// 4.4.3 订阅的本期内发生（同上）
+function isSubscriptionActiveInCycle(sub, cycleStart, cycleEnd) {
+  return isBillActiveInCycle({ due_day: sub.billing_day }, cycleStart, cycleEnd);
+}
+
+// 4.4.4 收入的本期内所有到账日 + 累加
+function sumIncomeInCycle(incomes, cycleStart, cycleEnd) {
+  let total = 0;
+  for (const inc of incomes) {
+    if (inc.frequency === 'monthly') {
+      const payDate = getPaydayInMonth(cycleStart.getFullYear(), cycleStart.getMonth(), inc.pay_day);
+      if (payDate >= cycleStart && payDate < cycleEnd) total += inc.amount;
+      const payDate2 = getPaydayInMonth(cycleEnd.getFullYear(), cycleEnd.getMonth(), inc.pay_day);
+      if (payDate2 >= cycleStart && payDate2 < cycleEnd) total += inc.amount;
+    } else if (inc.frequency === 'weekly') {
+      // 找 [cycleStart, cycleEnd) 内所有 inc.day_of_week 对应的日期
+      for (let d = new Date(cycleStart); d < cycleEnd; d = addDays(d, 1)) {
+        if (d.getDay() === inc.day_of_week) total += inc.amount;
+      }
+    }
+  }
+  return total;
+}
+
+// 4.4.5 升级版 computeDashboard（向后兼容）
+function computeDashboardV2(today, config, cashSources, creditCards,
+                            investments, bills, incomes, subscriptions) {
+  // ... V1 计算不变 ...
+  const v1 = computeDashboardV1(today, config, cashSources, creditCards);
+
+  const cycleStart = today;
+  const cycleEnd = getNextPayday(today, config.pay_day);
+
+  // 本期总支出
+  let totalExpense = v1.total_due; // 信用卡
+  for (const bill of bills) {
+    if (isBillActiveInCycle(bill, cycleStart, cycleEnd)) totalExpense += bill.amount;
+  }
+  for (const sub of subscriptions) {
+    if (isSubscriptionActiveInCycle(sub, cycleStart, cycleEnd)) totalExpense += sub.amount;
+  }
+  for (const inv of investments) {
+    const n = countInvestmentOccurrences(inv, cycleStart, cycleEnd);
+    totalExpense += n * inv.amount;
+  }
+
+  // 本期总收入
+  const totalIncome = sumIncomeInCycle(incomes, cycleStart, cycleEnd);
+
+  // 净流入
+  const netFlow = totalIncome - totalExpense;
+
+  // 净可用 = 当前现金 + 净流入
+  const netAvailable = v1.total_net_cash + netFlow;
+  const dailyBudget = Math.max(0, Math.floor(netAvailable / v1.days_to_payday));
+
+  return {
+    ...v1,
+    upcoming_expenses: { credit_cards: ..., bills: ..., subscriptions: ..., investments: ... },
+    upcoming_incomes: { ... },
+    total_expense: totalExpense,
+    total_income: totalIncome,
+    net_flow: netFlow,
+    net_available: netAvailable,
+    daily_budget: dailyBudget,
+  };
 }
 ```
 
@@ -310,7 +652,7 @@ function isCardActive(card, today, payDay) {
   - 启用 OpenType：`lnum`（等宽数字）+ `locl`（本地化字形）
 - **设计风格**：完全照搬 Notion 设计系统（暖中性色 + 耳语边框 + 多层极淡阴影）
 
-### 5.3 页面结构
+### 5.3 页面结构（v0.3）
 
 ```
 ┌─────────────────────────────┐
@@ -323,13 +665,17 @@ function isCardActive(card, today, payDay) {
 ├─────────────────────────────┤
 │  💰 现金来源     ¥52,000   │
 │  🔒 锁定金额     -¥8,000   │
-│  💳 活跃信用卡   -¥28,000  │
-│  ✨ 净可用       ¥16,000   │  ← 摘要卡片
+│  ⚠️ 本期支出     -¥12,300  │  ← v0.3 新增
+│  📈 本期收入     +¥320,000 │  ← v0.3 新增
+│  ────────                  │
+│  ✨ 净可用       ¥246,945  │  ← 重新计算
+│  日均预算       ¥12,997/日 │  ← 升级版公式
 ├─────────────────────────────┤
 │  ⚠️ 今天到了第 2 个采集点  │  ← 采集点提示（条件显示）
 ├─────────────────────────────┤
 │  [现金明细]                 │  ← 可折叠列表
-│  [信用卡明细]               │
+│  [本期支出明细 ▼]           │  ← v0.3 新增可折叠汇总卡
+│  [本期收入明细 ▼]           │  ← v0.3 新增可折叠汇总卡
 ├─────────────────────────────┤
 │  [主页] [曲线] [设置]      │  ← 底部 Tab 栏
 └─────────────────────────────┘
@@ -339,11 +685,15 @@ function isCardActive(card, today, payDay) {
 
 | 页面 | 路由 | 说明 |
 |------|------|------|
-| 主页 | `/` | 实时仪表盘 |
+| 主页 | `/` | 实时仪表盘（含本期支出/收入汇总卡） |
 | 曲线页 | `/trends` | 双 Y 轴图表 + 周期对比 |
 | 设置页 | `/settings` | 配置 + 数据管理 |
 | 新增/编辑现金 | `/cash/new`、`/cash/:id` | 表单 |
 | 新增/编辑信用卡 | `/card/new`、`/card/:id` | 表单 |
+| 新增/编辑投资 | `/investment/new`、`/investment/:id` | v0.3 表单 |
+| 新增/编辑账单 | `/bill/new`、`/bill/:id` | v0.3 表单 |
+| 新增/编辑收入 | `/income/new`、`/income/:id` | v0.3 表单 |
+| 新增/编辑订阅 | `/subscription/new`、`/subscription/:id` | v0.3 表单 |
 | 快照录入弹窗 | 模态层 | 主页和曲线页共用 |
 
 ---
@@ -435,9 +785,25 @@ cash-flow-pulse/
 | POST | `/api/snapshots` | 录入快照 |
 | PUT | `/api/snapshots/:id` | 更新备注 |
 | DELETE | `/api/snapshots/:id` | 删除 |
-| GET | `/api/dashboard` | 一站式接口：返回所有数据 + 计算结果 |
-| GET | `/api/export` | 导出 JSON |
+| GET | `/api/dashboard` | 一站式接口：返回所有数据 + 计算结果（含 v0.3 新字段） |
+| GET | `/api/export` | 导出 JSON（含 v0.3 新表） |
 | POST | `/api/import` | 导入 JSON |
+| **GET** | **`/api/investments`** | **v0.3 投资列表** |
+| **POST** | **`/api/investments`** | **v0.3 新增投资** |
+| **PUT** | **`/api/investments/:id`** | **v0.3 更新投资** |
+| **DELETE** | **`/api/investments/:id`** | **v0.3 删除投资** |
+| **GET** | **`/api/bills`** | **v0.3 账单列表** |
+| **POST** | **`/api/bills`** | **v0.3 新增账单** |
+| **PUT** | **`/api/bills/:id`** | **v0.3 更新账单** |
+| **DELETE** | **`/api/bills/:id`** | **v0.3 删除账单** |
+| **GET** | **`/api/incomes`** | **v0.3 收入列表** |
+| **POST** | **`/api/incomes`** | **v0.3 新增收入** |
+| **PUT** | **`/api/incomes/:id`** | **v0.3 更新收入** |
+| **DELETE** | **`/api/incomes/:id`** | **v0.3 删除收入** |
+| **GET** | **`/api/subscriptions`** | **v0.3 订阅列表** |
+| **POST** | **`/api/subscriptions`** | **v0.3 新增订阅** |
+| **PUT** | **`/api/subscriptions/:id`** | **v0.3 更新订阅** |
+| **DELETE** | **`/api/subscriptions/:id`** | **v0.3 删除订阅** |
 
 ### 6.5 部署流程
 
@@ -541,7 +907,9 @@ function shouldShowSnapshotPrompt(today, payDay, snapshotOffsets, existingSnapsh
 
 ---
 
-## 11. 验收标准（V1）
+## 11. 验收标准
+
+### 11.1 V1 验收标准（保持不变）
 
 - [ ] 用户能在 30 秒内完成首次配置（发薪日 + 至少 1 个现金来源 + 至少 1 张信用卡）
 - [ ] 主页能正确显示日均预算、距离下个发薪日天数
@@ -552,6 +920,36 @@ function shouldShowSnapshotPrompt(today, payDay, snapshotOffsets, existingSnapsh
 - [ ] JSON 导出/导入功能完整可用
 - [ ] 移动端（iPhone Safari）显示正常，所有交互可用
 - [ ] 桌面端（Chrome）显示正常
+
+### 11.2 v0.3 新增验收标准
+
+**定期事件 CRUD**：
+- [ ] 4 类卡片（投资/账单/收入/订阅）都能新增 / 编辑 / 删除 / 列表
+- [ ] 表单字段验证完整（金额非负、日期合法、CHECK 约束生效）
+- [ ] 投资的"频率"单选按钮（每天/每周/每月/每年）正常工作
+
+**算法升级**：
+- [ ] 新公式 `净可用 = 当前现金 + 净流入` 正确实现
+- [ ] 投资按频率自动计算本期内发生次数（如每日投资 19 天 = 19 次）
+- [ ] 订阅 / 账单按 due_day 在本期内正确识别
+- [ ] 收入按 pay_day / day_of_week 在本期内所有到账日累加
+- [ ] 没有任何新数据时，公式退化为 V1 公式（向后兼容）
+
+**汇总卡 UI**：
+- [ ] "本期支出 / 本期收入"两张汇总卡默认折叠，点击展开
+- [ ] 明细按"扣款天数从近到远"排序
+- [ ] 总支出橙色、总收入绿色，视觉对称
+- [ ] 摘要卡片新增"本期支出 / 本期收入"两行，带 icon
+
+**向后兼容**：
+- [ ] 升级后 V1 用户的所有数据保留
+- [ ] 现有"信用卡"分类行为不变
+- [ ] 老 dashboard API 字段仍然返回（不破坏现有前端）
+
+**端到端验证场景**：
+- [ ] 示例数据：PayPay ¥50k + 房租 ¥80k (7/1) + Netflix ¥1490 (6/30) + 工资 ¥300k (7/5) + 每日基金 ¥100
+- [ ] 今日 6/21 → 日均预算应 ≈ ¥12,997（按 v0.3 算法）
+- [ ] V1 老数据（无新卡片）→ 日均预算退化为 V1 公式
 
 ---
 ## 附录 A：术语速查
@@ -574,261 +972,13 @@ function shouldShowSnapshotPrompt(today, payDay, snapshotOffsets, existingSnapsh
 
 ---
 
-## 附录 C：设计系统（基于 Notion）
+## 附录 C：设计系统
 
-> 本项目的视觉规范完全照搬 Notion 设计系统。下表是可直接复制到 CSS Variables / Tailwind Config 的 token 值。
-
-### C.1 颜色 Token
-
-```css
-:root {
-  /* === Primary === */
-  --color-text-primary: rgba(0, 0, 0, 0.95);    /* 主文字：暖近黑 */
-  --color-bg-primary: #ffffff;                   /* 主背景：纯白 */
-  --color-accent: #0075de;                       /* Notion 蓝：CTA、链接 */
-  --color-accent-hover: #005bab;                 /* 蓝按钮按下 */
-
-  /* === Brand Secondary === */
-  --color-deep-navy: #213183;                    /* 强调区（罕用） */
-  --color-focus-ring: #097fe8;                   /* 焦点环 */
-
-  /* === Warm Neutral Scale（暖中性） === */
-  --color-bg-alt: #f6f5f4;                       /* 暖白：区块交替 */
-  --color-surface-dark: #31302e;                 /* 暖深：深色面 */
-  --color-text-secondary: #615d59;               /* 暖灰 500：次文字 */
-  --color-text-muted: #a39e98;                   /* 暖灰 300：占位 */
-
-  /* === Semantic Accent（语义色，少用） === */
-  --color-success: #1aae39;                      /* 成功：预算充裕 */
-  --color-warning: #dd5b00;                      /* 警告：信用卡待还 */
-  --color-info: #2a9d99;                         /* 信息：提示 */
-  --color-decorative: #ff64c8;                   /* 装饰粉：罕用 */
-  --color-premium: #391c57;                      /* 高级紫：罕用 */
-
-  /* === Interactive === */
-  --color-link: #0075de;                         /* 链接 */
-  --color-link-hover: #005bab;                   /* 链接 hover */
-  --color-badge-bg: #f2f9ff;                     /* 徽章背景：淡蓝 */
-  --color-badge-text: #097fe8;                   /* 徽章文字 */
-
-  /* === Border === */
-  --border-whisper: 1px solid rgba(0, 0, 0, 0.1); /* 标准耳语边框 */
-  --border-input: 1px solid #dddddd;             /* 输入框边框 */
-}
-```
-
-### C.2 字体 Token
-
-```css
-:root {
-  --font-sans: 'Inter', -apple-system, system-ui, 'Segoe UI',
-               'PingFang SC', 'Microsoft YaHei', Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-               'Liberation Mono', 'Courier New', monospace;
-
-  /* 启用 OpenType 特性：等宽数字 + 本地化字形 */
-  --font-features: 'lnum', 'locl';
-}
-```
-
-| 角色 | 尺寸 | 字重 | 行高 | 字距 | 用途 |
-|------|------|------|------|------|------|
-| Display Hero | 64px | 700 | 1.00 | -2.125px | 主仪表盘日均预算（最大字号）|
-| Section Heading | 48px | 700 | 1.00 | -1.5px | 区块大标题 |
-| Sub-heading | 26px | 700 | 1.23 | -0.625px | 区块副标题 |
-| Card Title | 22px | 700 | 1.27 | -0.25px | 卡片标题 |
-| Body Large | 20px | 600 | 1.40 | -0.125px | 引导文案 |
-| Body | 16px | 400 | 1.50 | normal | 正文 |
-| Body Medium | 16px | 500 | 1.50 | normal | 导航 / 强调 UI |
-| Nav / Button | 15px | 600 | 1.33 | normal | 按钮文字 |
-| Caption | 14px | 500 | 1.43 | normal | 元信息 |
-| Badge | 12px | 600 | 1.33 | 0.125px | 徽章 / 状态标签 |
-
-### C.3 间距与圆角 Token
-
-```css
-:root {
-  /* 8px 基准 */
-  --space-1: 2px;
-  --space-2: 4px;
-  --space-3: 6px;
-  --space-4: 8px;
-  --space-5: 12px;
-  --space-6: 16px;
-  --space-7: 24px;
-  --space-8: 32px;
-  --space-9: 48px;
-  --space-10: 64px;
-
-  /* 圆角 */
-  --radius-micro: 4px;      /* 按钮、输入框 */
-  --radius-subtle: 5px;     /* 链接、菜单项 */
-  --radius-standard: 8px;   /* 小卡片 */
-  --radius-comfortable: 12px; /* 标准卡片、图片顶部 */
-  --radius-large: 16px;     /* Hero 卡片 */
-  --radius-pill: 9999px;    /* 徽章、标签 */
-}
-```
-
-### C.4 阴影 Token（多层极淡叠加）
-
-```css
-:root {
-  /* Level 1: 耳语边框（默认） */
-  /* border: 1px solid rgba(0, 0, 0, 0.1); */
-
-  /* Level 2: 软卡片（4 层叠加，单层 ≤ 0.04） */
-  --shadow-card:
-    rgba(0, 0, 0, 0.04) 0px 4px 18px,
-    rgba(0, 0, 0, 0.027) 0px 2.025px 7.85px,
-    rgba(0, 0, 0, 0.02) 0px 0.8px 2.93px,
-    rgba(0, 0, 0, 0.01) 0px 0.175px 1.04px;
-
-  /* Level 3: 深卡片（5 层，模态框） */
-  --shadow-deep:
-    rgba(0, 0, 0, 0.01) 0px 1px 3px,
-    rgba(0, 0, 0, 0.02) 0px 3px 7px,
-    rgba(0, 0, 0, 0.02) 0px 7px 15px,
-    rgba(0, 0, 0, 0.04) 0px 14px 28px,
-    rgba(0, 0, 0, 0.05) 0px 23px 52px;
-}
-```
-
-### C.5 组件样式示例
-
-**Primary Button（Notion 蓝）**
-```css
-.btn-primary {
-  background: var(--color-accent);
-  color: #ffffff;
-  padding: 8px 16px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  font: 600 15px/1.33 var(--font-sans);
-  transition: transform 0.1s, background 0.15s;
-}
-.btn-primary:hover { background: var(--color-accent-hover); }
-.btn-primary:active { transform: scale(0.95); }
-.btn-primary:focus-visible { outline: 2px solid var(--color-focus-ring); }
-```
-
-**Secondary Button（半透明灰）**
-```css
-.btn-secondary {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--color-text-primary);
-  padding: 8px 16px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  font: 600 15px/1.33 var(--font-sans);
-}
-.btn-secondary:hover { background: rgba(0, 0, 0, 0.08); }
-.btn-secondary:active { transform: scale(0.95); }
-```
-
-**Pill Badge（胶囊徽章）**
-```css
-.badge {
-  background: var(--color-badge-bg);
-  color: var(--color-badge-text);
-  padding: 4px 8px;
-  border-radius: 9999px;
-  font: 600 12px/1.33 var(--font-sans);
-  letter-spacing: 0.125px;
-}
-```
-
-**Card（标准卡片）**
-```css
-.card {
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
-  box-shadow: var(--shadow-card);
-  padding: 24px;
-}
-```
-
-**Input（输入框）**
-```css
-.input {
-  background: #ffffff;
-  color: var(--color-text-primary);
-  border: 1px solid #dddddd;
-  border-radius: 4px;
-  padding: 6px;
-  font: 400 16px/1.50 var(--font-sans);
-}
-.input:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 0;
-}
-```
-
-### C.6 关键设计原则（应用此项目时）
-
-1. **暖中性优先**：所有灰都带黄棕底色（`#f6f5f4` 米白），禁止使用冷灰（如 `#e5e7eb`）
-2. **耳语边框**：默认边框用 `rgba(0,0,0,0.1)`，不要用实色灰
-3. **唯一饱和色**：只有 Notion 蓝 `#0075de` 用作强调；信用卡应还可用警告橙 `#dd5b00`，但仅在真正需要警示时
-4. **多层极淡阴影**：单层 opacity 不超过 0.05，4-5 层叠加
-5. **等宽数字**：所有金额数字启用 Inter 的 `lnum` 特性，避免宽度抖动
-6. **字距随字号缩放**：64px → -2.125px，16px → normal
-7. **区块交替**：白色 `#ffffff` 与暖白 `#f6f5f4` 交替，不使用硬边框分割
-8. **块级留白**：大区块之间垂直 padding 64-80px，不要堆砌
-
-### C.7 Tailwind Config 示例
-
-```javascript
-// tailwind.config.js
-module.exports = {
-  theme: {
-    extend: {
-      colors: {
-        'notion-text': 'rgba(0, 0, 0, 0.95)',
-        'notion-text-secondary': '#615d59',
-        'notion-text-muted': '#a39e98',
-        'notion-bg': '#ffffff',
-        'notion-bg-alt': '#f6f5f4',
-        'notion-blue': '#0075de',
-        'notion-blue-hover': '#005bab',
-        'notion-blue-soft': '#f2f9ff',
-        'notion-warning': '#dd5b00',
-        'notion-success': '#1aae39',
-        'notion-border': 'rgba(0, 0, 0, 0.1)',
-      },
-      borderRadius: {
-        'micro': '4px',
-        'subtle': '5px',
-        'standard': '8px',
-        'comfortable': '12px',
-        'large': '16px',
-        'pill': '9999px',
-      },
-      boxShadow: {
-        'card': 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2.025px 7.85px, rgba(0,0,0,0.02) 0px 0.8px 2.93px, rgba(0,0,0,0.01) 0px 0.175px 1.04px',
-        'deep': 'rgba(0,0,0,0.01) 0px 1px 3px, rgba(0,0,0,0.02) 0px 3px 7px, rgba(0,0,0,0.02) 0px 7px 15px, rgba(0,0,0,0.04) 0px 14px 28px, rgba(0,0,0,0.05) 0px 23px 52px',
-      },
-      fontFamily: {
-        sans: ['Inter', '-apple-system', 'system-ui', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
-      },
-      fontFeatureSettings: {
-        'lining-nums': '"lnum", "locl"',
-      },
-    },
-  },
-};
-```
-
-### C.8 此项目特定应用
-
-| 场景 | 使用 Token |
-|------|-----------|
-| 主页日均预算大字 | `--color-text-primary` + `font-feature-settings: lnum` |
-| 净可用现金卡片 | `--shadow-card` 软阴影 + `--color-bg-primary` |
-| 活跃信用卡提示 | `--color-warning` 文字 + `--color-badge-bg` 风格徽章 |
-| 采集点提示条 | `--color-bg-alt` 暖白底 + `--color-accent` 强调 |
-| 区块交替 | 白 `#ffffff` ↔ 暖白 `#f6f5f4` |
-| 数据未变快照点 | `--color-text-muted` `#a39e98` 浅灰 |
+> 📐 **本附录已拆分为独立文件**：[`docs/design-system-notion.md`](./design-system-notion.md)
+>
+> 内含完整的 Notion 设计系统 token（颜色 / 字体 / 间距 / 圆角 / 阴影）+ 组件样式示例 + Tailwind 配置 + 项目特定应用。
+>
+> 在开发新组件或调整样式前，**先读这份文件**。
 
 ---
 
@@ -838,3 +988,4 @@ module.exports = {
 |------|------|---------|
 | v0.1 | 2026-06-21 | 初始草案，需求已收敛 |
 | v0.2 | 2026-06-21 | 视觉风格升级为 Notion 设计系统，新增附录 C（含完整 token、组件示例、Tailwind 配置） |
+| v0.3 | 2026-06-21 | **新增 4 类定期事件卡片（投资/账单/收入/订阅）+ 算法升级 + 视觉聚合汇总卡** |
