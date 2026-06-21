@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../lib/store';
 import { Card } from '../components/Card';
 import { LoadingState } from '../components/States';
+import { Icon } from '../components/Icon';
 
 export function Settings() {
   const config = useStore((s) => s.config);
@@ -78,7 +79,7 @@ export function Settings() {
   };
 
   const handleClearAll = async () => {
-    if (!confirm('⚠️ 真的要清空所有数据吗？此操作不可恢复！')) return;
+    if (!confirm('真的要清空所有数据吗？此操作不可恢复！')) return;
     if (!confirm('再次确认：所有现金来源、信用卡、快照都将被删除。')) return;
     try {
       const res = await fetch('/api/import?mode=overwrite', {
@@ -105,7 +106,10 @@ export function Settings() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <header>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight-section">设置</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight-section flex items-center gap-2">
+          <Icon name="settings" size={28} strokeWidth={1.5} className="text-notion-text-secondary" />
+          <span>设置</span>
+        </h1>
         <p className="text-sm text-notion-text-secondary mt-1">配置发薪日、采集点，管理数据</p>
       </header>
 
@@ -142,8 +146,9 @@ export function Settings() {
               {saving ? '保存中...' : '保存配置'}
             </button>
             {savedAt && (
-              <span className="text-xs text-notion-success">
-                ✓ 已保存（{new Date(savedAt).toLocaleTimeString('zh-CN')}）
+              <span className="text-xs text-notion-success inline-flex items-center gap-1">
+                <Icon name="check" size={14} strokeWidth={2.5} />
+                <span>已保存（{new Date(savedAt).toLocaleTimeString('zh-CN')}）</span>
               </span>
             )}
           </div>
@@ -155,11 +160,13 @@ export function Settings() {
           所有数据仅存储在你的 Cloudflare D1 中，不上传任何第三方。建议定期导出备份。
         </p>
         <div className="flex flex-wrap gap-2">
-          <button onClick={handleExportJSON} className="btn-primary">
-            📥 导出 JSON（完整数据）
+          <button onClick={handleExportJSON} className="btn-primary flex items-center gap-1.5">
+            <Icon name="download" size={16} strokeWidth={2} />
+            <span>导出 JSON（完整数据）</span>
           </button>
-          <button onClick={handleExportCSV} className="btn-secondary">
-            📊 导出 CSV（快照表格）
+          <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-1.5">
+            <Icon name="export-csv" size={16} />
+            <span>导出 CSV（快照表格）</span>
           </button>
         </div>
       </Card>
@@ -168,8 +175,9 @@ export function Settings() {
         <p className="text-sm text-notion-text-secondary mb-3">
           选择之前导出的 JSON 文件，会与现有数据合并（不会清空）。
         </p>
-        <label className="btn-secondary cursor-pointer">
-          {importing ? '导入中...' : '📤 选择 JSON 文件'}
+        <label className="btn-secondary cursor-pointer inline-flex items-center gap-1.5">
+          <Icon name="import" size={16} />
+          <span>{importing ? '导入中...' : '选择 JSON 文件'}</span>
           <input
             type="file"
             accept=".json,application/json"
@@ -187,8 +195,12 @@ export function Settings() {
 
       <Card title="危险操作">
         <p className="text-sm text-notion-text-secondary mb-3">清空所有数据，恢复初始状态</p>
-        <button onClick={handleClearAll} className="text-notion-warning hover:underline text-sm">
-          清空所有数据
+        <button
+          onClick={handleClearAll}
+          className="inline-flex items-center gap-1.5 text-notion-warning hover:underline text-sm"
+        >
+          <Icon name="warning" size={14} strokeWidth={2} />
+          <span>清空所有数据</span>
         </button>
       </Card>
 

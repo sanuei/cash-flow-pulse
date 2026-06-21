@@ -4,6 +4,7 @@ import { Trends } from './pages/Trends';
 import { Settings } from './pages/Settings';
 import { useStore } from './lib/store';
 import { useEffect } from 'react';
+import { Icon } from './components/Icon';
 
 function App() {
   const loadDashboard = useStore((s) => s.loadDashboard);
@@ -18,7 +19,9 @@ function App() {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="card p-8 max-w-md text-center">
-          <div className="text-5xl mb-4">⚠️</div>
+          <div className="inline-flex items-center justify-center w-14 h-14 mb-4 rounded-full bg-[#fff4eb]">
+            <Icon name="warning" size={28} className="text-notion-warning" strokeWidth={1.5} />
+          </div>
           <h2 className="text-xl font-bold mb-2">加载失败</h2>
           <p className="text-notion-text-secondary text-sm mb-4">{error}</p>
           <button className="btn-primary" onClick={() => loadDashboard()}>
@@ -34,7 +37,7 @@ function App() {
       {/* 顶栏（桌面端） */}
       <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border bg-white">
         <div className="flex items-center gap-2 font-bold text-notion-text">
-          <span className="text-lg">💰</span>
+          <Icon name="wallet" size={20} className="text-notion-text" />
           <span>Cash Flow Pulse</span>
         </div>
         <nav className="flex items-center gap-1">
@@ -56,9 +59,9 @@ function App() {
 
       {/* 底部 Tab（移动端） */}
       <nav className="sm:hidden flex items-center justify-around border-t border-notion-border bg-white sticky bottom-0 h-14">
-        <NavTabMobile to="/" icon="🏠" label="主页" />
-        <NavTabMobile to="/trends" icon="📈" label="曲线" />
-        <NavTabMobile to="/settings" icon="⚙️" label="设置" />
+        <NavTabMobile to="/" icon="home" label="主页" />
+        <NavTabMobile to="/trends" icon="chart" label="曲线" />
+        <NavTabMobile to="/settings" icon="settings" label="设置" />
       </nav>
     </div>
   );
@@ -80,7 +83,7 @@ function NavTab({ to, children }: { to: string; children: React.ReactNode }) {
   );
 }
 
-function NavTabMobile({ to, icon, label }: { to: string; icon: string; label: string }) {
+function NavTabMobile({ to, icon, label }: { to: string; icon: 'home' | 'chart' | 'settings'; label: string }) {
   return (
     <NavLink
       to={to}
@@ -91,8 +94,12 @@ function NavTabMobile({ to, icon, label }: { to: string; icon: string; label: st
         }`
       }
     >
-      <span className="text-xl">{icon}</span>
-      <span>{label}</span>
+      {({ isActive }) => (
+        <>
+          <Icon name={icon} size={22} strokeWidth={isActive ? 2 : 1.75} />
+          <span>{label}</span>
+        </>
+      )}
     </NavLink>
   );
 }

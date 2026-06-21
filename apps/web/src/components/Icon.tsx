@@ -1,0 +1,112 @@
+import {
+  Wallet,
+  House,
+  ChartLine,
+  Settings as Gear,
+  Banknote,
+  CreditCard,
+  BarChart3,
+  Inbox,
+  TriangleAlert,
+  Sparkles,
+  Lock,
+  MapPin,
+  Pencil,
+  X,
+  Plus,
+  FileJson,
+  FileSpreadsheet,
+  Upload,
+  Download,
+  Check,
+  type LucideIcon,
+} from 'lucide-react';
+import { forwardRef } from 'react';
+
+/**
+ * 项目用到的 icon 名称清单
+ *
+ * 用 union type 限定拼写，编译期就能拦住 typo。
+ * 如果要新增 icon，先在这里加映射。
+ */
+export type IconName =
+  | 'wallet'      // 💰 Logo
+  | 'home'        // 🏠 主页 Tab
+  | 'chart'       // 📈 曲线 Tab
+  | 'settings'    // ⚙️ 设置 Tab
+  | 'cash'        // 💵 现金来源
+  | 'card'        // 💳 信用卡
+  | 'bar-chart'   // 📊 趋势图
+  | 'inbox'       // 📭 通用空状态
+  | 'warning'     // ⚠️ 错误
+  | 'sparkle'     // ✨ 高亮
+  | 'lock'        // 🔒 锁定
+  | 'pin'         // 📍 采集点
+  | 'edit'        // ✎ 编辑
+  | 'close'       // × 关闭/删除
+  | 'add'         // + 新增
+  | 'export-json' // 📥 导出 JSON
+  | 'export-csv'  // 📊 导出 CSV
+  | 'import'      // 📤 导入
+  | 'download'    // ⬇ 下载
+  | 'check';      // ✓ 完成
+
+const map: Record<IconName, LucideIcon> = {
+  wallet: Wallet,
+  home: House,
+  chart: ChartLine,
+  settings: Gear,
+  cash: Banknote,
+  card: CreditCard,
+  'bar-chart': BarChart3,
+  inbox: Inbox,
+  warning: TriangleAlert,
+  sparkle: Sparkles,
+  lock: Lock,
+  pin: MapPin,
+  edit: Pencil,
+  close: X,
+  add: Plus,
+  'export-json': FileJson,
+  'export-csv': FileSpreadsheet,
+  import: Upload,
+  download: Download,
+  check: Check,
+};
+
+type Props = {
+  name: IconName;
+  /** 图标尺寸（像素），默认 20 */
+  size?: number;
+  /** Tailwind className 控制颜色（用 currentColor 继承父元素 text-*） */
+  className?: string;
+  /** 线条粗细，默认 1.75（比 Lucide 默认 2 略细，配合 Notion 1px 边框） */
+  strokeWidth?: number;
+  /** 不可访问 label（屏幕阅读器） */
+  'aria-label'?: string;
+};
+
+/**
+ * 统一 Icon 组件
+ *
+ * 设计要点：
+ * - 颜色靠 currentColor 继承父元素的 text-* 类，不要 hardcode 颜色
+ * - strokeWidth 默认 1.75，比 Lucide 默认 2 更克制
+ * - forwardRef 兼容未来可能接入的 Headless UI / Radix
+ */
+export const Icon = forwardRef<SVGSVGElement, Props>(function Icon(
+  { name, size = 20, className, strokeWidth = 1.75, 'aria-label': ariaLabel },
+  ref,
+) {
+  const Cmp = map[name];
+  return (
+    <Cmp
+      ref={ref}
+      size={size}
+      strokeWidth={strokeWidth}
+      className={className}
+      aria-label={ariaLabel}
+      aria-hidden={ariaLabel ? undefined : true}
+    />
+  );
+});

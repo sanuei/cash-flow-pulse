@@ -14,6 +14,7 @@ import { useStore } from '../lib/store';
 import { Card } from '../components/Card';
 import { LoadingState, EmptyState } from '../components/States';
 import { Modal } from '../components/Modal';
+import { Icon } from '../components/Icon';
 import { formatYen } from '@cfp/shared';
 import { apiGet } from '../lib/api';
 
@@ -112,7 +113,10 @@ export function Trends() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight-section">月度趋势</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight-section flex items-center gap-2">
+            <Icon name="chart" size={28} strokeWidth={1.5} className="text-notion-text-secondary" />
+            <span>月度趋势</span>
+          </h1>
           <p className="text-sm text-notion-text-secondary mt-1">
             每个发薪周期固定 4 个采集点 · 蓝色 = 净可用现金 · 橙色 = 日均预算
           </p>
@@ -131,10 +135,11 @@ export function Trends() {
           </select>
           <button
             onClick={onRecordNow}
-            className="btn-secondary"
+            className="btn-secondary flex items-center gap-1.5"
             disabled={recording || !calc}
           >
-            {recording ? '保存中...' : '+ 录入快照'}
+            <Icon name="add" size={14} strokeWidth={2} />
+            <span>{recording ? '保存中...' : '录入快照'}</span>
           </button>
         </div>
       </header>
@@ -162,12 +167,13 @@ export function Trends() {
           <LoadingState />
         ) : chartData.length === 0 ? (
           <EmptyState
-            icon="📊"
+            icon="bar-chart"
             title="还没有快照数据"
             description="录入第一批快照后，这里会显示趋势曲线"
             action={
-              <button onClick={onRecordNow} className="btn-primary" disabled={!calc}>
-                录入第一个快照
+              <button onClick={onRecordNow} className="btn-primary flex items-center gap-1.5 mx-auto" disabled={!calc}>
+                <Icon name="add" size={16} strokeWidth={2} />
+                <span>录入第一个快照</span>
               </button>
             }
           />

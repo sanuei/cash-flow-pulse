@@ -6,6 +6,7 @@ import { Money } from '../components/Money';
 import { EmptyState, LoadingState } from '../components/States';
 import { CashForm } from '../components/CashForm';
 import { CardForm } from '../components/CardForm';
+import { Icon } from '../components/Icon';
 import { formatYen } from '@cfp/shared';
 import type { CashSource, CreditCard } from '@cfp/shared';
 
@@ -45,7 +46,7 @@ export function Home() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       {/* 顶部移动端标题 */}
       <div className="sm:hidden flex items-center gap-2 font-bold text-notion-text">
-        <span>💰</span>
+        <Icon name="wallet" size={18} />
         <span>Cash Flow Pulse</span>
       </div>
 
@@ -66,16 +67,21 @@ export function Home() {
       {/* 采集点提示条 */}
       {prompt && (
         <div className="bg-notion-bg-alt border border-notion-border rounded-comfortable px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex-1 text-sm">
-            <div className="font-semibold text-notion-text">
-              📍 今天到了第 {prompt.offset_index + 1} 个采集点
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-white border border-notion-border flex items-center justify-center">
+              <Icon name="pin" size={16} className="text-notion-blue" />
             </div>
-            <div className="text-notion-text-secondary text-xs mt-0.5">
-              {prompt.exists ? '已录入，可更新' : '点击录入本月快照'}（周期第 {prompt.cycle_day} 天）
+            <div className="flex-1 text-sm min-w-0">
+              <div className="font-semibold text-notion-text">
+                今天到了第 {prompt.offset_index + 1} 个采集点
+              </div>
+              <div className="text-notion-text-secondary text-xs mt-0.5">
+                {prompt.exists ? '已录入，可更新' : '点击录入本月快照'}（周期第 {prompt.cycle_day} 天）
+              </div>
             </div>
           </div>
           <button
-            className="btn-primary text-sm"
+            className="btn-primary text-sm flex-shrink-0"
             disabled={snapshotSaving}
             onClick={onRecordSnapshot}
           >
@@ -85,11 +91,28 @@ export function Home() {
       )}
 
       {/* 摘要卡片 */}
-      <Card title="本期概览">
+      <Card
+        title={
+          <div className="flex items-center gap-2">
+            <Icon name="sparkle" size={18} className="text-notion-blue" strokeWidth={1.75} />
+            <span>本期概览</span>
+          </div>
+        }
+      >
         <dl className="divide-y divide-notion-border">
           <Row label="现金来源总额" value={formatYen(calc.total_balance)} />
-          <Row label="锁定金额" value={`-${formatYen(calc.total_locked)}`} muted />
-          <Row label="本期应还（信用卡）" value={`-${formatYen(calc.total_due)}`} warning={calc.total_due > 0} />
+          <Row
+            label="锁定金额"
+            value={`-${formatYen(calc.total_locked)}`}
+            muted
+            icon={<Icon name="lock" size={14} className="text-notion-text-muted" />}
+          />
+          <Row
+            label="本期应还（信用卡）"
+            value={`-${formatYen(calc.total_due)}`}
+            warning={calc.total_due > 0}
+            icon={<Icon name="card" size={14} className="text-notion-warning" />}
+          />
           <Row label="净可用现金" value={formatYen(calc.net_available)} bold />
           <Row
             label="日均预算"
@@ -102,21 +125,31 @@ export function Home() {
 
       {/* 现金来源明细 */}
       <Card
-        title={`现金来源 (${cashSources.length})`}
+        title={
+          <div className="flex items-center gap-2">
+            <Icon name="cash" size={18} className="text-notion-text-secondary" strokeWidth={1.75} />
+            <span>现金来源 ({cashSources.length})</span>
+          </div>
+        }
         action={
-          <button onClick={() => setShowAddCash(true)} className="btn-ghost text-notion-blue">
-            + 新增
+          <button
+            onClick={() => setShowAddCash(true)}
+            className="btn-ghost text-notion-blue flex items-center gap-1"
+          >
+            <Icon name="add" size={14} strokeWidth={2} />
+            <span>新增</span>
           </button>
         }
       >
         {cashSources.length === 0 ? (
           <EmptyState
-            icon="💵"
+            icon="cash"
             title="还没有现金来源"
             description="添加 PayPay、钱包现金、银行活期等"
             action={
-              <button onClick={() => setShowAddCash(true)} className="btn-primary">
-                + 添加第一个
+              <button onClick={() => setShowAddCash(true)} className="btn-primary flex items-center gap-1.5 mx-auto">
+                <Icon name="add" size={16} strokeWidth={2} />
+                <span>添加第一个</span>
               </button>
             }
           />
@@ -129,23 +162,26 @@ export function Home() {
               >
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm text-notion-text truncate">{cs.name}</div>
-                  <div className="text-xs text-notion-text-muted mt-0.5 font-numeric">
-                    余额 {formatYen(cs.balance)}
+                  <div className="text-xs text-notion-text-muted mt-0.5 font-numeric flex items-center gap-2">
+                    <span>余额 {formatYen(cs.balance)}</span>
                     {cs.locked_amount > 0 && (
-                      <span className="ml-2">· 锁定 {formatYen(cs.locked_amount)}</span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <Icon name="lock" size={10} />
+                        <span>锁定 {formatYen(cs.locked_amount)}</span>
+                      </span>
                     )}
                   </div>
                 </div>
                 <div className="text-right">
                   <Money amount={cs.balance - cs.locked_amount} size="md" />
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-0.5">
                   <button
                     onClick={() => setEditingCash(cs)}
-                    className="text-notion-text-muted hover:text-notion-blue p-1"
+                    className="text-notion-text-muted hover:text-notion-blue p-1.5 rounded-micro hover:bg-notion-bg-alt transition-colors"
                     aria-label="编辑"
                   >
-                    ✎
+                    <Icon name="edit" size={14} />
                   </button>
                   <button
                     onClick={async () => {
@@ -154,10 +190,10 @@ export function Home() {
                         await loadDashboard();
                       }
                     }}
-                    className="text-notion-text-muted hover:text-notion-warning p-1"
+                    className="text-notion-text-muted hover:text-notion-warning p-1.5 rounded-micro hover:bg-notion-bg-alt transition-colors"
                     aria-label="删除"
                   >
-                    ×
+                    <Icon name="close" size={14} strokeWidth={2} />
                   </button>
                 </div>
               </li>
@@ -168,21 +204,31 @@ export function Home() {
 
       {/* 信用卡明细 */}
       <Card
-        title={`信用卡 (${creditCards.length})`}
+        title={
+          <div className="flex items-center gap-2">
+            <Icon name="card" size={18} className="text-notion-text-secondary" strokeWidth={1.75} />
+            <span>信用卡 ({creditCards.length})</span>
+          </div>
+        }
         action={
-          <button onClick={() => setShowAddCard(true)} className="btn-ghost text-notion-blue">
-            + 新增
+          <button
+            onClick={() => setShowAddCard(true)}
+            className="btn-ghost text-notion-blue flex items-center gap-1"
+          >
+            <Icon name="add" size={14} strokeWidth={2} />
+            <span>新增</span>
           </button>
         }
       >
         {creditCards.length === 0 ? (
           <EmptyState
-            icon="💳"
+            icon="card"
             title="还没有信用卡"
             description="添加待还款的信用卡，填写扣款日"
             action={
-              <button onClick={() => setShowAddCard(true)} className="btn-primary">
-                + 添加卡片
+              <button onClick={() => setShowAddCard(true)} className="btn-primary flex items-center gap-1.5 mx-auto">
+                <Icon name="add" size={16} strokeWidth={2} />
+                <span>添加卡片</span>
               </button>
             }
           />
@@ -219,12 +265,13 @@ export function Home() {
                     sign={c.active ? 'negative' : 'neutral'}
                   />
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-0.5">
                   <button
                     onClick={() => setEditingCard(c)}
-                    className="text-notion-text-muted hover:text-notion-blue p-1"
+                    className="text-notion-text-muted hover:text-notion-blue p-1.5 rounded-micro hover:bg-notion-bg-alt transition-colors"
+                    aria-label="编辑"
                   >
-                    ✎
+                    <Icon name="edit" size={14} />
                   </button>
                   <button
                     onClick={async () => {
@@ -233,9 +280,10 @@ export function Home() {
                         await loadDashboard();
                       }
                     }}
-                    className="text-notion-text-muted hover:text-notion-warning p-1"
+                    className="text-notion-text-muted hover:text-notion-warning p-1.5 rounded-micro hover:bg-notion-bg-alt transition-colors"
+                    aria-label="删除"
                   >
-                    ×
+                    <Icon name="close" size={14} strokeWidth={2} />
                   </button>
                 </div>
               </li>
@@ -281,6 +329,7 @@ function Row({
   muted,
   warning,
   highlight,
+  icon,
 }: {
   label: string;
   value: string;
@@ -288,11 +337,17 @@ function Row({
   muted?: boolean;
   warning?: boolean;
   highlight?: boolean;
+  icon?: React.ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between py-2.5">
-      <dt className={`text-sm ${muted ? 'text-notion-text-muted' : 'text-notion-text-secondary'}`}>
-        {label}
+      <dt
+        className={`text-sm flex items-center gap-1.5 ${
+          muted ? 'text-notion-text-muted' : 'text-notion-text-secondary'
+        }`}
+      >
+        {icon}
+        <span>{label}</span>
       </dt>
       <dd
         className={`font-numeric text-sm ${
