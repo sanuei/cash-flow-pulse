@@ -13,6 +13,11 @@ import { cardRoutes } from './routes/cards';
 import { snapshotRoutes } from './routes/snapshots';
 import { dashboardRoute } from './routes/dashboard';
 import { exportImportRoutes } from './routes/export-import';
+// v0.3 新增
+import { investmentRoutes } from './routes/investments';
+import { billRoutes } from './routes/bills';
+import { incomeRoutes } from './routes/incomes';
+import { subscriptionRoutes } from './routes/subscriptions';
 
 export interface Env {
   DB: D1Database;
@@ -41,6 +46,11 @@ app.route('/api/cards', cardRoutes);
 app.route('/api/snapshots', snapshotRoutes);
 app.route('/api/dashboard', dashboardRoute);
 app.route('/api', exportImportRoutes);
+// v0.3 新增
+app.route('/api/investments', investmentRoutes);
+app.route('/api/bills', billRoutes);
+app.route('/api/incomes', incomeRoutes);
+app.route('/api/subscriptions', subscriptionRoutes);
 
 // 404
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));

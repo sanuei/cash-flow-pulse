@@ -57,8 +57,9 @@ export const SnapshotUpdateSchema = z.object({
 });
 
 // === 导入数据 ===
+// v0.3 升级：version 支持 1 和 2（兼容老 JSON + 新格式含 4 类新表）
 export const ImportPayloadSchema = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   exported_at: z.number(),
   config: z.object({
     pay_day: z.number().int().min(1).max(31),
@@ -74,6 +75,39 @@ export const ImportPayloadSchema = z.object({
     statement_amount: z.number(),
     due_day: z.number(),
   })),
+  // v0.3 新增字段（可选，老 JSON 没这些也能导入）
+  investments: z.array(z.object({
+    name: z.string(),
+    amount: z.number(),
+    frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+    start_date: z.string(),
+    end_date: z.string().nullable().optional(),
+    note: z.string().nullable().optional(),
+  })).optional(),
+  bills: z.array(z.object({
+    name: z.string(),
+    amount: z.number(),
+    due_day: z.number(),
+    note: z.string().nullable().optional(),
+  })).optional(),
+  incomes: z.array(z.object({
+    name: z.string(),
+    amount: z.number(),
+    frequency: z.enum(['monthly', 'weekly']),
+    pay_day: z.number().nullable().optional(),
+    day_of_week: z.number().nullable().optional(),
+    start_date: z.string(),
+    end_date: z.string().nullable().optional(),
+    note: z.string().nullable().optional(),
+  })).optional(),
+  subscriptions: z.array(z.object({
+    name: z.string(),
+    amount: z.number(),
+    billing_day: z.number(),
+    billing_cycle: z.enum(['monthly', 'yearly']).optional(),
+    category: z.string().nullable().optional(),
+    note: z.string().nullable().optional(),
+  })).optional(),
   snapshots: z.array(z.object({
     cycle_id: z.string(),
     offset_index: z.number(),
