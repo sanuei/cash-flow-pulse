@@ -1,7 +1,17 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
 allowBuilds:
   esbuild: set this to true or false
   sharp: set this to true or false
   workerd: set this to true or false
+
+# 允许这些依赖运行 install scripts（pnpm 11+ 安全机制默认阻止）
+# esbuild: vite 构建依赖
+# sharp: wrangler 图像处理
+# workerd: wrangler 运行时
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd
