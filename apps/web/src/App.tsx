@@ -127,7 +127,14 @@ function App() {
       </main>
 
       {/* 底部 Tab（移动端：4 个主要页面） */}
-      <nav className="sm:hidden flex items-center justify-around border-t border-notion-border bg-white sticky bottom-0 h-14">
+      {/* paddingBottom + 高度自动加上 iOS home indicator 的安全区高度（iPhone X 以上约 34px） */}
+      <nav
+        className="sm:hidden flex items-center justify-around border-t border-notion-border bg-white sticky bottom-0"
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          height: 'calc(3.5rem + env(safe-area-inset-bottom))',
+        }}
+      >
         <NavTabMobile to="/" icon="home" label="总览" />
         <NavTabMobile to="/incomes" icon="income" label="收入" />
         <NavTabMobile to="/investments" icon="investment" label="投资" />
