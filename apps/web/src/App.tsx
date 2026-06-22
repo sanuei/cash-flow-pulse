@@ -9,6 +9,7 @@ import { useStore } from './lib/store';
 import { useEffect, lazy, Suspense } from 'react';
 import { Icon, type IconName } from './components/Icon';
 import { LoadingState } from './components/States';
+import { Toaster } from './components/Toaster';
 
 // Trends 依赖 recharts（gzip ~105KB），懒加载以减小首屏 bundle
 const Trends = lazy(() => import('./pages/Trends').then((m) => ({ default: m.Trends })));
@@ -143,6 +144,9 @@ function App() {
         <NavTabMobile to="/investments" icon="investment" label="投资" />
         <NavTabMobile to="/expenses" icon="bill" label="消费" />
       </nav>
+
+      {/* 全局 Toast（删除撤销等） */}
+      <Toaster />
     </div>
   );
 }

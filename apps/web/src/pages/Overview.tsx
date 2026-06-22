@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../lib/store';
+import { useToast } from '../lib/toast';
 import { Card } from '../components/Card';
 import { Money } from '../components/Money';
 import { LoadingState } from '../components/States';
@@ -47,11 +48,15 @@ type DashboardResponse = {
 export function Overview() {
   // 全局 store（本期数据 + 基础列表）
   const storeCalc = useStore((s) => s.calc);
-  const cashSources = useStore((s) => s.cashSources);
+  const cashSourcesAll = useStore((s) => s.cashSources);
   const config = useStore((s) => s.config);
   const loading = useStore((s) => s.loading);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const deleteCash = useStore((s) => s.deleteCash);
+  const pendingDeletes = useToast((s) => s.pendingDeletes);
+  const softDelete = useToast((s) => s.softDelete);
+  // 乐观隐藏正在删除的现金来源
+  const cashSources = cashSourcesAll.filter((cs) => !pendingDeletes.includes(cs.id));
 
   // 周期切换本地状态
   const [cycleOffset, setCycleOffset] = useState(0);
@@ -429,12 +434,16 @@ export function Overview() {
               }
               money={<Money amount={cs.balance - cs.locked_amount} size="md" />}
               onEdit={() => openEdit(cs)}
-              onDelete={async () => {
-                if (confirm(`删除「${cs.name}」？`)) {
-                  await deleteCash(cs.id);
-                  await loadDashboard();
-                }
-              }}
+              onDelete={() =>
+                softDelete({
+                  entityId: cs.id,
+                  message: `已删除「${cs.name}」`,
+                  perform: async () => {
+                    await deleteCash(cs.id);
+                    await loadDashboard();
+                  },
+                })
+              }
             />
           ))
         }

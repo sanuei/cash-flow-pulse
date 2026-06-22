@@ -1,4 +1,5 @@
 import { useStore } from '../lib/store';
+import { useToast } from '../lib/toast';
 import { ManagedListCard } from '../components/ManagedListCard';
 import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
@@ -12,21 +13,29 @@ import type { RecurringBill, Subscription, CreditCard } from '@cfp/shared';
 
 export function ExpensesPage() {
   const calc = useStore((s) => s.calc);
-  const creditCards = useStore((s) => s.creditCards);
-  const bills = useStore((s) => s.bills);
-  const subscriptions = useStore((s) => s.subscriptions);
+  const creditCardsAll = useStore((s) => s.creditCards);
+  const billsAll = useStore((s) => s.bills);
+  const subscriptionsAll = useStore((s) => s.subscriptions);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const deleteBill = useStore((s) => s.deleteBill);
   const deleteSubscription = useStore((s) => s.deleteSubscription);
   const deleteCard = useStore((s) => s.deleteCard);
+  const pendingDeletes = useToast((s) => s.pendingDeletes);
+  const softDelete = useToast((s) => s.softDelete);
 
   if (!calc) return <LoadingState message="加载中..." />;
+
+  // 乐观隐藏正在删除的项
+  const notPending = <T extends { id: string }>(x: T) => !pendingDeletes.includes(x.id);
+  const creditCards = creditCardsAll.filter(notPending);
+  const bills = billsAll.filter(notPending);
+  const subscriptions = subscriptionsAll.filter(notPending);
 
   // 信用卡：活跃卡（本期要还）排前，非活跃卡排后（与原首页一致）
   const cardRows = [
     ...calc.active_cards.map((ac) => ({ card: ac.card, active: true, days_until_due: ac.days_until_due })),
     ...calc.inactive_cards.map((c) => ({ card: c, active: false, days_until_due: -1 })),
-  ];
+  ].filter((r) => notPending(r.card));
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
@@ -79,12 +88,16 @@ export function ExpensesPage() {
               subtitle={`每月 ${card.due_day} 号扣款 · 账单 ${formatYen(card.statement_amount)}`}
               money={<Money amount={card.statement_amount} size="md" sign={active ? 'negative' : 'neutral'} />}
               onEdit={() => openEdit(card)}
-              onDelete={async () => {
-                if (confirm(`删除「${card.name}」？`)) {
-                  await deleteCard(card.id);
-                  await loadDashboard();
-                }
-              }}
+              onDelete={() =>
+                softDelete({
+                  entityId: card.id,
+                  message: `已删除「${card.name}」`,
+                  perform: async () => {
+                    await deleteCard(card.id);
+                    await loadDashboard();
+                  },
+                })
+              }
             />
           ))
         }
@@ -126,12 +139,16 @@ export function ExpensesPage() {
               subtitle={`每月 ${b.due_day} 号扣款`}
               money={<Money amount={b.amount} size="md" sign="negative" />}
               onEdit={() => openEdit(b)}
-              onDelete={async () => {
-                if (confirm(`删除「${b.name}」？`)) {
-                  await deleteBill(b.id);
-                  await loadDashboard();
-                }
-              }}
+              onDelete={() =>
+                softDelete({
+                  entityId: b.id,
+                  message: `已删除「${b.name}」`,
+                  perform: async () => {
+                    await deleteBill(b.id);
+                    await loadDashboard();
+                  },
+                })
+              }
             />
           ))
         }
@@ -187,12 +204,16 @@ export function ExpensesPage() {
               subtitle={`${s.billing_cycle === 'monthly' ? '每月' : '每年'} ${s.billing_day} 号扣款`}
               money={<Money amount={s.amount} size="md" sign="negative" />}
               onEdit={() => openEdit(s)}
-              onDelete={async () => {
-                if (confirm(`删除「${s.name}」？`)) {
-                  await deleteSubscription(s.id);
-                  await loadDashboard();
-                }
-              }}
+              onDelete={() =>
+                softDelete({
+                  entityId: s.id,
+                  message: `已删除「${s.name}」`,
+                  perform: async () => {
+                    await deleteSubscription(s.id);
+                    await loadDashboard();
+                  },
+                })
+              }
             />
           ))
         }

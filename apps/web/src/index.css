@@ -96,3 +96,8 @@ body {
   color: var(--notion-text-secondary) !important;
   font-size: 12px;
 }
+/* Toast 入场动画 */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

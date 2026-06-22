@@ -1,4 +1,5 @@
 import { useStore } from '../lib/store';
+import { useToast } from '../lib/toast';
 import { ManagedListCard } from '../components/ManagedListCard';
 import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
@@ -9,9 +10,12 @@ import type { RecurringIncome } from '@cfp/shared';
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 export function IncomesPage() {
-  const incomes = useStore((s) => s.incomes);
+  const incomesAll = useStore((s) => s.incomes);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const deleteIncome = useStore((s) => s.deleteIncome);
+  const pendingDeletes = useToast((s) => s.pendingDeletes);
+  const softDelete = useToast((s) => s.softDelete);
+  const incomes = incomesAll.filter((i) => !pendingDeletes.includes(i.id));
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
@@ -66,12 +70,16 @@ export function IncomesPage() {
                 subtitle={freqLabel}
                 money={<Money amount={inc.amount} size="md" sign="positive" />}
                 onEdit={() => openEdit(inc)}
-                onDelete={async () => {
-                  if (confirm(`删除「${inc.name}」？`)) {
-                    await deleteIncome(inc.id);
-                    await loadDashboard();
-                  }
-                }}
+                onDelete={() =>
+                  softDelete({
+                    entityId: inc.id,
+                    message: `已删除「${inc.name}」`,
+                    perform: async () => {
+                      await deleteIncome(inc.id);
+                      await loadDashboard();
+                    },
+                  })
+                }
               />
             );
           })

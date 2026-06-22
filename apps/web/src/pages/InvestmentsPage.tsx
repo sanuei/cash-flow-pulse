@@ -1,4 +1,5 @@
 import { useStore } from '../lib/store';
+import { useToast } from '../lib/toast';
 import { ManagedListCard } from '../components/ManagedListCard';
 import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
@@ -15,9 +16,12 @@ const FREQ_LABEL: Record<InvestmentFrequency, string> = {
 };
 
 export function InvestmentsPage() {
-  const investments = useStore((s) => s.investments);
+  const investmentsAll = useStore((s) => s.investments);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const deleteInvestment = useStore((s) => s.deleteInvestment);
+  const pendingDeletes = useToast((s) => s.pendingDeletes);
+  const softDelete = useToast((s) => s.softDelete);
+  const investments = investmentsAll.filter((i) => !pendingDeletes.includes(i.id));
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
@@ -65,12 +69,16 @@ export function InvestmentsPage() {
               subtitle={`${FREQ_LABEL[inv.frequency]}扣款 ${formatYen(inv.amount)} · 始于 ${inv.start_date}`}
               money={<Money amount={inv.amount} size="md" sign="negative" />}
               onEdit={() => openEdit(inv)}
-              onDelete={async () => {
-                if (confirm(`删除「${inv.name}」？`)) {
-                  await deleteInvestment(inv.id);
-                  await loadDashboard();
-                }
-              }}
+              onDelete={() =>
+                softDelete({
+                  entityId: inv.id,
+                  message: `已删除「${inv.name}」`,
+                  perform: async () => {
+                    await deleteInvestment(inv.id);
+                    await loadDashboard();
+                  },
+                })
+              }
             />
           ))
         }
