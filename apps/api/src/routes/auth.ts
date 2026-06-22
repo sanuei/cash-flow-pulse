@@ -121,6 +121,47 @@ authRoutes.post('/logout', async (c) => {
 });
 
 /**
+ * GET /api/auth/sessions
+ * 当前用户的所有活跃 session（用于设备管理）
+ */
+authRoutes.get('/sessions', async (c) => {
+  const user = c.get('user');
+  if (!user) return c.json({ error: 'unauthorized' }, 401);
+  const currentSessionId = c.get('sessionId');
+  const rows = await c.env.DB
+    .prepare(`SELECT id, created_at, expires_at, ip, user_agent
+              FROM sessions WHERE user_id = ? AND expires_at > ?
+              ORDER BY created_at DESC LIMIT 10`)
+    .bind(user.id, Date.now())
+    .all<any>();
+  const sessions = (rows.results || []).map((s: any) => ({
+    id: s.id,
+    is_current: s.id === currentSessionId,
+    created_at: s.created_at,
+    expires_at: s.expires_at,
+    ip: s.ip,
+    user_agent: s.user_agent,
+  }));
+  return c.json(sessions);
+});
+
+/**
+ * DELETE /api/auth/sessions/:id
+ * 吊销指定 session（远程登出某设备）
+ */
+authRoutes.delete('/sessions/:id', async (c) => {
+  const user = c.get('user');
+  if (!user) return c.json({ error: 'unauthorized' }, 401);
+  const id = c.req.param('id');
+  const result = await c.env.DB
+    .prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?')
+    .bind(id, user.id)
+    .run();
+  if ((result as any).meta?.changes === 0) return c.json({ error: 'not found' }, 404);
+  return c.json({ ok: true });
+});
+
+/**
  * GET /api/auth/me
  * 返回当前用户信息（前端初始化用）
  */

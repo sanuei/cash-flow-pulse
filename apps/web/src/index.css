@@ -2,20 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Notion 设计系统：基础样式 */
+/* ══════════════════════════════════════
+   设计系统颜色 Token — 浅色模式（默认）
+   ══════════════════════════════════════ */
 :root {
-  --notion-text: rgba(0, 0, 0, 0.95);
-  --notion-text-secondary: #615d59;
-  --notion-text-muted: #a39e98;
-  --notion-bg: #ffffff;
-  --notion-bg-alt: #f6f5f4;
-  --notion-blue: #0075de;
-  --notion-blue-hover: #005bab;
-  --notion-blue-soft: #f2f9ff;
-  --notion-blue-text: #097fe8;
-  --notion-warning: #dd5b00;
-  --notion-success: #1aae39;
-  --notion-border: rgba(0, 0, 0, 0.1);
+  /* 文字 */
+  --c-text:           rgba(0, 0, 0, 0.95);
+  --c-text-secondary: #615d59;
+  --c-text-muted:     #a39e98;
+  /* 背景 */
+  --c-bg:             #ffffff;
+  --c-bg-alt:         #f6f5f4;
+  --c-bg-dark:        #31302e;
+  /* 强调色 */
+  --c-blue:           #0075de;
+  --c-blue-hover:     #005bab;
+  --c-blue-soft:      #f2f9ff;
+  --c-blue-text:      #097fe8;
+  --c-warning:        #dd5b00;
+  --c-success:        #1aae39;
+  /* 边框 */
+  --c-border:         rgba(0, 0, 0, 0.1);
+  /* 阴影 */
+  --shadow-card: rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2.025px 7.85px,
+                 rgba(0,0,0,0.02) 0px 0.8px 2.93px, rgba(0,0,0,0.01) 0px 0.175px 1.04px;
+  --shadow-deep: rgba(0,0,0,0.01) 0px 1px 3px, rgba(0,0,0,0.02) 0px 3px 7px,
+                 rgba(0,0,0,0.02) 0px 7px 15px, rgba(0,0,0,0.04) 0px 14px 28px,
+                 rgba(0,0,0,0.05) 0px 23px 52px;
+
+  /* 旧变量名保持兼容（渐进迁移） */
+  --notion-text: var(--c-text);
+  --notion-text-secondary: var(--c-text-secondary);
+  --notion-text-muted: var(--c-text-muted);
+  --notion-bg: var(--c-bg);
+  --notion-bg-alt: var(--c-bg-alt);
+  --notion-blue: var(--c-blue);
+  --notion-border: var(--c-border);
+}
+
+/* ══════════════════════════════════════
+   深色模式 Override（跟随系统设置）
+   ══════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 文字 */
+    --c-text:           rgba(255, 255, 255, 0.92);
+    --c-text-secondary: #9d9891;
+    --c-text-muted:     #6b6560;
+    /* 背景 */
+    --c-bg:             #1f1f1f;
+    --c-bg-alt:         #2a2a2a;
+    --c-bg-dark:        #111111;
+    /* 强调色 — 深色下稍亮以保证对比度 */
+    --c-blue:           #3b9eff;
+    --c-blue-hover:     #60b4ff;
+    --c-blue-soft:      rgba(59, 158, 255, 0.12);
+    --c-blue-text:      #5bb0ff;
+    --c-warning:        #f07a2a;
+    --c-success:        #34c759;
+    /* 边框 */
+    --c-border:         rgba(255, 255, 255, 0.1);
+    /* 阴影 */
+    --shadow-card: rgba(0,0,0,0.3) 0px 4px 18px, rgba(0,0,0,0.2) 0px 2px 8px;
+    --shadow-deep: rgba(0,0,0,0.4) 0px 8px 32px, rgba(0,0,0,0.3) 0px 2px 8px;
+  }
 }
 
 * {
@@ -55,9 +105,9 @@ body {
   }
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-1.5 rounded-micro px-4 py-2
-           bg-black/[0.05] text-notion-text text-[15px] font-semibold leading-tight
+           bg-notion-bg-alt text-notion-text text-[15px] font-semibold leading-tight
            transition-all duration-150 active:scale-95
-           hover:bg-black/[0.08];
+           hover:brightness-95;
   }
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-1.5 px-2 py-1
@@ -76,13 +126,17 @@ body {
     @apply bg-notion-bg-alt text-notion-text-muted;
   }
   .card {
-    @apply bg-white border border-notion-border rounded-comfortable shadow-card;
+    @apply bg-notion-bg border border-notion-border rounded-comfortable shadow-card;
   }
   .input {
-    @apply w-full bg-white border border-[#dddddd] rounded-micro px-2 py-1.5
+    @apply w-full bg-notion-bg border border-notion-border rounded-micro px-2 py-1.5
            text-[16px] text-notion-text
-           focus:outline-none focus:border-notion-blue focus:ring-2 focus:ring-notion-blue/20
+           focus:outline-none focus:border-notion-blue
            placeholder:text-notion-text-muted;
+    /* focus ring 用 box-shadow 直接指定，绕开 Tailwind CSS 变量不支持 /opacity 修饰的限制 */
+  }
+  .input:focus {
+    box-shadow: 0 0 0 2px rgba(0, 117, 222, 0.2);
   }
   .label {
     @apply block text-[14px] font-medium text-notion-text-secondary mb-1.5;

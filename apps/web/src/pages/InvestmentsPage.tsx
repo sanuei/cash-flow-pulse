@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useStore } from '../lib/store';
 import { useToast } from '../lib/toast';
+import { SearchBar } from '../components/SearchBar';
 import { ManagedListCard } from '../components/ManagedListCard';
 import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
@@ -21,11 +23,15 @@ export function InvestmentsPage() {
   const deleteInvestment = useStore((s) => s.deleteInvestment);
   const pendingDeletes = useToast((s) => s.pendingDeletes);
   const softDelete = useToast((s) => s.softDelete);
-  const investments = investmentsAll.filter((i) => !pendingDeletes.includes(i.id));
+  const [query, setQuery] = useState('');
+  const investments = investmentsAll
+    .filter((i) => !pendingDeletes.includes(i.id))
+    .filter((i) => !query || i.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <PageTitle icon="investment" title="投资" subtitle="基金定投、黄金积存等自动扣款" />
+      <SearchBar value={query} onChange={setQuery} placeholder="搜索投资项目..." />
 
       <ManagedListCard<RecurringInvestment>
         icon="investment"

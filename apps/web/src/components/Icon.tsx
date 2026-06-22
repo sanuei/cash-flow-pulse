@@ -32,6 +32,8 @@ import {
   User,            // 用户头像
   LogOut,          // 注销
   Loader2,         // 加载 spinner
+  // v1.2 新增
+  Search,          // 搜索
   type LucideIcon,
 } from 'lucide-react';
 import { forwardRef } from 'react';
@@ -75,7 +77,8 @@ export type IconName =
   // v1.0 新增
   | 'user'       // 用户
   | 'logout'     // 注销
-  | 'loading';   // 加载
+  | 'loading'    // 加载
+  | 'search';    // 搜索
 
 const map: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -111,6 +114,7 @@ const map: Record<IconName, LucideIcon> = {
   user: User,
   logout: LogOut,
   loading: Loader2,
+  search: Search,
 };
 
 type Props = {

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useStore } from '../lib/store';
 import { useToast } from '../lib/toast';
+import { SearchBar } from '../components/SearchBar';
 import { ManagedListCard } from '../components/ManagedListCard';
 import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
@@ -22,14 +24,16 @@ export function ExpensesPage() {
   const deleteCard = useStore((s) => s.deleteCard);
   const pendingDeletes = useToast((s) => s.pendingDeletes);
   const softDelete = useToast((s) => s.softDelete);
+  const [query, setQuery] = useState('');
 
   if (!calc) return <LoadingState message="加载中..." />;
 
-  // 乐观隐藏正在删除的项
+  // 乐观隐藏 + 搜索过滤
+  const match = (name: string) => !query || name.toLowerCase().includes(query.toLowerCase());
   const notPending = <T extends { id: string }>(x: T) => !pendingDeletes.includes(x.id);
-  const creditCards = creditCardsAll.filter(notPending);
-  const bills = billsAll.filter(notPending);
-  const subscriptions = subscriptionsAll.filter(notPending);
+  const creditCards = creditCardsAll.filter(notPending).filter((c) => match(c.name));
+  const bills = billsAll.filter(notPending).filter((b) => match(b.name));
+  const subscriptions = subscriptionsAll.filter(notPending).filter((s) => match(s.name));
 
   // 信用卡：活跃卡（本期要还）排前，非活跃卡排后（与原首页一致）
   const cardRows = [
@@ -40,6 +44,7 @@ export function ExpensesPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <PageTitle icon="bill" title="消费" subtitle="信用卡、固定账单、订阅" />
+      <SearchBar value={query} onChange={setQuery} placeholder="搜索消费项目..." />
 
       {/* 信用卡 */}
       <ManagedListCard<CreditCard>

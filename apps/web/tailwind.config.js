@@ -1,24 +1,26 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // 跟随系统深色模式（prefers-color-scheme: dark）
+  darkMode: 'media',
   theme: {
     extend: {
       colors: {
-        // Notion 主色
+        // Notion 主色 — 通过 CSS 变量实现深色适配
         notion: {
-          text: 'rgba(0, 0, 0, 0.95)',
-          'text-secondary': '#615d59',
-          'text-muted': '#a39e98',
-          bg: '#ffffff',
-          'bg-alt': '#f6f5f4',
-          'bg-dark': '#31302e',
-          blue: '#0075de',
-          'blue-hover': '#005bab',
-          'blue-soft': '#f2f9ff',
-          'blue-text': '#097fe8',
-          warning: '#dd5b00',
-          success: '#1aae39',
-          border: 'rgba(0, 0, 0, 0.1)',
+          text:             'var(--c-text)',
+          'text-secondary': 'var(--c-text-secondary)',
+          'text-muted':     'var(--c-text-muted)',
+          bg:               'var(--c-bg)',
+          'bg-alt':         'var(--c-bg-alt)',
+          'bg-dark':        'var(--c-bg-dark)',
+          blue:             'var(--c-blue)',
+          'blue-hover':     'var(--c-blue-hover)',
+          'blue-soft':      'var(--c-blue-soft)',
+          'blue-text':      'var(--c-blue-text)',
+          warning:          'var(--c-warning)',
+          success:          'var(--c-success)',
+          border:           'var(--c-border)',
         },
       },
       borderRadius: {
@@ -30,8 +32,8 @@ export default {
         pill: '9999px',
       },
       boxShadow: {
-        card: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2.025px 7.85px, rgba(0,0,0,0.02) 0px 0.8px 2.93px, rgba(0,0,0,0.01) 0px 0.175px 1.04px',
-        deep: 'rgba(0,0,0,0.01) 0px 1px 3px, rgba(0,0,0,0.02) 0px 3px 7px, rgba(0,0,0,0.02) 0px 7px 15px, rgba(0,0,0,0.04) 0px 14px 28px, rgba(0,0,0,0.05) 0px 23px 52px',
+        card: 'var(--shadow-card)',
+        deep: 'var(--shadow-deep)',
       },
       fontFamily: {
         sans: [
@@ -46,8 +48,8 @@ export default {
         ],
       },
       letterSpacing: {
-        'tight-display': '-0.0332em', // -2.125px / 64px
-        'tight-section': '-0.0234em', // -1.5px / 64px
+        'tight-display': '-0.0332em',
+        'tight-section': '-0.0234em',
       },
     },
   },

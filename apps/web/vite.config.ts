@@ -1,8 +1,32 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      // 不覆盖已有的 manifest.json（public/ 里的那个），只注册 SW
+      manifest: false,
+      workbox: {
+        // 缓存 app shell（HTML/CSS/JS）
+        globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        // 运行时缓存：API 请求（网络优先，失败时用缓存）
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/cashflow\.soniclab\.cc\/api\//,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 }, // 1h
+              networkTimeoutSeconds: 5,
+            },
+          },
+        ],
+      },
+    }),
+  ],
   // base 默认 '/'，显式声明便于未来部署到子路径
   // 当前部署目标：https://cash-flow-pulse.pages.dev/（根路径）
   base: '/',

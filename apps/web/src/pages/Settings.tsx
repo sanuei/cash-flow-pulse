@@ -1,9 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../lib/store';
 import { Card } from '../components/Card';
 import { LoadingState } from '../components/States';
 import { Icon } from '../components/Icon';
 import { apiGet } from '../lib/api';
+
+type SessionInfo = {
+  id: string;
+  is_current: boolean;
+  created_at: number;
+  expires_at: number;
+  ip: string | null;
+  user_agent: string | null;
+};
 
 const APP_VERSION = 'v1.1.0';
 
@@ -23,6 +32,29 @@ export function Settings() {
   const [dataMsg, setDataMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const [clearConfirm, setClearConfirm] = useState(false);
+
+  // ── 登录设备 ──
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSessionsLoading(true);
+    apiGet<SessionInfo[]>('/auth/sessions')
+      .then(setSessions)
+      .catch(() => {})
+      .finally(() => setSessionsLoading(false));
+  }, []);
+
+  const revokeSession = async (id: string) => {
+    setRevokingId(id);
+    try {
+      await fetch(`/api/auth/sessions/${id}`, { method: 'DELETE', credentials: 'include' });
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+    } finally {
+      setRevokingId(null);
+    }
+  };
 
   if (loading || !config) return <LoadingState />;
 
@@ -173,7 +205,55 @@ export function Settings() {
         </Card>
       )}
 
-      {/* ── 2. 发薪日 ── */}
+      {/* ── 2. 登录设备 ── */}
+      <Card title="登录设备">
+        <p className="text-sm text-notion-text-secondary mb-4">
+          当前活跃的登录会话，可远程退出不认识的设备。
+        </p>
+        {sessionsLoading ? (
+          <div className="text-sm text-notion-text-muted">加载中...</div>
+        ) : sessions.length === 0 ? (
+          <div className="text-sm text-notion-text-muted">无活跃会话</div>
+        ) : (
+          <ul className="divide-y divide-notion-border -mx-5">
+            {sessions.map((s) => {
+              const ua = s.user_agent ?? '';
+              const device = ua.includes('iPhone') || ua.includes('iPad') ? '📱 iOS'
+                : ua.includes('Android') ? '📱 Android'
+                : ua.includes('Mac') ? '💻 Mac'
+                : ua.includes('Windows') ? '🖥 Windows'
+                : '🌐 浏览器';
+              const createdDate = new Date(s.created_at).toLocaleDateString('zh-CN', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+              });
+              return (
+                <li key={s.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-notion-text flex items-center gap-2">
+                      {device}
+                      {s.is_current && <span className="badge text-[10px] px-1.5 py-0.5">当前设备</span>}
+                    </div>
+                    <div className="text-xs text-notion-text-muted mt-0.5">
+                      {s.ip ?? '未知 IP'} · 登录于 {createdDate}
+                    </div>
+                  </div>
+                  {!s.is_current && (
+                    <button
+                      onClick={() => revokeSession(s.id)}
+                      disabled={revokingId === s.id}
+                      className="text-xs text-notion-warning hover:underline flex-shrink-0"
+                    >
+                      {revokingId === s.id ? '退出中...' : '退出'}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+
+      {/* ── 3. 发薪日 ── */}
       <Card title="发薪日">
         <p className="text-sm text-notion-text-secondary mb-4">
           设置你每月的发薪日，所有周期计算和日均预算都以此为基准。

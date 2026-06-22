@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useStore } from '../lib/store';
 import { useToast } from '../lib/toast';
+import { SearchBar } from '../components/SearchBar';
 import { ManagedListCard } from '../components/ManagedListCard';
 import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
@@ -15,11 +17,15 @@ export function IncomesPage() {
   const deleteIncome = useStore((s) => s.deleteIncome);
   const pendingDeletes = useToast((s) => s.pendingDeletes);
   const softDelete = useToast((s) => s.softDelete);
-  const incomes = incomesAll.filter((i) => !pendingDeletes.includes(i.id));
+  const [query, setQuery] = useState('');
+  const incomes = incomesAll
+    .filter((i) => !pendingDeletes.includes(i.id))
+    .filter((i) => !query || i.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <PageTitle icon="income" title="收入" subtitle="工资、副业等固定到账项目" />
+      <SearchBar value={query} onChange={setQuery} placeholder="搜索收入项目..." />
 
       <ManagedListCard<RecurringIncome>
         icon="income"

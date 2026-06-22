@@ -35,7 +35,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-large shadow-deep max-w-md w-full max-h-[90vh] overflow-auto"
+        className="bg-notion-bg rounded-large shadow-deep max-w-md w-full max-h-[90vh] overflow-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {title && (

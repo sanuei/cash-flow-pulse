@@ -74,7 +74,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col bg-notion-bg">
       {/* 顶栏（桌面端：6 项文字 Tab） */}
-      <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border bg-white">
+      <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border bg-notion-bg">
         <div className="flex items-center gap-2 font-bold text-notion-text">
           <Icon name="wallet" size={20} className="text-notion-text" />
           <span>Cash Flow Pulse</span>
@@ -90,7 +90,7 @@ function App() {
       </header>
 
       {/* 顶栏（移动端：Logo + 曲线/设置图标） */}
-      <header className="sm:hidden flex items-center justify-between px-4 h-12 border-b border-notion-border bg-white">
+      <header className="sm:hidden flex items-center justify-between px-4 h-12 border-b border-notion-border bg-notion-bg">
         <div className="flex items-center gap-2 font-bold text-notion-text text-sm">
           <Icon name="wallet" size={16} className="text-notion-text" />
           <span>Cash Flow Pulse</span>
@@ -133,7 +133,7 @@ function App() {
       {/* 底部 Tab（移动端：4 个主要页面） */}
       {/* paddingBottom + 高度自动加上 iOS home indicator 的安全区高度（iPhone X 以上约 34px） */}
       <nav
-        className="sm:hidden flex items-center justify-around border-t border-notion-border bg-white sticky bottom-0"
+        className="sm:hidden flex items-center justify-around border-t border-notion-border bg-notion-bg sticky bottom-0"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom)',
           height: 'calc(3.5rem + env(safe-area-inset-bottom))',

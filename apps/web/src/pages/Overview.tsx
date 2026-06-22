@@ -110,6 +110,13 @@ export function Overview() {
   const theoretical = formulaIncome - totalInvestment;  // 理论可消费
   const formulaBalance = theoretical - totalConsume;    // 结余（正=盈余，负=超支）
 
+  // 新用户引导：本期且所有数字为 0
+  const isNewUser = isCurrentCycle
+    && cashSources.length === 0
+    && totalIncome === 0
+    && totalInvestment === 0
+    && totalConsume === 0;
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
 
@@ -218,6 +225,45 @@ export function Overview() {
           </div>
         </div>
       </Card>
+
+      {/* 新用户引导卡（首次使用，所有数据为空时显示） */}
+      {isNewUser && (
+        <div className="card p-5 border-2 border-dashed border-notion-border">
+          <div className="text-sm font-semibold text-notion-text mb-1">👋 欢迎使用 Cash Flow Pulse</div>
+          <p className="text-sm text-notion-text-secondary mb-4">
+            添加数据后，这里会自动计算你的日均可用预算和收支结余。从这三步开始：
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Link to="/incomes"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-standard border border-notion-border hover:bg-notion-bg-alt transition-colors">
+              <Icon name="income" size={16} className="text-notion-success flex-shrink-0" strokeWidth={1.75} />
+              <div>
+                <div className="text-sm font-medium text-notion-text">添加收入</div>
+                <div className="text-xs text-notion-text-muted">工资、副业等</div>
+              </div>
+            </Link>
+            <Link to="/investments"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-standard border border-notion-border hover:bg-notion-bg-alt transition-colors">
+              <Icon name="investment" size={16} className="text-notion-blue flex-shrink-0" strokeWidth={1.75} />
+              <div>
+                <div className="text-sm font-medium text-notion-text">添加投资</div>
+                <div className="text-xs text-notion-text-muted">基金定投、积存等</div>
+              </div>
+            </Link>
+            <Link to="/expenses"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-standard border border-notion-border hover:bg-notion-bg-alt transition-colors">
+              <Icon name="bill" size={16} className="text-notion-warning flex-shrink-0" strokeWidth={1.75} />
+              <div>
+                <div className="text-sm font-medium text-notion-text">添加消费</div>
+                <div className="text-xs text-notion-text-muted">账单、订阅、信用卡</div>
+              </div>
+            </Link>
+          </div>
+          <p className="text-xs text-notion-text-muted mt-3">
+            💡 还可以在总览底部添加现金来源（PayPay、银行账户等），让收入数字更准确。
+          </p>
+        </div>
+      )}
 
       {/* 摘要卡片（含本期支出/收入两行） */}
       <Card
