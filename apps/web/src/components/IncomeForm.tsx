@@ -94,6 +94,7 @@ export function IncomeForm({
         <label className="label">金额（¥）</label>
         <input
           type="number"
+          inputMode="numeric"
           className="input font-numeric"
           value={amount}
           onChange={(e) => setAmount(Number(e.target.value) || 0)}
@@ -133,6 +134,7 @@ export function IncomeForm({
           <label className="label">每月到账日（1-31）</label>
           <input
             type="number"
+            inputMode="numeric"
             className="input font-numeric max-w-[120px]"
             value={payDay}
             onChange={(e) => setPayDay(Number(e.target.value) || 0)}

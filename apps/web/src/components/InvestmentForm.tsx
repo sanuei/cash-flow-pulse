@@ -96,6 +96,7 @@ export function InvestmentForm({
         <label className="label">金额（¥）</label>
         <input
           type="number"
+          inputMode="numeric"
           className="input font-numeric"
           value={amount}
           onChange={(e) => setAmount(Number(e.target.value) || 0)}

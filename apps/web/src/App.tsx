@@ -3,12 +3,15 @@ import { Overview } from './pages/Overview';
 import { IncomesPage } from './pages/IncomesPage';
 import { InvestmentsPage } from './pages/InvestmentsPage';
 import { ExpensesPage } from './pages/ExpensesPage';
-import { Trends } from './pages/Trends';
 import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
 import { useStore } from './lib/store';
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { Icon, type IconName } from './components/Icon';
+import { LoadingState } from './components/States';
+
+// Trends 依赖 recharts（gzip ~105KB），懒加载以减小首屏 bundle
+const Trends = lazy(() => import('./pages/Trends').then((m) => ({ default: m.Trends })));
 
 function App() {
   const authStatus = useStore((s) => s.authStatus);
@@ -120,7 +123,7 @@ function App() {
           <Route path="/incomes" element={<IncomesPage />} />
           <Route path="/investments" element={<InvestmentsPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
-          <Route path="/trends" element={<Trends />} />
+          <Route path="/trends" element={<Suspense fallback={<LoadingState />}><Trends /></Suspense>} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

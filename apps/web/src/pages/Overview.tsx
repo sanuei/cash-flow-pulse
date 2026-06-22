@@ -49,11 +49,9 @@ export function Overview() {
   const storeCalc = useStore((s) => s.calc);
   const cashSources = useStore((s) => s.cashSources);
   const config = useStore((s) => s.config);
-  const prompt = useStore((s) => s.prompt);
   const loading = useStore((s) => s.loading);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const deleteCash = useStore((s) => s.deleteCash);
-  const recordSnapshot = useStore((s) => s.recordSnapshot);
 
   // 周期切换本地状态
   const [cycleOffset, setCycleOffset] = useState(0);
@@ -80,29 +78,16 @@ export function Overview() {
 
   const [expensesExpanded, setExpensesExpanded] = useState(false);
   const [incomesExpanded, setIncomesExpanded] = useState(false);
-  const [snapshotSaving, setSnapshotSaving] = useState(false);
 
   // 当前显示的 calc：offset=0 用 store，其他用本地拉取结果
   const calc = cycleOffset === 0 ? storeCalc : cycleCalc;
   const isCurrentCycle = cycleOffset === 0;
   const isPredicted = cycleMeta?.is_predicted ?? false;
   const snapshotBased = cycleMeta?.snapshot_based ?? false;
-  const hasHistory = cycleMeta?.has_history ?? true;
   const displayCycleId = cycleMeta?.cycle_id ?? storeCalc?.cycle_id ?? '';
 
   if (loading && !storeCalc) return <LoadingState />;
   if (!storeCalc || !config) return <LoadingState message="初始化..." />;
-
-  const onRecordSnapshot = async () => {
-    if (!prompt) return;
-    setSnapshotSaving(true);
-    try {
-      await recordSnapshot(prompt.cycle_id, prompt.offset_index);
-      await loadDashboard();
-    } finally {
-      setSnapshotSaving(false);
-    }
-  };
 
   const activeCalc = calc ?? storeCalc;
   const upcomingExpenses = activeCalc.upcoming_expenses;
@@ -228,32 +213,6 @@ export function Overview() {
           </div>
         </div>
       </Card>
-
-      {/* 采集点提示条（仅本期显示） */}
-      {isCurrentCycle && prompt && (
-        <div className="bg-notion-bg-alt border border-notion-border rounded-comfortable px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-white border border-notion-border flex items-center justify-center">
-              <Icon name="pin" size={16} className="text-notion-blue" />
-            </div>
-            <div className="flex-1 text-sm min-w-0">
-              <div className="font-semibold text-notion-text">
-                今天到了第 {prompt.offset_index + 1} 个采集点
-              </div>
-              <div className="text-notion-text-secondary text-xs mt-0.5">
-                {prompt.exists ? '已录入，可更新' : '点击录入本月快照'}（周期第 {prompt.cycle_day} 天）
-              </div>
-            </div>
-          </div>
-          <button
-            className="btn-primary text-sm flex-shrink-0"
-            disabled={snapshotSaving}
-            onClick={onRecordSnapshot}
-          >
-            {snapshotSaving ? '保存中...' : prompt.exists ? '更新' : '录入'}
-          </button>
-        </div>
-      )}
 
       {/* 摘要卡片（含本期支出/收入两行） */}
       <Card

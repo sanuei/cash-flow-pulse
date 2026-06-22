@@ -62,6 +62,7 @@ export function CashForm({
         <label className="label">余额（¥）</label>
         <input
           type="number"
+          inputMode="numeric"
           className="input font-numeric"
           value={balance}
           onChange={(e) => setBalance(Number(e.target.value) || 0)}
@@ -73,6 +74,7 @@ export function CashForm({
         <label className="label">锁定金额（¥）</label>
         <input
           type="number"
+          inputMode="numeric"
           className="input font-numeric"
           value={lockedAmount}
           onChange={(e) => setLockedAmount(Number(e.target.value) || 0)}

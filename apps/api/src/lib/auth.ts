@@ -81,8 +81,7 @@ const STATE_COOKIE = 'cfp_oauth_state';
 const STATE_TTL_MIN = 10; // state 必须 10 分钟内用完，防 CSRF
 
 // 创始用户邮箱（迁移 + 永久 pro + 绕过限流）。后续如要真正开放注册，把这行删掉。
-// ⚠️ 生产前必须改成你的真实 Google 账号邮箱
-const FOUNDER_EMAIL = 'founder@example.com';
+const FOUNDER_EMAIL = 'sonic980828@gmail.com';
 
 // ========================================================================
 // JWT 验证（Google id_token）

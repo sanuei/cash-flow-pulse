@@ -28,6 +28,12 @@ export function Settings() {
 
   // ── 保存发薪日 ──
   const handleSave = async () => {
+    // 改发薪日会重算所有历史周期的划分，提示用户
+    if (payDay !== config.pay_day) {
+      if (!confirm('修改发薪日会重新划分所有历史周期，影响趋势曲线的周期归属。确定修改？')) {
+        return;
+      }
+    }
     setSaving(true);
     try {
       await updateConfig({ pay_day: payDay });
@@ -152,9 +158,7 @@ export function Settings() {
               </div>
               <div className="text-sm text-notion-text-secondary truncate">{currentUser.email}</div>
             </div>
-            <span className="text-xs px-2 py-1 rounded-micro bg-notion-bg-alt text-notion-text-secondary uppercase font-semibold">
-              {currentUser.tier}
-            </span>
+            {/* tier 徽章暂隐：付费功能（Stripe）尚未接入，避免误导。接入后恢复 */}
           </div>
           <div className="mt-4 pt-4 border-t border-notion-border flex items-center justify-between">
             <p className="text-xs text-notion-text-muted">通过 Google 账号登录</p>
@@ -178,6 +182,7 @@ export function Settings() {
           <span className="text-sm text-notion-text-secondary">每月</span>
           <input
             type="number"
+            inputMode="numeric"
             className="input font-numeric w-20 text-center"
             value={payDay}
             onChange={(e) => setPayDay(Math.max(1, Math.min(31, Number(e.target.value) || 1)))}

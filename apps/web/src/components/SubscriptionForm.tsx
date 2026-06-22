@@ -84,6 +84,7 @@ export function SubscriptionForm({
         <label className="label">金额（¥）</label>
         <input
           type="number"
+          inputMode="numeric"
           className="input font-numeric"
           value={amount}
           onChange={(e) => setAmount(Number(e.target.value) || 0)}
@@ -122,6 +123,7 @@ export function SubscriptionForm({
         <label className="label">扣款日（1-31）</label>
         <input
           type="number"
+          inputMode="numeric"
           className="input font-numeric max-w-[120px]"
           value={billingDay}
           onChange={(e) => setBillingDay(Number(e.target.value) || 0)}

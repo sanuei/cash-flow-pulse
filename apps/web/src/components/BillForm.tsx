@@ -72,6 +72,7 @@ export function BillForm({
         <label className="label">金额（¥）</label>
         <input
           type="number"
+          inputMode="numeric"
           className="input font-numeric"
           value={amount}
           onChange={(e) => setAmount(Number(e.target.value) || 0)}
@@ -83,6 +84,7 @@ export function BillForm({
         <label className="label">每月扣款日（1-31）</label>
         <input
           type="number"
+          inputMode="numeric"
           className="input font-numeric max-w-[120px]"
           value={dueDay}
           onChange={(e) => setDueDay(Number(e.target.value) || 0)}
