@@ -192,50 +192,32 @@ export function Overview() {
       <Card
         title={
           <div className="flex items-center gap-2">
-            <Icon name="sparkle" size={18} className="text-notion-blue" strokeWidth={1.75} />
+            <Icon name="sparkle" size={18} className="text-notion-text-secondary" strokeWidth={1.75} />
             <span>收入 − 投资 = 消费</span>
           </div>
         }
       >
-        {/* 三列数字 */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <FormulaCol
-            label="收入"
-            sublabel="含现金余额"
-            amount={formulaIncome}
-            color="success"
-            to="/incomes"
-          />
-          <FormulaCol
-            label="投资"
-            amount={totalInvestment}
-            color="blue"
-            to="/investments"
-          />
-          <FormulaCol
-            label="消费"
-            amount={totalConsume}
-            color="warning"
-            to="/expenses"
-          />
+        {/* 三列：整列可点击跳转，无多余「管理」链接 */}
+        <div className="grid grid-cols-3 divide-x divide-notion-border mb-4 -mx-1">
+          <FormulaCol label="收入" sublabel="含现金余额" amount={formulaIncome} to="/incomes" />
+          <FormulaCol label="投资" amount={totalInvestment} to="/investments" />
+          <FormulaCol label="消费" amount={totalConsume} to="/expenses" />
         </div>
 
-        {/* 完整公式：收入 − 投资 − 消费 = 结余 */}
-        <div className="border-t border-notion-border pt-3 mt-1 space-y-2">
-          {/* 等式展开行 */}
+        {/* 等式行 + 结余：只有结果数字有颜色 */}
+        <div className="border-t border-notion-border pt-3 space-y-2">
           <div className="flex items-center justify-center gap-1.5 text-xs text-notion-text-muted flex-wrap">
-            <span className="font-numeric text-notion-success">{formatYen(formulaIncome)}</span>
+            <span className="font-numeric text-notion-text">{formatYen(formulaIncome)}</span>
             <span>−</span>
-            <span className="font-numeric text-notion-blue">{formatYen(totalInvestment)}</span>
+            <span className="font-numeric text-notion-text">{formatYen(totalInvestment)}</span>
             <span>−</span>
-            <span className="font-numeric text-notion-warning">{formatYen(totalConsume)}</span>
+            <span className="font-numeric text-notion-text">{formatYen(totalConsume)}</span>
             <span>=</span>
             <span className={`font-semibold font-numeric ${formulaBalance >= 0 ? 'text-notion-success' : 'text-notion-warning'}`}>
               {formulaBalance >= 0 ? `+${formatYen(formulaBalance)}` : formatYen(formulaBalance)}
             </span>
           </div>
 
-          {/* 结余 / 超支 主展示 */}
           <div className={`text-center text-base font-bold font-numeric py-2 rounded-micro ${
             formulaBalance >= 0
               ? 'text-notion-success bg-notion-success/5'
@@ -510,39 +492,27 @@ function FormulaCol({
   label,
   sublabel,
   amount,
-  color,
   to,
 }: {
   label: string;
   sublabel?: string;
   amount: number;
-  color: 'success' | 'blue' | 'warning';
   to: string;
 }) {
-  const colorClass = {
-    success: 'text-notion-success',
-    blue:    'text-notion-blue',
-    warning: 'text-notion-warning',
-  }[color];
-
   return (
-    <div className="flex flex-col items-center gap-1 py-2">
+    <Link
+      to={to}
+      className="group flex flex-col items-center gap-1 py-3 px-2 rounded-micro hover:bg-notion-bg-alt transition-colors"
+    >
       <div className="text-xs text-notion-text-muted">{label}</div>
-      {/* 固定高度：有 sublabel 时显示，无时占位，保持三列等高 */}
-      <div className="text-[10px] text-notion-text-muted/70 h-4 leading-4">
+      {/* 固定高度保证三列等高 */}
+      <div className="text-[10px] text-notion-text-muted/60 h-4 leading-4">
         {sublabel ?? ''}
       </div>
-      <div className={`text-lg sm:text-xl font-bold font-numeric ${colorClass}`}>
+      <div className="text-lg sm:text-xl font-bold font-numeric text-notion-text group-hover:text-notion-blue transition-colors">
         {formatYen(amount)}
       </div>
-      <Link
-        to={to}
-        className="text-xs text-notion-blue hover:underline flex items-center gap-0.5"
-      >
-        <span>管理</span>
-        <Icon name="chevron-right" size={11} strokeWidth={2} />
-      </Link>
-    </div>
+    </Link>
   );
 }
 

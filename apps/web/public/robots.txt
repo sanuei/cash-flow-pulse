@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Allow: /login
+
+# 不索引应用内页（需登录）
+Disallow: /incomes
+Disallow: /investments
+Disallow: /expenses
+Disallow: /trends
+Disallow: /settings
+Disallow: /api/
+
+Sitemap: https://cashflow.soniclab.cc/sitemap.xml

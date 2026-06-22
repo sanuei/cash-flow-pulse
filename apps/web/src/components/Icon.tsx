@@ -99,7 +99,7 @@ const map: Record<IconName, LucideIcon> = {
   download: Download,
   check: Check,
   // v0.3 新增
-  investment: TrendingDown,
+  investment: TrendingUp,
   bill: Receipt,
   income: Briefcase,
   subscription: Tv,

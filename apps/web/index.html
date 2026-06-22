@@ -4,32 +4,98 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-    <!-- ── PWA / 安装到桌面 ── -->
+    <!-- ══════════════════════════════════════
+         基础 SEO
+    ══════════════════════════════════════ -->
+    <title>Cash Flow Pulse — 个人现金流 · 收入投资消费追踪</title>
+    <meta name="description"
+          content="可视化管理个人现金流：追踪收入、投资与消费，计算日均可用预算，掌握每月结余。基于 Google 账号登录，数据私有存储在 Cloudflare。" />
+    <meta name="keywords"
+          content="现金流,日均预算,个人理财,收入追踪,投资管理,消费分析,cash flow,personal finance" />
+    <meta name="author" content="Cash Flow Pulse" />
+    <link rel="canonical" href="https://cashflow.soniclab.cc/" />
+
+    <!-- ══════════════════════════════════════
+         Open Graph（微信 / LINE / Slack 分享预览）
+    ══════════════════════════════════════ -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:url"         content="https://cashflow.soniclab.cc/" />
+    <meta property="og:site_name"   content="Cash Flow Pulse" />
+    <meta property="og:title"       content="Cash Flow Pulse — 个人现金流追踪" />
+    <meta property="og:description" content="可视化收入、投资与消费，计算日均可用预算。Google 账号登录，数据完全私有。" />
+    <meta property="og:image"       content="https://cashflow.soniclab.cc/og-image.svg" />
+    <meta property="og:image:width"  content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"   content="Cash Flow Pulse 应用预览图" />
+    <meta property="og:locale"      content="zh_CN" />
+
+    <!-- ══════════════════════════════════════
+         Twitter / X Card
+    ══════════════════════════════════════ -->
+    <meta name="twitter:card"        content="summary_large_image" />
+    <meta name="twitter:title"       content="Cash Flow Pulse — 个人现金流追踪" />
+    <meta name="twitter:description" content="可视化收入、投资与消费，计算日均可用预算。Google 账号登录，数据完全私有。" />
+    <meta name="twitter:image"       content="https://cashflow.soniclab.cc/og-image.svg" />
+
+    <!-- ══════════════════════════════════════
+         PWA / 安装到桌面
+    ══════════════════════════════════════ -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Android / Chrome: 主题色 -->
-    <meta name="theme-color" content="#0075de" />
+    <!-- Android / Chrome 主题色 -->
+    <meta name="theme-color" content="#0f172a" />
 
-    <!-- iOS Safari: 允许全屏独立运行（隐藏浏览器 UI） -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="现金流" />
+    <!-- iOS Safari：全屏独立运行 -->
+    <meta name="apple-mobile-web-app-capable"          content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title"            content="现金流" />
 
-    <!-- iOS 桌面图标（各尺寸） -->
-    <link rel="apple-touch-icon" href="/icon.svg" />
-    <link rel="apple-touch-icon" sizes="152x152" href="/icon.svg" />
+    <!-- iOS 桌面图标 -->
+    <link rel="apple-touch-icon"             href="/icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icon.svg" />
     <link rel="apple-touch-icon" sizes="167x167" href="/icon.svg" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icon.svg" />
 
-    <!-- 通用图标 -->
+    <!-- 通用 favicon -->
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
 
-    <!-- ── 应用信息 ── -->
-    <title>Cash Flow Pulse</title>
-    <meta name="description" content="个人现金流可视化 · 日均可用预算" />
-    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- ══════════════════════════════════════
+         JSON-LD 结构化数据（Google 富搜索结果）
+    ══════════════════════════════════════ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Cash Flow Pulse",
+      "url": "https://cashflow.soniclab.cc",
+      "description": "个人现金流可视化工具，追踪收入、投资与消费，计算日均可用预算",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Web, iOS, Android",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "JPY"
+      },
+      "inLanguage": "zh-CN",
+      "author": {
+        "@type": "Person",
+        "name": "sanuei"
+      },
+      "featureList": [
+        "收入管理",
+        "投资追踪",
+        "消费分析",
+        "日均预算计算",
+        "周期切换查看历史",
+        "趋势曲线图表",
+        "PWA 支持安装到桌面"
+      ]
+    }
+    </script>
 
-    <!-- ── 字体 ── -->
+    <!-- ══════════════════════════════════════
+         字体
+    ══════════════════════════════════════ -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
