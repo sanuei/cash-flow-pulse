@@ -888,15 +888,22 @@ export function computeDashboardV2(
   // 4. 计算本期总收入
   const { total: totalIncome, items: incomeItems } = sumIncomeInCycle(incomes, cycleStart, cycleEnd);
 
-  // 5. 本期总支出（信用卡 + 账单 + 订阅 + 投资）
+  // 5. 本期总支出(整个周期 [cycleStart, cycleEnd))— 用于 net_flow 展示
   const totalCreditCards = v1.total_due;
   const totalExpense = totalCreditCards + totalBills + totalSubs + totalInvestments;
 
-  // 6. 净流入 + 净可用
-  const netFlow = totalIncome - totalExpense;
-  const netAvailable = v1.total_net_cash + netFlow;
+  // 6. 净可用 + 日均预算
+  //   净可用 = 现金账户余额(扣锁定) - 信用卡本期应还
+  //   日均   = 净可用 / 剩余天数(到下次发薪日)
+  //   设计: 收入(income)只用于 UI 展示,纯参考;预算计算基于真实账上余额
+  //   原因: 现金余额 = 历史存款 + 累计收入 - 累计支出,直接反映"现在能花多少"
+  //   简化: 只扣"信用卡本期应还"(v1.total_due),不扣未来账单/订阅/投资
+  //         那些会在 dashboard "本期支出明细"卡里展示,用户能自己看到
+  const netAvailable = v1.total_net_cash - v1.total_due;
   const safeDays = Math.max(1, v1.days_to_payday);
   const dailyBudget = Math.max(0, Math.floor(netAvailable / safeDays));
+  // netFlow 用整月 totalExpense(用于收支图 / 本期收入明细卡)
+  const netFlow = totalIncome - totalExpense;
 
   return {
     ...v1,
