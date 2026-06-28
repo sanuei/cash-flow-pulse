@@ -12,6 +12,7 @@ export interface UserConfig {
   user_id: string;             // V1 固定 'default'
   pay_day: number;             // 1-31
   snapshot_offsets: number[];  // 相对发薪日的天数偏移，如 [0, 7, 14, 21]
+  weekend_shift: boolean;      // 扣款日遇周六/日时顺延至下一个工作日（周一）
   created_at: number;          // Unix ms
   updated_at: number;
 }

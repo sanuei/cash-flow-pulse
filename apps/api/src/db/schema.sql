@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS user_config (
   pay_day        INTEGER NOT NULL DEFAULT 10
                    CHECK (pay_day >= 1 AND pay_day <= 31),
   snapshot_offsets TEXT NOT NULL DEFAULT '[0,7,14,21]',  -- JSON 数组
+  weekend_shift  INTEGER NOT NULL DEFAULT 0,             -- 扣款日遇周末顺延至周一（0=关 1=开）
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL
 );

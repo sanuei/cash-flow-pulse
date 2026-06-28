@@ -112,6 +112,7 @@ async function runDailySnapshot(env: Env): Promise<void> {
         user_id: userId,
         pay_day: config.pay_day,
         snapshot_offsets: JSON.parse(config.snapshot_offsets),
+        weekend_shift: !!config.weekend_shift,
         created_at: config.created_at,
         updated_at: config.updated_at,
       };

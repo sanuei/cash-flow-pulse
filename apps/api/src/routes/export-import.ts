@@ -43,6 +43,7 @@ exportImportRoutes.get('/export', async (c) => {
     config: {
       pay_day: config?.pay_day ?? 10,
       snapshot_offsets: config ? JSON.parse(config.snapshot_offsets) : [0, 7, 14, 21],
+      weekend_shift: !!config?.weekend_shift,
     },
     cash_sources: (cash.results || []).map((r: any) => ({
       name: r.name,
@@ -167,8 +168,8 @@ exportImportRoutes.post('/import', async (c) => {
 
     // 1. 更新配置
     await db
-      .prepare('UPDATE user_config SET pay_day = ?, snapshot_offsets = ?, updated_at = ? WHERE user_id = ?')
-      .bind(config.pay_day, JSON.stringify(config.snapshot_offsets), ts, userId)
+      .prepare('UPDATE user_config SET pay_day = ?, snapshot_offsets = ?, weekend_shift = ?, updated_at = ? WHERE user_id = ?')
+      .bind(config.pay_day, JSON.stringify(config.snapshot_offsets), config.weekend_shift ? 1 : 0, ts, userId)
       .run();
 
     // 2. 现金来源

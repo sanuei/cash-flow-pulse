@@ -21,6 +21,7 @@ import {
   isSubscriptionActiveInCycle,
   sumIncomeInCycle,
   computeDashboardV2,
+  shiftToWorkday,
 } from './calc.js';
 import type { CashSource, CreditCard, UserConfig, Snapshot } from './types.js';
 
@@ -28,6 +29,7 @@ const baseConfig: UserConfig = {
   user_id: 'default',
   pay_day: 10,
   snapshot_offsets: [0, 7, 14, 21],
+  weekend_shift: false,
   created_at: 0,
   updated_at: 0,
 };
@@ -84,6 +86,23 @@ describe('日期工具', () => {
   it('addMonths 处理跨年（12/15 + 1月 = 次年 1/15）', () => {
     const d = new Date(2026, 11, 15);
     expect(formatDate(addMonths(d, 1))).toBe('2027-01-15');
+  });
+});
+
+describe('周末顺延 shiftToWorkday', () => {
+  it('周六顺延到周一（+2 天）', () => {
+    // 2026-06-27 是周六
+    expect(formatDate(shiftToWorkday(parseDate('2026-06-27')))).toBe('2026-06-29');
+  });
+  it('周日顺延到周一（+1 天）', () => {
+    // 2026-06-28 是周日
+    expect(formatDate(shiftToWorkday(parseDate('2026-06-28')))).toBe('2026-06-29');
+  });
+  it('工作日不变', () => {
+    // 2026-06-29 是周一
+    expect(formatDate(shiftToWorkday(parseDate('2026-06-29')))).toBe('2026-06-29');
+    // 2026-06-26 是周五
+    expect(formatDate(shiftToWorkday(parseDate('2026-06-26')))).toBe('2026-06-26');
   });
 });
 

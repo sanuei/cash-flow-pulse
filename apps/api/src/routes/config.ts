@@ -33,6 +33,7 @@ configRoute.get('/', async (c) => {
     user_id: row!.user_id,
     pay_day: row!.pay_day,
     snapshot_offsets: JSON.parse(row!.snapshot_offsets),
+    weekend_shift: !!row!.weekend_shift,
     created_at: row!.created_at,
     updated_at: row!.updated_at,
   });
@@ -65,6 +66,10 @@ configRoute.put('/', async (c) => {
     if (parsed.data.snapshot_offsets !== undefined) {
       updates.push('snapshot_offsets = ?');
       values.push(JSON.stringify(parsed.data.snapshot_offsets));
+    }
+    if (parsed.data.weekend_shift !== undefined) {
+      updates.push('weekend_shift = ?');
+      values.push(parsed.data.weekend_shift ? 1 : 0);
     }
     updates.push('updated_at = ?');
     values.push(now);

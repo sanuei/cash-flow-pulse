@@ -101,6 +101,17 @@ export function subtractMonths(d: Date, n: number): Date {
  *
  * 注意：month 必须先规范化为 [0, 11]，但 year 不做调整（让调用方决定是否跨年）。
  */
+/**
+ * 工作日顺延：若日期落在周六/周日，顺延至下一个周一。
+ * 仅处理周末，不含公众假期（需假期日历，暂不支持）。
+ */
+export function shiftToWorkday(d: Date): Date {
+  const dow = d.getDay(); // 0=周日, 6=周六
+  if (dow === 6) return addDays(d, 2); // 周六 → 周一
+  if (dow === 0) return addDays(d, 1); // 周日 → 周一
+  return d;
+}
+
 export function getPaydayInMonth(year: number, month: number, payDay: number): Date {
   // month 必须已规范化到 [0, 11]，不处理溢出（避免 12 被静默归零到 0）
   if (month < 0 || month > 11) {
@@ -268,10 +279,12 @@ export function computeDashboard(
   for (const card of creditCards) {
     const { active, dueDate } = isCardActiveInCycle(card, cycle.start_date, cycle.end_date);
     if (active && dueDate) {
+      // 周末顺延：金额仍按原扣款日所在月取（顺延不跨月，月份归属不变）
+      const effectiveDue = config.weekend_shift ? shiftToWorkday(dueDate) : dueDate;
       activeCards.push({
         card,
-        due_date: formatDate(dueDate),
-        days_until_due: Math.max(0, diffDays(today, dueDate)),
+        due_date: formatDate(effectiveDue),
+        days_until_due: Math.max(0, diffDays(today, effectiveDue)),
         amount: getCardAmountForDate(card, dueDate),
       });
     } else {
@@ -415,6 +428,7 @@ export function defaultConfig(payDay = 10): UserConfig {
     user_id: 'default',
     pay_day: payDay,
     snapshot_offsets: [0, 7, 14, 21],
+    weekend_shift: false,
     created_at: Date.now(),
     updated_at: Date.now(),
   };
@@ -751,7 +765,9 @@ export function computeDashboardV2(
   let totalBills = 0;
   for (const bill of bills) {
     // 找下一次扣款日（用 nextOccurrence，跳过严格匹配）
-    const dueDate = nextOccurrence(today, bill.due_day);
+    const rawDue = nextOccurrence(today, bill.due_day);
+    // 周末顺延（开启时）：影响展示日期与本期归属判断
+    const dueDate = config.weekend_shift ? shiftToWorkday(rawDue) : rawDue;
     // 判断是否在本期内（用于 net_flow 计算）
     const inCycle = dueDate >= cycleStart && dueDate < cycleEnd;
     if (inCycle) {
@@ -779,7 +795,8 @@ export function computeDashboardV2(
   const subscriptionItems: UpcomingExpenseItem[] = [];
   let totalSubs = 0;
   for (const sub of subscriptions) {
-    const dueDate = nextOccurrence(today, sub.billing_day);
+    const rawDue = nextOccurrence(today, sub.billing_day);
+    const dueDate = config.weekend_shift ? shiftToWorkday(rawDue) : rawDue;
     const inCycle = dueDate >= cycleStart && dueDate < cycleEnd;
     if (inCycle) {
       totalSubs += sub.amount;

@@ -47,6 +47,7 @@ export const UserConfigUpdateSchema = z.object({
     .min(1, '至少 1 个采集点')
     .max(10, '最多 10 个采集点')
     .optional(),
+  weekend_shift: z.boolean().optional(),
 });
 
 // === 快照 ===
@@ -68,6 +69,7 @@ export const ImportPayloadSchema = z.object({
   config: z.object({
     pay_day: z.number().int().min(1).max(31),
     snapshot_offsets: z.array(z.number().int()),
+    weekend_shift: z.boolean().optional(),
   }),
   cash_sources: z.array(z.object({
     name: z.string(),

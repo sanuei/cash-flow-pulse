@@ -27,6 +27,8 @@ export function Settings() {
 
   const [activeTheme, setActiveTheme] = useState<Theme>(getStoredTheme);
   const [payDay, setPayDay] = useState(config?.pay_day ?? 10);
+  const [weekendShift, setWeekendShift] = useState(config?.weekend_shift ?? false);
+  const [shiftSaving, setShiftSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
@@ -75,6 +77,21 @@ export function Settings() {
       setSavedAt(Date.now());
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ── 周末顺延开关（即时生效）──
+  const handleToggleWeekendShift = async () => {
+    const next = !weekendShift;
+    setWeekendShift(next);       // 乐观更新
+    setShiftSaving(true);
+    try {
+      await updateConfig({ weekend_shift: next });
+      await loadDashboard();
+    } catch {
+      setWeekendShift(!next);    // 失败回滚
+    } finally {
+      setShiftSaving(false);
     }
   };
 
@@ -332,6 +349,35 @@ export function Settings() {
               <span>已保存 {new Date(savedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
             </span>
           )}
+        </div>
+      </Card>
+
+      {/* ── 扣款日规则：周末顺延 ── */}
+      <Card title="扣款日规则">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-notion-text mb-1">周末顺延至工作日</div>
+            <p className="text-[13px] text-notion-text-secondary leading-relaxed">
+              开启后，信用卡 / 账单 / 订阅的扣款日若落在<b className="text-notion-text font-medium">周六或周日</b>，自动顺延到下一个周一（如 27 号周六 → 29 号周一）。仅处理周末，不含节假日。
+            </p>
+          </div>
+          {/* 开关 */}
+          <button
+            role="switch"
+            aria-checked={weekendShift}
+            aria-label="周末顺延至工作日"
+            onClick={handleToggleWeekendShift}
+            disabled={shiftSaving}
+            className={`relative flex-shrink-0 w-12 h-7 rounded-[var(--radius-pill)] transition-colors duration-[var(--dur-base)] ${
+              weekendShift ? 'bg-[var(--c-accent)]' : 'bg-[var(--c-bg-alt)] border border-[var(--c-border-strong)]'
+            } ${shiftSaving ? 'opacity-60' : ''}`}
+          >
+            <span
+              className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-[var(--shadow-sm)] transition-transform duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+                weekendShift ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
         </div>
       </Card>
 

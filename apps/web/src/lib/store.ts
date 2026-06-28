@@ -76,7 +76,7 @@ interface AppState {
   addCard: (data: { name: string; statement_amount: number; due_day: number; monthly_statements?: Record<string, number> }) => Promise<void>;
   updateCard: (id: string, data: Partial<CreditCard>) => Promise<void>;
   deleteCard: (id: string) => Promise<void>;
-  updateConfig: (data: Partial<Pick<UserConfig, 'pay_day' | 'snapshot_offsets'>>) => Promise<void>;
+  updateConfig: (data: Partial<Pick<UserConfig, 'pay_day' | 'snapshot_offsets' | 'weekend_shift'>>) => Promise<void>;
   recordSnapshot: (cycleId: string, offsetIndex: number, note?: string) => Promise<void>;
 
   // ===== v0.3 Actions =====
