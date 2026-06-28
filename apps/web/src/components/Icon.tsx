@@ -40,7 +40,7 @@ import {
   Gauge,           // 仪表盘（花费节奏）
   type LucideIcon,
 } from 'lucide-react';
-import { forwardRef } from 'react';
+import { forwardRef, type CSSProperties } from 'react';
 
 /**
  * 项目用到的 icon 名称清单
@@ -139,6 +139,8 @@ type Props = {
   strokeWidth?: number;
   /** 不可访问 label（屏幕阅读器） */
   'aria-label'?: string;
+  /** 内联样式（用于动态色：style={{ color: 'var(--c-accent)' }}） */
+  style?: CSSProperties;
 };
 
 /**
@@ -150,7 +152,7 @@ type Props = {
  * - forwardRef 兼容未来可能接入的 Headless UI / Radix
  */
 export const Icon = forwardRef<SVGSVGElement, Props>(function Icon(
-  { name, size = 20, className, strokeWidth = 1.75, 'aria-label': ariaLabel },
+  { name, size = 20, className, strokeWidth = 1.75, 'aria-label': ariaLabel, style },
   ref,
 ) {
   const Cmp = map[name];
@@ -160,6 +162,7 @@ export const Icon = forwardRef<SVGSVGElement, Props>(function Icon(
       size={size}
       strokeWidth={strokeWidth}
       className={className}
+      style={style}
       aria-label={ariaLabel}
       aria-hidden={ariaLabel ? undefined : true}
     />
