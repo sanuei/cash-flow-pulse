@@ -80,18 +80,18 @@ function App() {
 
   return (
     // iOS PWA / Safari 普通模式兼容:
-    // 1. position:fixed + inset:0 让外层容器直接占满 viewport,不受 100svh/dvh 误差影响
-    // 2. 桌面 sm:flex-row 让 sidebar 240px 在左 + main 在右
-    // 100svh 在 iOS Safari 普通模式下 ≠ 屏幕可视区(Safari UI 占 ~80px),
-    // 用 fixed inset:0 可以保证 nav 真正贴到屏幕底
-    <div className="fixed inset-0 flex flex-col sm:flex-row overflow-hidden">
+    // 外层是正常流的 flex 列(高度 = #root 的 100dvh),header / main / nav 都在文档流里。
+    // nav 作为列最后一项自然落在容器真实底部 —— 不用 position:fixed,
+    // 因此不受 iOS"布局视口 ≠ 可视视口"误差影响(fixed bottom-0 在 iOS 上会浮在
+    // 底部工具栏之上,留出一条空白)。桌面 sm:flex-row 让 sidebar 在左 + main 在右。
+    <div className="h-full w-full flex flex-col sm:flex-row overflow-hidden">
       {/* 桌面端:左侧 Sidebar 240px (含 logo/nav/user) — 替代原来的顶部 6-tab header */}
       <Sidebar />
 
       {/* 顶栏（移动端：Logo + 曲线/设置图标） — 玻璃模糊 + safe-area 适配
           尺寸:v1.4 加大,Logo 28px / 文字 17px / 头部 56px,与桌面端 h-14 对齐 */}
       <header
-        className="sm:hidden flex items-center justify-between px-4 border-b border-notion-border glass fixed top-0 inset-x-0 z-30"
+        className="sm:hidden flex-shrink-0 flex items-center justify-between px-4 border-b border-notion-border glass z-30"
         style={{
           paddingTop: 'env(safe-area-inset-top)',
           height: 'calc(3.5rem + env(safe-area-inset-top))',
@@ -126,15 +126,13 @@ function App() {
         </div>
       </header>
 
-      {/* 内容 — 路由切换时 fade-in;pt/pb 给 fixed 头尾留位;overflow-y-auto 让 main 自己滚
-          mobile 端 pt/pb 用 calc 包含 safe-area,跟 header/nav 实际高度对齐 */}
+      {/* 内容 — 路由切换时 fade-in;header/nav 已在文档流里,main 只需 flex-1 自己滚。
+          min-h-0:flex 列里 overflow-y-auto 子项必须能收缩,否则撑破容器不滚动 */}
       <main
         key={useLocation().pathname}
         className={`
-          flex-1 overflow-y-auto overscroll-contain
+          flex-1 min-h-0 overflow-y-auto overscroll-contain
           bg-notion-bg
-          pt-[calc(3.5rem+env(safe-area-inset-top))] sm:pt-0
-          pb-0 sm:pb-0
           ${loading ? 'opacity-60' : ''}
           transition-opacity duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
           ${reduced ? '' : 'anim-fade-up'}
@@ -153,11 +151,10 @@ function App() {
       </main>
 
       {/* 底部 Tab（移动端：4 个主要页面） — 实色背景 + 顶边阴影
-          v1.4: glass → bg-notion-bg,避免 main 底部 padding 区域(90px 留白)
-                露出 body 黑色时,nav 玻璃模糊显示"色差",造成"nav 之下多空白"假象
-                实色让 nav + main 底部 padding 区域都是 --c-bg,视觉融合 */}
+          正常流(flex-shrink-0),作为列最后一项贴容器真实底部,不用 fixed。
+          paddingBottom = safe-area:home 指示条留白;height 含 safe-area 故整条贴到屏幕边 */}
       <nav
-        className="sm:hidden flex items-center justify-around bg-notion-bg border-t border-[var(--c-border)] fixed bottom-0 inset-x-0 z-30 shadow-[var(--shadow-md)]"
+        className="sm:hidden flex-shrink-0 flex items-center justify-around bg-notion-bg border-t border-[var(--c-border)] z-30 shadow-[var(--shadow-md)]"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom)',
           height: 'calc(3.5rem + env(safe-area-inset-bottom))',

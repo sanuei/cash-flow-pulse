@@ -166,24 +166,36 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  /* PWA/原生 App 化:
-     - 100svh 优先:最小视口高度,iOS Safari 普通模式(非 PWA)下不含 URL bar,容器不溢出屏幕
-     - 100dvh 兜底:动态视口高度,PWA 独立模式或桌面浏览器下与 100svh 等价
-     - -webkit-fill-available 兜底:旧 iOS 兼容
+  /* 视口高度 —— 浏览器模式(Safari)与安装为 PWA(standalone)需要不同单位:
+     【浏览器】用 100dvh:动态视口,跟随地址栏/工具栏显隐,底部 nav 落在工具栏之上。
+     【standalone PWA】见下方 @media 覆盖:用 100lvh(大视口=整屏)。
+       实测 iPhone 16 standalone 下 dvh/svh 只给 793(= 屏高 852 − 顶部安全区 59),
+       比真实屏幕矮 59px → 底部留白;唯有 lvh 是满屏 852。
+     不用 -webkit-fill-available —— 它在 iOS 返回带工具栏的旧高度,会让容器比可视区高。
      overflow:hidden 禁橡皮筋透出 */
+  height: 100vh;
   height: 100svh;
   height: 100dvh;
-  height: -webkit-fill-available;
   overflow: hidden;
   overscroll-behavior: none;
 }
 
 #root {
+  height: 100vh;
   height: 100svh;
   height: 100dvh;
-  height: -webkit-fill-available;
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+/* 安装为主屏 PWA(无地址栏/工具栏):用大视口 = 整屏,让底部 nav 贴真实屏幕底,
+   消除 iOS standalone 下 dvh 偏短(793 vs 852)造成的底部空白 */
+@media (display-mode: standalone) {
+  html,
+  #root {
+    height: 100vh;
+    height: 100lvh;
+  }
 }
 
 body {

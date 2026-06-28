@@ -29,7 +29,7 @@ export function InvestmentsPage() {
     .filter((i) => !query || i.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 pb-safe-nav">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <PageTitle icon="investment" title="投资" subtitle="基金定投、黄金积存等自动扣款" />
       <SearchBar value={query} onChange={setQuery} placeholder="搜索投资项目..." />
 

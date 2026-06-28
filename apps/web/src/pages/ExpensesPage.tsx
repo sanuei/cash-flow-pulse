@@ -38,7 +38,7 @@ export function ExpensesPage() {
   ].filter((r) => notPending(r.card));
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 pb-safe-nav">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <PageTitle icon="bill" title="消费" subtitle="信用卡、固定账单、订阅" />
       <SearchBar value={query} onChange={setQuery} placeholder="搜索消费项目..." />
 
