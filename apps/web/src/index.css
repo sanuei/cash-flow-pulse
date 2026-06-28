@@ -168,7 +168,13 @@ html {
 }
 
 body {
-  background: var(--c-bg);
+  /* 单色背景色晕：仅用当前主题强调色（一种色相），给磨砂玻璃提供折射源。
+     fixed 不随滚动移动，整页统一氛围。 */
+  background:
+    radial-gradient(62% 48% at 88% 0%, var(--c-wash-1, transparent) 0%, transparent 70%),
+    radial-gradient(54% 42% at 0% 100%, var(--c-wash-2, transparent) 0%, transparent 72%),
+    var(--c-bg);
+  background-attachment: fixed;
   color: var(--c-text);
   margin: 0;
   font-size: 15px;
@@ -294,14 +300,33 @@ body {
     @apply bg-[var(--c-bg-alt)] text-[var(--c-text-muted)];
   }
 
-  /* === 卡片 === */
+  /* === 卡片（磨砂玻璃）=== */
   .card {
-    @apply bg-[var(--c-bg-elev)] border border-[var(--c-border)]
+    background: var(--c-glass-bg);
+    -webkit-backdrop-filter: blur(20px) saturate(135%);
+    backdrop-filter: blur(20px) saturate(135%);
+    @apply border border-[var(--c-glass-border)]
            rounded-[var(--radius-xl)] shadow-[var(--shadow-md)]
            transition-shadow duration-[var(--dur-medium)] ease-[var(--ease-out-expo)];
   }
+  /* 不支持 backdrop-filter 时回退到接近实色，保证可读性 */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .card { background: var(--c-bg-elev); }
+  }
   .card-hover {
-    @apply hover:shadow-[var(--shadow-md)] hover:border-[var(--c-border-strong)];
+    @apply hover:shadow-[var(--shadow-lg)] hover:border-[var(--c-border-strong)];
+  }
+  /* Hero 玻璃：比普通卡更强的磨砂 + 顶部强调色高光 */
+  .hero-glass {
+    position: relative;
+    background: var(--c-glass-strong);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    backdrop-filter: blur(28px) saturate(150%);
+    @apply border border-[var(--c-glass-border)]
+           rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)];
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .hero-glass { background: var(--c-bg-elev); }
   }
 
   /* === 输入 === */
@@ -626,4 +651,34 @@ html[data-theme="violet"] .hero-gradient {
   background:
     radial-gradient(120% 130% at 82% 6%, oklch(50% 0.1 270) 0%, transparent 54%),
     linear-gradient(140deg, oklch(42% 0.1 264) 0%, oklch(35% 0.09 266) 52%, oklch(29% 0.07 268) 100%);
+}
+
+/* ============================================================================
+   10. 磨砂玻璃系统（v1.4）
+   - 背景色晕 --c-wash-*：仅取当前主题强调色一种色相（color-mix 自动适配 5 主题）
+   - 玻璃面板 --c-glass-*：亮色主题=半透明白；深色主题=半透明深色 + 微光白边
+   ============================================================================ */
+html {
+  --c-wash-1: color-mix(in oklch, var(--c-accent) 30%, transparent);
+  --c-wash-2: color-mix(in oklch, var(--c-accent) 15%, transparent);
+}
+
+/* 亮色三主题：白玻璃 */
+html[data-theme="warm"],
+html[data-theme="white"],
+html[data-theme="green"] {
+  --c-glass-bg:     rgba(255, 255, 255, 0.50);
+  --c-glass-strong: rgba(255, 255, 255, 0.62);
+  --c-glass-border: rgba(255, 255, 255, 0.70);
+}
+
+/* 深色两主题：深色玻璃 + 低透明白边 */
+html[data-theme="dark"],
+html[data-theme="violet"] {
+  --c-glass-bg:     color-mix(in srgb, var(--c-bg-elev) 55%, transparent);
+  --c-glass-strong: color-mix(in srgb, var(--c-bg-elev) 72%, transparent);
+  --c-glass-border: rgba(255, 255, 255, 0.10);
+  /* 深色下色晕更克制 */
+  --c-wash-1: color-mix(in oklch, var(--c-accent) 20%, transparent);
+  --c-wash-2: color-mix(in oklch, var(--c-accent) 10%, transparent);
 }

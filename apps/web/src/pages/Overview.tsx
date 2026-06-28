@@ -134,14 +134,14 @@ export function Overview() {
     // stagger — 每个 section 依次入场（60ms 间隔）
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-5 stagger">
 
-      {/* Hero — 周期切换器内嵌在渐变横幅顶部 */}
-      <section className="hero-gradient rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)] px-5 pt-4 pb-5">
+      {/* Hero — 磨砂玻璃面板（深色字 + 单一强调色点缀，无大色块） */}
+      <section className="hero-glass px-5 pt-4 pb-5">
 
-        {/* 周期导航栏 — Hero 顶部白色半透明行 */}
+        {/* 周期导航栏 */}
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => { setCycleOffset(o => o - 1); setExpensesExpanded(false); setIncomesExpanded(false); }}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 transition-colors text-white"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--c-bg-alt)] hover:bg-[var(--c-bg-elev)] transition-colors text-notion-text-secondary"
             aria-label="上一期"
           >
             <Icon name="chevron-right" size={15} className="rotate-180" />
@@ -149,17 +149,17 @@ export function Overview() {
 
           <div className="flex items-center gap-2">
             {cycleLoading
-              ? <Icon name="loading" size={14} className="animate-spin text-white/80" />
-              : <span className="font-numeric text-[14px] font-semibold text-white">
+              ? <Icon name="loading" size={14} className="animate-spin text-notion-text-muted" />
+              : <span className="font-numeric text-[14px] font-semibold text-notion-text">
                   {displayCycleId || '加载中'}
                 </span>
             }
-            {isPredicted && <span className="text-[10px] font-semibold text-white/80 bg-white/20 rounded-[var(--radius-pill)] px-2 py-0.5">预测</span>}
-            {snapshotBased && <span className="text-[10px] font-semibold text-white/70 bg-white/15 rounded-[var(--radius-pill)] px-2 py-0.5">快照</span>}
+            {isPredicted && <span className="badge text-[10px] px-2 py-0.5">预测</span>}
+            {snapshotBased && <span className="badge-muted badge text-[10px] px-2 py-0.5">快照</span>}
             {cycleOffset !== 0 && (
               <button
                 onClick={() => { setCycleOffset(0); setExpensesExpanded(false); setIncomesExpanded(false); }}
-                className="text-[11px] font-semibold text-white/80 hover:text-white bg-white/15 hover:bg-white/25 rounded-[var(--radius-pill)] px-2.5 py-0.5 transition-colors"
+                className="text-[11px] font-semibold text-[var(--c-accent-text)] hover:text-[var(--c-accent)] bg-[var(--c-accent-soft)] rounded-[var(--radius-pill)] px-2.5 py-0.5 transition-colors"
               >
                 回本期
               </button>
@@ -168,7 +168,7 @@ export function Overview() {
 
           <button
             onClick={() => { setCycleOffset(o => o + 1); setExpensesExpanded(false); setIncomesExpanded(false); }}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 transition-colors text-white"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--c-bg-alt)] hover:bg-[var(--c-bg-elev)] transition-colors text-notion-text-secondary"
             aria-label="下一期"
           >
             <Icon name="chevron-right" size={15} />
@@ -177,36 +177,36 @@ export function Overview() {
 
         {/* 无快照提示（过去期） */}
         {!isCurrentCycle && !isPredicted && !snapshotBased && !cycleLoading && (
-          <div className="mb-3 text-[12px] text-white/70 text-center bg-white/10 rounded-[var(--radius-md)] px-3 py-2">
+          <div className="mb-3 text-[12px] text-notion-text-secondary text-center bg-[var(--c-bg-alt)] rounded-[var(--radius-md)] px-3 py-2">
             该周期没有历史快照，余额数据不可用
           </div>
         )}
 
-        <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-caps font-semibold text-white/90 bg-white/20 rounded-[var(--radius-pill)] px-3 py-1 mb-3">
+        <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-caps font-semibold text-[var(--c-accent-text)] bg-[var(--c-accent-soft)] rounded-[var(--radius-pill)] px-3 py-1 mb-3">
           {isPredicted ? '预测日均预算' : '日均可用预算'}
         </div>
         <div className="mb-1.5">
           <Money
             amount={activeCalc.daily_budget}
             size="hero"
-            className="font-display !text-white drop-shadow-sm"
+            className="font-display"
             animate
           />
-          <span className="text-[16px] sm:text-[18px] text-white/85 font-normal ml-1.5">
+          <span className="text-[16px] sm:text-[18px] text-notion-text-secondary font-normal ml-1.5">
             / 日
           </span>
         </div>
-        <div className="text-[13px] text-white/90">
+        <div className="text-[13px] text-notion-text-secondary">
           {isCurrentCycle
-            ? <>距发薪日（{activeCalc.next_payday_date}）还有 <b className="text-white font-semibold">{activeCalc.days_to_payday}</b> 天</>
+            ? <>距发薪日（{activeCalc.next_payday_date}）还有 <b className="text-notion-text font-semibold">{activeCalc.days_to_payday}</b> 天</>
             : <>{cycleMeta?.cycle_start} — {cycleMeta?.cycle_end}</>
           }
         </div>
 
         {/* 净可用现金 */}
-        <div className="mt-4 pt-3 border-t border-white/25 flex items-baseline justify-between">
-          <span className="text-[12px] text-white/85">净可用现金</span>
-          <span className="font-display font-semibold text-[20px] text-white tabular-nums">
+        <div className="mt-4 pt-3 border-t border-[var(--c-border)] flex items-baseline justify-between">
+          <span className="text-[12px] text-notion-text-secondary">净可用现金</span>
+          <span className="font-display font-semibold text-[20px] text-notion-text tabular-nums">
             {formatYen(activeCalc.net_available)}
           </span>
         </div>
@@ -679,8 +679,8 @@ function FlowChartRow({
   const overspend = hasIncome && netFlow < 0;
 
   const segments: DonutSeg[] = [
-    { value: consume, color: 'var(--c-warning)', label: '消费' },
-    { value: invest,  color: 'var(--c-accent)',  label: '投资' },
+    { value: consume, color: 'var(--c-accent)',      label: '消费' },
+    { value: invest,  color: 'var(--c-text-muted)',  label: '投资' },
     ...(hasIncome && netFlow > 0 ? [{ value: netFlow, color: 'var(--c-success)', label: '净流入' }] : []),
   ].filter(s => s.value > 0);
 
