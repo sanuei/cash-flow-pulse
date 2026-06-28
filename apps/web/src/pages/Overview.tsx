@@ -604,21 +604,32 @@ function NetSparkline({
 }) {
   const W = 300, H = 80, PAD = 4;
 
-  // 数据点：历史快照 + 当前值
-  const pts: { day: number; val: number }[] = [
-    ...snapshots.map(s => ({
-      day: Math.max(0, cycleDay - Math.max(0,
-        Math.floor((Date.now() - new Date(s.snapshot_date).getTime()) / 86400000)
-      )),
-      val: s.net_available,
-    })),
-    { day: cycleDay, val: currentValue },
-  ].sort((a, b) => a.day - b.day);
+  // 从 cycleDay 反推周期起始日（本地午夜）
+  // 不用 Date.now() - snapshotDate 的差值，避免 UTC/本地时区不一致
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  const cycleStartMs = todayMidnight.getTime() - cycleDay * 86400000;
 
+  // 同一天只保留最后一条（UPSERT 行为，已是最新），再加今天当前值
+  const dayMap = new Map<number, number>();
+  for (const s of snapshots) {
+    // 'YYYY-MM-DD' → 本地午夜，避免 UTC 偏移导致 off-by-1
+    const snapMs = new Date(s.snapshot_date + 'T00:00:00').getTime();
+    const dayInCycle = Math.max(0, Math.min(cycleLen,
+      Math.round((snapMs - cycleStartMs) / 86400000)
+    ));
+    dayMap.set(dayInCycle, s.net_available);
+  }
+  dayMap.set(cycleDay, currentValue);  // 当前值覆盖今天
+
+  let pts = [...dayMap.entries()]
+    .map(([day, val]) => ({ day, val }))
+    .sort((a, b) => a.day - b.day);
+
+  // 少于 2 点时在 day 0 补一个锚点
   if (pts.length < 2) {
-    // 只有 1 个点时，补一个 day 0 起点
     const first = pts[0];
-    if (first) pts.unshift({ day: 0, val: first.val });
+    if (first && first.day > 0) pts = [{ day: 0, val: first.val }, ...pts];
   }
 
   const vals = pts.map(p => p.val);
