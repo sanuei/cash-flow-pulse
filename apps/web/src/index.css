@@ -166,7 +166,12 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  /* PWA/原生 App 化: 100dvh 钉死外层,旧 iOS 用 -webkit-fill-available 兜底;overflow:hidden 禁橡皮筋透出 */
+  /* PWA/原生 App 化:
+     - 100svh 优先:最小视口高度,iOS Safari 普通模式(非 PWA)下不含 URL bar,容器不溢出屏幕
+     - 100dvh 兜底:动态视口高度,PWA 独立模式或桌面浏览器下与 100svh 等价
+     - -webkit-fill-available 兜底:旧 iOS 兼容
+     overflow:hidden 禁橡皮筋透出 */
+  height: 100svh;
   height: 100dvh;
   height: -webkit-fill-available;
   overflow: hidden;
@@ -174,6 +179,7 @@ html {
 }
 
 #root {
+  height: 100svh;
   height: 100dvh;
   height: -webkit-fill-available;
   overflow: hidden;

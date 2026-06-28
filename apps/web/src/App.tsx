@@ -82,7 +82,10 @@ function App() {
     // 100dvh 钉死外层 + overflow-hidden: iOS 橡皮筋只发生在最外层,内层 main 独立滚动就不会露出 body 背景
     // bg 放在 main 上: 容器透明,body 背景的 radial-gradient 色晕可以透出,让整体视觉更通透
     // 桌面端 sm:flex-row 让 sidebar 240px 在左 + main 在右
-    <div className="h-[100dvh] flex flex-col sm:flex-row overflow-hidden">
+    // 100svh: 最小视口高度,不含 iOS Safari URL bar。
+    // 之前的 100dvh 在 Safari 普通模式(非 PWA)下比可视区大,容器溢出屏幕底部 ~80px。
+    // PWA 独立模式下 100svh = 100dvh = 屏幕高度,行为一致。
+    <div className="h-[100svh] flex flex-col sm:flex-row overflow-hidden">
       {/* 桌面端:左侧 Sidebar 240px (含 logo/nav/user) — 替代原来的顶部 6-tab header */}
       <Sidebar />
 
