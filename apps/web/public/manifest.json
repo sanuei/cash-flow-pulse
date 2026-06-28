@@ -4,22 +4,22 @@
   "description": "Personal cash flow tracker — income, investment, expenses, daily budget",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F3EEE7",
-  "theme_color": "#C0502F",
+  "background_color": "#BFEF00",
+  "theme_color": "#BFEF00",
   "lang": "zh-CN",
   "orientation": "portrait-primary",
   "categories": ["finance"],
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
