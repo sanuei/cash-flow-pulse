@@ -6,6 +6,7 @@ import { Money } from '../components/Money';
 import { LoadingState } from '../components/States';
 import { Icon } from '../components/Icon';
 import { formatYen } from '@cfp/shared';
+import { HorizontalBarChart, type BarItem } from '../components/HorizontalBarChart';
 import { apiGet } from '../lib/api';
 import type {
   UpcomingExpenseItem,
@@ -374,8 +375,26 @@ export function Overview() {
             </button>
           }
         >
+          {/* 收起时:水平条形图(概览) — 4 个子类别聚合 */}
+          {!expensesExpanded && upcomingExpenses && (
+            <div className="anim-fade-up">
+              <HorizontalBarChart
+                items={[
+                  { name: '信用卡', amount: upcomingExpenses.total_credit_card, color: 'var(--c-warning)', icon: 'card' },
+                  { name: '固定账单', amount: upcomingExpenses.total_bills, color: 'var(--c-accent)', icon: 'bill' },
+                  { name: '固定投资', amount: upcomingExpenses.total_investments, color: 'var(--c-success)', icon: 'investment' },
+                  { name: '订阅', amount: upcomingExpenses.total_subscriptions, color: 'var(--c-text-muted)', icon: 'subscription' },
+                ]}
+                total={totalExpense}
+                emptyText="本期暂无支出"
+              />
+            </div>
+          )}
+
           <div
-            className="grid transition-[grid-template-rows] duration-[var(--dur-medium)] ease-[var(--ease-out-expo)]"
+            className={`grid transition-[grid-template-rows] duration-[var(--dur-medium)] ease-[var(--ease-out-expo)] ${
+              expensesExpanded ? 'mt-3' : ''
+            }`}
             style={{ gridTemplateRows: expensesExpanded ? '1fr' : '0fr' }}
           >
             <div className="overflow-hidden">
@@ -474,8 +493,33 @@ export function Overview() {
             </button>
           }
         >
+          {/* 收起时:水平条形图(概览) — 按 income 类别聚合 */}
+          {!incomesExpanded && (
+            <div className="anim-fade-up">
+              <HorizontalBarChart
+                items={(() => {
+                  // 按 name 聚合(upcomingIncomes.items 里同 name 多个 occurrences)
+                  const map = new Map<string, number>();
+                  for (const inc of upcomingIncomes.items) {
+                    map.set(inc.name, (map.get(inc.name) ?? 0) + inc.amount);
+                  }
+                  return Array.from(map.entries()).map(([name, amount]) => ({
+                    name,
+                    amount,
+                    color: 'var(--c-success)',
+                    icon: 'income' as const,
+                  }));
+                })()}
+                total={totalIncome}
+                emptyText="本期暂无收入"
+              />
+            </div>
+          )}
+
           <div
-            className="grid transition-[grid-template-rows] duration-[var(--dur-medium)] ease-[var(--ease-out-expo)]"
+            className={`grid transition-[grid-template-rows] duration-[var(--dur-medium)] ease-[var(--ease-out-expo)] ${
+              incomesExpanded ? 'mt-3' : ''
+            }`}
             style={{ gridTemplateRows: incomesExpanded ? '1fr' : '0fr' }}
           >
             <div className="overflow-hidden">
@@ -737,7 +781,6 @@ function NetSparkline({
     </svg>
   );
 }
-
 
 function SubCategory({
   title,
