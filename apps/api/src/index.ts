@@ -20,6 +20,7 @@ import { investmentRoutes } from './routes/investments';
 import { billRoutes } from './routes/bills';
 import { incomeRoutes } from './routes/incomes';
 import { subscriptionRoutes } from './routes/subscriptions';
+import { adminRoutes } from './routes/admin';
 // v1.0 新增
 import { authRoutes } from './routes/auth';
 import { requireAuth } from './lib/auth';
@@ -71,6 +72,7 @@ app.route('/api/investments', investmentRoutes);
 app.route('/api/bills', billRoutes);
 app.route('/api/incomes', incomeRoutes);
 app.route('/api/subscriptions', subscriptionRoutes);
+app.route('/api/admin', adminRoutes);
 
 // 404
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));

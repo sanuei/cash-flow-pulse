@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { Card } from '../components/Card';
 import { LoadingState } from '../components/States';
@@ -346,6 +347,29 @@ export function Settings() {
           )}
         </div>
       </Card>
+
+      {/* ── 管理员入口(仅 admin 可见) ── */}
+      {currentUser?.is_admin ? (
+        <Card title="管理后台">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-notion-text mb-1 inline-flex items-center gap-2">
+                <Icon name="lock" size={14} className="text-[var(--c-accent-text)]" strokeWidth={2} />
+                管理员专属
+              </div>
+              <p className="text-xs text-notion-text-secondary">
+                查看平台所有用户、数据规模、活跃度
+              </p>
+            </div>
+            <Link
+              to="/admin"
+              className="flex-shrink-0 px-4 py-2 rounded-[var(--radius-md)] bg-[var(--c-accent)] text-[var(--c-text-on-accent)] text-[13px] font-semibold hover:bg-[var(--c-accent-hover)] transition-colors"
+            >
+              进入后台 →
+            </Link>
+          </div>
+        </Card>
+      ) : null}
 
       {/* ── 扣款日规则：周末顺延 ── */}
       <Card title="扣款日规则">

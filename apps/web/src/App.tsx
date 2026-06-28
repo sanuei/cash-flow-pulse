@@ -4,6 +4,7 @@ import { IncomesPage } from './pages/IncomesPage';
 import { InvestmentsPage } from './pages/InvestmentsPage';
 import { ExpensesPage } from './pages/ExpensesPage';
 import { Settings } from './pages/Settings';
+import { Admin } from './pages/Admin';
 import { Login } from './pages/Login';
 import { useStore } from './lib/store';
 import { useEffect, lazy, Suspense } from 'react';
@@ -163,6 +164,7 @@ function App() {
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/trends" element={<Suspense fallback={<LoadingState />}><Trends /></Suspense>} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
