@@ -195,6 +195,7 @@ export function Overview() {
             amount={activeCalc.daily_budget}
             size="hero"
             className="font-display"
+            color="accent"
             animate
           />
           <span className="text-[16px] sm:text-[18px] text-notion-text-secondary font-normal ml-1.5">
@@ -211,7 +212,16 @@ export function Overview() {
         {/* 净可用现金 */}
         <div className="mt-4 pt-3 border-t border-[var(--c-border)] flex items-baseline justify-between">
           <span className="text-[12px] text-notion-text-secondary">净可用现金</span>
-          <span className="font-display font-semibold text-[20px] text-notion-text tabular-nums">
+          <span
+            className="font-display font-semibold text-[20px] tabular-nums"
+            style={{
+              backgroundImage: 'linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent-hover) 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              color: 'transparent',
+            }}
+          >
             {formatYen(activeCalc.net_available)}
           </span>
         </div>
@@ -637,7 +647,11 @@ function NetSparkline({
   const minVal = Math.min(...vals, 0);
   const range = maxVal - minVal || 1;
 
-  const toX = (day: number) => PAD + ((day / Math.max(cycleLen, 1)) * (W - PAD * 2));
+  // 关键:第一个点不一定在 day 0,要让折线从最左画满整个图表
+  // 真实 x 轴区间 = [pts[0].day, cycleLen],把它等比映射到 [PAD, W-PAD]
+  const firstDay = pts[0]?.day ?? 0;
+  const daySpan = Math.max(cycleLen - firstDay, 1);
+  const toX = (day: number) => PAD + (((day - firstDay) / daySpan) * (W - PAD * 2));
   const toY = (val: number) => H - PAD - ((val - minVal) / range) * (H - PAD * 2);
 
   // 平滑贝塞尔路径
