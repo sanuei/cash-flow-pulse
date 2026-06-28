@@ -16,11 +16,9 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cashflow\.soniclab\.cc\/api\//,
-            handler: 'NetworkFirst',
+            handler: 'NetworkOnly',  // 不缓存 API,确保数据实时
             options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 }, // 1h
-              networkTimeoutSeconds: 5,
+              cacheName: 'api-no-cache',
             },
           },
         ],
