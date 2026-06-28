@@ -893,17 +893,17 @@ export function computeDashboardV2(
   const totalExpense = totalCreditCards + totalBills + totalSubs + totalInvestments;
 
   // 6. 净可用 + 日均预算
-  //   净可用 = 现金账户余额(扣锁定) - 信用卡本期应还
+  //   净可用 = 本期收入 - 本期支出(只看这个发薪周期的预算,不混入历史余额)
   //   日均   = 净可用 / 剩余天数(到下次发薪日)
-  //   设计: 收入(income)只用于 UI 展示,纯参考;预算计算基于真实账上余额
-  //   原因: 现金余额 = 历史存款 + 累计收入 - 累计支出,直接反映"现在能花多少"
-  //   简化: 只扣"信用卡本期应还"(v1.total_due),不扣未来账单/订阅/投资
-  //         那些会在 dashboard "本期支出明细"卡里展示,用户能自己看到
-  const netAvailable = v1.total_net_cash - v1.total_due;
+  //   语义: "这个月工资还剩多少能花"(结余视角)
+  //   v1.4 用户要求:净可用是"结余 = 收入 - 支出",日均按剩余天数算
+  //   例(6/28): 收入 310,000 - 支出 253,338 = 结余 56,662 → 56,662/12 = ¥4,721/天
+  //   注: 收入(本月到账)用于预算计算,不只展示
+  const netAvailable = totalIncome - totalExpense;
   const safeDays = Math.max(1, v1.days_to_payday);
   const dailyBudget = Math.max(0, Math.floor(netAvailable / safeDays));
-  // netFlow 用整月 totalExpense(用于收支图 / 本期收入明细卡)
-  const netFlow = totalIncome - totalExpense;
+  // netFlow 复用同一数值(用于收支图 / UI 展示)
+  const netFlow = netAvailable;
 
   return {
     ...v1,
