@@ -113,15 +113,21 @@ export function Overview() {
   const netFlow = totalIncome - totalConsume - totalInvestment;
 
   // ── 花费节奏（仅本期）：对比「时间进度」与「预算进度」──
-  // 预算进度 = 自周期最早一次快照以来，净可用现金消耗的百分比
   const snapshots = isCurrentCycle ? storeSnapshots : (cycleCalc?.currentSnapshots ?? []);
   const baseline = snapshots.length > 0
     ? snapshots.reduce((earliest, s) => (s.snapshot_date < earliest.snapshot_date ? s : earliest))
     : null;
-  let budgetProgress: number | null = null;
+  let budgetProgress: number | null = null;   // null = 无快照（不显示进度条）
+  let balanceGrew = false;                     // 余额较快照增长（发薪/存款）
   if (baseline && baseline.net_available > 0) {
     const spent = baseline.net_available - activeCalc.net_available;
-    budgetProgress = Math.min(100, Math.max(0, Math.round((spent / baseline.net_available) * 100)));
+    if (spent <= 0) {
+      // 余额没有减少（可能有收入到账），显示为"余额增长"而非 0% 空条
+      balanceGrew = true;
+      budgetProgress = 0;
+    } else {
+      budgetProgress = Math.min(100, Math.round((spent / baseline.net_available) * 100));
+    }
   }
 
   return (
@@ -208,7 +214,12 @@ export function Overview() {
 
       {/* 花费节奏卡 — 时间进度 vs 预算进度（仅本期，且需有快照基线） */}
       {isCurrentCycle && !isNewUser && (
-        <PaceCard timePct={cycleProgress} budgetPct={budgetProgress} daysLeft={activeCalc.days_to_payday} />
+        <PaceCard
+          timePct={cycleProgress}
+          budgetPct={budgetProgress}
+          balanceGrew={balanceGrew}
+          daysLeft={activeCalc.days_to_payday}
+        />
       )}
 
       {/* 收支图：有本期收入时 = 收入去向；无收入时 = 支出分布 */}
@@ -463,56 +474,71 @@ export function Overview() {
 function PaceCard({
   timePct,
   budgetPct,
+  balanceGrew,
   daysLeft,
 }: {
   timePct: number;
   budgetPct: number | null;
+  balanceGrew: boolean;
   daysLeft: number;
 }) {
-  // 无快照基线：给出引导，而非假数据
+  const titleNode = (
+    <div className="flex items-center gap-2">
+      <Icon name="bar-chart" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
+      <span>花费节奏</span>
+    </div>
+  );
+
+  // 无快照：引导录入
   if (budgetPct === null) {
     return (
-      <Card
-        title={
-          <div className="flex items-center gap-2">
-            <Icon name="bar-chart" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
-            <span>花费节奏</span>
-          </div>
-        }
-      >
-        <div className="flex items-center gap-2 text-[13px] text-notion-text-secondary">
-          <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
-        </div>
+      <Card title={titleNode}>
+        <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
         <p className="mt-3 text-[12px] text-notion-text-muted leading-relaxed">
-          录入一次本期快照后，这里会对比「时间进度」与「预算进度」，告诉你是领先还是花得太快。
+          录入一次本期快照后，这里会对比「时间进度」与「预算进度」，告诉你花得快还是慢。
         </p>
       </Card>
     );
   }
 
+  // 余额较快照增长（收入到账/存款），显示为"净增"而非 0% 空条
+  if (balanceGrew) {
+    return (
+      <Card
+        title={titleNode}
+        action={<span className="badge text-[10px] px-2 py-0.5 text-notion-success bg-[var(--c-success-soft)]">余额增长</span>}
+      >
+        <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
+        <div className="flex items-center gap-2 mt-2.5">
+          <span className="text-[12px] text-notion-text-muted w-8 flex-shrink-0">预算</span>
+          <div className="flex-1 h-2 rounded-[var(--radius-pill)] bg-[var(--c-bg-alt)] overflow-hidden flex items-center px-2">
+            <span className="text-[10px] text-notion-success font-semibold">↑ 余额较快照时有所增加</span>
+          </div>
+        </div>
+        <p className="mt-3 text-[12px] text-notion-text-secondary leading-relaxed">
+          时间过了 <b className="font-semibold">{timePct}%</b>，但你的净可用余额比记录快照时还高——有收入到账或余额增加，节奏非常好。
+        </p>
+      </Card>
+    );
+  }
+
+  // 正常消费进度
   const ahead = budgetPct <= timePct;
   const synced = !ahead && budgetPct <= timePct + 12;
   const verdict = ahead
     ? { label: '进度健康', cls: 'text-notion-success bg-[var(--c-success-soft)]',
-        text: <>时间过了 <b className="font-semibold">{timePct}%</b>，预算只用了 <b className="font-semibold">{budgetPct}%</b> — 你领先了，可以稍微放松。</> }
+        text: <>时间过了 <b className="font-semibold">{timePct}%</b>，预算只用了 <b className="font-semibold">{budgetPct}%</b> — 领先了，可以稍微放松。</> }
     : synced
     ? { label: '基本同步', cls: 'text-notion-text-secondary bg-[var(--c-bg-alt)]',
-        text: <>时间 <b className="font-semibold">{timePct}%</b> / 预算 <b className="font-semibold">{budgetPct}%</b> — 节奏基本同步。</> }
+        text: <>时间 <b className="font-semibold">{timePct}%</b> / 预算已用 <b className="font-semibold">{budgetPct}%</b> — 节奏基本同步。</> }
     : { label: '花得偏快', cls: 'text-notion-warning bg-[var(--c-warning-soft)]',
-        text: <>时间才过 <b className="font-semibold">{timePct}%</b>，预算已用 <b className="font-semibold">{budgetPct}%</b> — 剩下 {daysLeft} 天要省着点。</> };
+        text: <>时间才过 <b className="font-semibold">{timePct}%</b>，预算已用 <b className="font-semibold">{budgetPct}%</b> — 剩 {daysLeft} 天，注意控制支出。</> };
   const budgetColor = ahead ? 'var(--c-success)' : synced ? 'var(--c-accent)' : 'var(--c-warning)';
 
   return (
     <Card
-      title={
-        <div className="flex items-center gap-2">
-          <Icon name="bar-chart" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
-          <span>花费节奏</span>
-        </div>
-      }
-      action={
-        <span className={`badge text-[10px] px-2 py-0.5 ${verdict.cls}`}>{verdict.label}</span>
-      }
+      title={titleNode}
+      action={<span className={`badge text-[10px] px-2 py-0.5 ${verdict.cls}`}>{verdict.label}</span>}
     >
       <div className="space-y-2.5">
         <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
