@@ -15,7 +15,7 @@ type SessionInfo = {
   user_agent: string | null;
 };
 
-const APP_VERSION = 'v1.1.0';
+const APP_VERSION = 'v1.3.0';
 
 export function Settings() {
   const config = useStore((s) => s.config);
