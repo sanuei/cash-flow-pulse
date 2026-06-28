@@ -26,6 +26,7 @@ import {
   PiggyBank,       // 投资/储蓄
   ChevronDown,     // 折叠展开
   ChevronRight,    // 折叠收起
+  ChevronUp,       // 折叠收起（向上）
   CalendarDays,    // 日历/周期
   TrendingUp,      // 上涨
   // v1.0 新增
@@ -75,6 +76,7 @@ export type IconName =
   | 'subscription'// 订阅/娱乐
   | 'chevron-down'// 折叠展开
   | 'chevron-right'// 折叠收起
+  | 'chevron-up'// 折叠收起（向上变体）
   | 'calendar'    // 日历/周期
   | 'trending-up'// 上涨
   // v1.0 新增
@@ -114,6 +116,7 @@ const map: Record<IconName, LucideIcon> = {
   subscription: Repeat,
   'chevron-down': ChevronDown,
   'chevron-right': ChevronRight,
+  'chevron-up': ChevronUp,
   calendar: CalendarDays,
   'trending-up': TrendingUp,
   // v1.0 新增

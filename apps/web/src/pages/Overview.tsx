@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode, Children, isValidElement, cloneElement, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { Card } from '../components/Card';
@@ -353,9 +353,9 @@ export function Overview() {
               <span>{expensesExpanded ? '收起' : '展开'}</span>
               <Icon
                 name="chevron-down"
-                size={12}
+                size={14}
                 className={`transition-transform duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
-                  expensesExpanded ? 'rotate-0' : '-rotate-90'
+                  expensesExpanded ? 'rotate-180' : 'rotate-0'
                 }`}
               />
             </button>
@@ -734,16 +734,26 @@ function SubCategory({
   total: number;
   children: ReactNode;
 }) {
+  // 自动给每个 ExpenseRow / InvestmentExpenseRow 子元素注入 icon
+  // 这样 4 个分类不用各自手动传 icon
+  const childrenWithIcon = Children.map(children, (child) => {
+    if (!isValidElement(child)) return child;
+    if (child.type === ExpenseRow || child.type === InvestmentExpenseRow) {
+      return cloneElement(child as ReactElement<{ icon?: typeof icon }>, { icon });
+    }
+    return child;
+  });
+
   return (
     <div>
-      <div className="flex items-center justify-between text-[12px] text-notion-text-secondary mb-2 tracking-tight-section">
+      <div className="flex items-center justify-between text-[12px] text-notion-text-secondary mb-2.5 tracking-tight-section">
         <div className="flex items-center gap-1.5">
           <Icon name={icon} size={12} strokeWidth={1.75} />
           <span className="font-semibold uppercase tracking-caps text-[11px]">{title}</span>
         </div>
         <span className="font-numeric font-semibold">{formatYen(total)}</span>
       </div>
-      <div className="space-y-1.5 pl-4">{children}</div>
+      <div className="space-y-1 pl-0.5">{childrenWithIcon}</div>
     </div>
   );
 }
@@ -754,15 +764,22 @@ function ExpenseRow({
   date,
   daysUntil,
   inCurrentCycle = true,
+  icon,
 }: {
   name: string;
   amount: number;
   date: string;
   daysUntil: number;
   inCurrentCycle?: boolean;
+  icon?: 'card' | 'bill' | 'subscription' | 'investment';
 }) {
   return (
-    <div className="flex items-center justify-between text-[13px] py-1">
+    <div className="flex items-center gap-3 text-[13px] py-2.5 px-2 -mx-2 rounded-[var(--radius-sm)] hover:bg-[var(--c-bg-alt)] transition-colors">
+      {icon && (
+        <span className="flex-shrink-0 w-6 h-6 inline-flex items-center justify-center rounded-[var(--radius-xs)] bg-[var(--c-bg-alt)] text-notion-text-secondary">
+          <Icon name={icon} size={13} strokeWidth={1.75} />
+        </span>
+      )}
       <div className="flex-1 min-w-0">
         <span className={inCurrentCycle ? 'text-notion-text' : 'text-notion-text-muted'}>
           {name}
@@ -775,7 +792,7 @@ function ExpenseRow({
         </span>
       </div>
       <span
-        className={`font-numeric font-semibold ${
+        className={`font-numeric font-semibold tabular-nums ${
           inCurrentCycle ? 'text-notion-warning' : 'text-notion-text-muted'
         }`}
       >
@@ -785,7 +802,7 @@ function ExpenseRow({
   );
 }
 
-function InvestmentExpenseRow({ item }: { item: UpcomingExpenseItem }) {
+function InvestmentExpenseRow({ item, icon }: { item: UpcomingExpenseItem; icon?: 'investment' }) {
   const freqLabel: Record<InvestmentFrequency, string> = {
     daily: '每天',
     weekly: '每周',
@@ -793,14 +810,19 @@ function InvestmentExpenseRow({ item }: { item: UpcomingExpenseItem }) {
     yearly: '每年',
   };
   return (
-    <div className="flex items-center justify-between text-[13px] py-1">
+    <div className="flex items-center gap-3 text-[13px] py-2.5 px-2 -mx-2 rounded-[var(--radius-sm)] hover:bg-[var(--c-bg-alt)] transition-colors">
+      {icon && (
+        <span className="flex-shrink-0 w-6 h-6 inline-flex items-center justify-center rounded-[var(--radius-xs)] bg-[var(--c-bg-alt)] text-notion-text-secondary">
+          <Icon name={icon} size={13} strokeWidth={1.75} />
+        </span>
+      )}
       <div className="flex-1 min-w-0">
         <span className="text-notion-text">{item.name}</span>
         <span className="text-notion-text-muted ml-2 text-[11px]">
           {freqLabel[item.frequency ?? 'monthly']} × {item.occurrences} 次
         </span>
       </div>
-      <span className="font-numeric font-semibold text-notion-warning">{formatYen(item.total)}</span>
+      <span className="font-numeric font-semibold tabular-nums text-notion-warning">{formatYen(item.total)}</span>
     </div>
   );
 }
