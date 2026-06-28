@@ -77,9 +77,10 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-notion-bg">
+    // 100dvh 钉死外层 + overflow-hidden: iOS 橡皮筋只发生在最外层,内层 main 独立滚动就不会露出 body 背景
+    <div className="h-[100dvh] flex flex-col bg-notion-bg overflow-hidden">
       {/* 顶栏（桌面端：6 项文字 Tab） — 玻璃模糊背景 */}
-      <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border glass sticky top-0 z-30">
+      <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border glass fixed top-0 inset-x-0 z-30">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center justify-center w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)]">
             <Icon name="wallet" size={15} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
@@ -98,19 +99,20 @@ function App() {
         </nav>
       </header>
 
-      {/* 顶栏（移动端：Logo + 曲线/设置图标） — 玻璃模糊 + safe-area 适配 */}
+      {/* 顶栏（移动端：Logo + 曲线/设置图标） — 玻璃模糊 + safe-area 适配
+          尺寸:v1.4 加大,Logo 28px / 文字 17px / 头部 56px,与桌面端 h-14 对齐 */}
       <header
-        className="sm:hidden flex items-center justify-between px-4 border-b border-notion-border glass sticky top-0 z-30"
+        className="sm:hidden flex items-center justify-between px-4 border-b border-notion-border glass fixed top-0 inset-x-0 z-30"
         style={{
           paddingTop: 'env(safe-area-inset-top)',
-          height: 'calc(3rem + env(safe-area-inset-top))',
+          height: 'calc(3.5rem + env(safe-area-inset-top))',
         }}
       >
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)]">
-            <Icon name="wallet" size={13} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
+        <div className="flex items-center gap-2.5">
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)]">
+            <Icon name="wallet" size={15} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
           </span>
-          <span style={{ fontFamily: 'var(--font-logo)', fontWeight: 700, fontSize: '15px', letterSpacing: '-0.02em', color: 'var(--c-text)' }}>
+          <span style={{ fontFamily: 'var(--font-logo)', fontWeight: 700, fontSize: '17px', letterSpacing: '-0.02em', color: 'var(--c-text)' }}>
             cash<span style={{ color: 'var(--c-accent)' }}>flow</span>
           </span>
         </div>
@@ -124,7 +126,7 @@ function App() {
             }
             aria-label="曲线"
           >
-            <Icon name="chart" size={20} strokeWidth={1.75} />
+            <Icon name="chart" size={22} strokeWidth={1.75} />
           </NavLink>
           <NavLink
             to="/settings"
@@ -135,19 +137,23 @@ function App() {
             }
             aria-label="设置"
           >
-            <Icon name="settings" size={20} strokeWidth={1.75} />
+            <Icon name="settings" size={22} strokeWidth={1.75} />
           </NavLink>
         </div>
       </header>
 
-      {/* 内容 — 路由切换时 fade-in */}
+      {/* 内容 — 路由切换时 fade-in;pt/pb 给 fixed 头尾留位;overflow-y-auto 让 main 自己滚 */}
       <main
         key={useLocation().pathname}
         className={`
-          flex-1 ${loading ? 'opacity-60' : ''}
+          flex-1 overflow-y-auto overscroll-contain
+          pt-14 sm:pt-14
+          pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-0
+          ${loading ? 'opacity-60' : ''}
           transition-opacity duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
           ${reduced ? '' : 'anim-fade-up'}
         `}
+        style={{ WebkitOverflowScrolling: 'touch' }}
       >
         <Routes>
           <Route path="/" element={<Overview />} />
@@ -162,7 +168,7 @@ function App() {
 
       {/* 底部 Tab（移动端：4 个主要页面） — 玻璃模糊 + 顶边阴影 */}
       <nav
-        className="sm:hidden flex items-center justify-around glass border-t border-[var(--c-border)] sticky bottom-0 z-30 shadow-[var(--shadow-md)]"
+        className="sm:hidden flex items-center justify-around glass border-t border-[var(--c-border)] fixed bottom-0 inset-x-0 z-30 shadow-[var(--shadow-md)]"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom)',
           height: 'calc(3.5rem + env(safe-area-inset-bottom))',

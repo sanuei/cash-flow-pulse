@@ -166,6 +166,18 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* PWA/原生 App 化: 100dvh 钉死外层,旧 iOS 用 -webkit-fill-available 兜底;overflow:hidden 禁橡皮筋透出 */
+  height: 100dvh;
+  height: -webkit-fill-available;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#root {
+  height: 100dvh;
+  height: -webkit-fill-available;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
