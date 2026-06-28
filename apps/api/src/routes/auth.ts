@@ -8,11 +8,9 @@ import { Hono } from 'hono';
 import type { Env } from '../index';
 import {
   buildGoogleAuthUrl,
+  verifyCallbackState,
   buildSessionCookie,
   buildClearSessionCookie,
-  buildStateCookie,
-  buildClearStateCookie,
-  consumeStateFromCookie,
   exchangeCodeForUser,
   upsertUser,
   migrateDefaultDataToUser,
@@ -25,22 +23,13 @@ export const authRoutes = new Hono<{ Bindings: Env }>();
 
 /**
  * GET /api/auth/google
- * 跳 Google consent screen
+ * 跳 Google consent screen（state 用 HMAC 签名，不依赖 cookie，修复 iOS PWA/Safari 跨 jar 问题）
  */
-authRoutes.get('/google', (c) => {
-  // redirect_uri 必须跟 Google Console 配的一致
+authRoutes.get('/google', async (c) => {
   const origin = new URL(c.req.url).origin;
   const redirectUri = `${origin}/api/auth/callback/google`;
-
-  const { url, state } = buildGoogleAuthUrl(c.env, redirectUri);
-
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: url,
-      'Set-Cookie': buildStateCookie(state, c.req.url.startsWith('https://')),
-    },
-  });
+  const { url } = await buildGoogleAuthUrl(c.env, redirectUri);
+  return new Response(null, { status: 302, headers: { Location: url } });
 });
 
 /**
@@ -62,10 +51,10 @@ authRoutes.get('/callback/google', async (c) => {
     return c.json({ error: 'missing_code_or_state' }, 400);
   }
 
-  // CSRF 检查：state 必须匹配 cookie
-  const cookieState = consumeStateFromCookie(c.req.raw);
-  if (!cookieState || cookieState !== state) {
-    return c.json({ error: 'state_mismatch', message: 'Possible CSRF attack' }, 400);
+  // CSRF 检查：验证 HMAC 签名 state（不依赖 cookie）
+  const stateValid = await verifyCallbackState(state, c.env);
+  if (!stateValid) {
+    return c.json({ error: 'state_invalid', message: 'State expired or tampered' }, 400);
   }
 
   try {
@@ -84,17 +73,15 @@ authRoutes.get('/callback/google', async (c) => {
     // 4. 创建 session
     const { id: sessionId, expiresAt } = await createSession(c.env, user.id, c.req.raw);
 
-    // 5. 302 回前端首页（带 session cookie + 清掉 state cookie）
+    // 5. 302 回前端首页（带 session cookie）
     const isSecure = c.req.url.startsWith('https://');
     const sessionCookie = buildSessionCookie(sessionId, expiresAt, isSecure);
-    const clearStateCookie = buildClearStateCookie(isSecure);
-    // Cloudflare Workers 不支持单 header 多 cookie 用 \n 合并，必须 append 多次
     const headers = new Headers();
-    // 重定向到前端 Web App，不能用相对路径（/）否则会跳到 API Worker 根路径返回 404
     const appUrl = c.env.APP_URL || 'https://cashflow.soniclab.cc';
-    headers.set('Location', migration.migrated ? `${appUrl}/?welcome=migrated` : `${appUrl}/`);
+    // ?cfp_auth=1 让前端 checkSession 在 visibilitychange 时重试（iOS PWA/Safari 场景）
+    const dest = migration.migrated ? `${appUrl}/?welcome=migrated` : `${appUrl}/?cfp_auth=1`;
+    headers.set('Location', dest);
     headers.append('Set-Cookie', sessionCookie);
-    headers.append('Set-Cookie', clearStateCookie);
     return new Response(null, { status: 302, headers });
   } catch (err: any) {
     console.error('OAuth callback error:', err);

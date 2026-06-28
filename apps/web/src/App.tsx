@@ -34,6 +34,23 @@ function App() {
     checkSession();
   }, [checkSession]);
 
+  // 1b. iOS PWA 场景: Google OAuth 在 Safari 完成后 session cookie 通过共享 store 同步过来，
+  //     用户切回 PWA 时 visibilitychange 触发重新检查；?cfp_auth=1 也走同一路径
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && authStatus === 'unauthenticated') {
+        checkSession();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    // 如果 URL 带 ?cfp_auth=1（OAuth 回调重定向过来），立刻重新检查并清理参数
+    if (new URLSearchParams(window.location.search).has('cfp_auth')) {
+      checkSession();
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [authStatus, checkSession]);
+
   // 2. auth 状态确定后，加载 dashboard（已登录）或跳 Login
   useEffect(() => {
     if (authStatus === 'authenticated') {

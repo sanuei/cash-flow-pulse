@@ -77,8 +77,8 @@ const SESSION_COOKIE = 'cfp_session';
 const SESSION_TTL_DAYS = 30;
 const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-const STATE_COOKIE = 'cfp_oauth_state';
 const STATE_TTL_MIN = 10; // state 必须 10 分钟内用完，防 CSRF
+const STATE_SEP = '~'; // HMAC state 分隔符（nonce/exp/sig 均为 hex/数字，不含此字符）
 
 // 创始用户邮箱（迁移 + 永久 pro + 绕过限流）。后续如要真正开放注册，把这行删掉。
 const FOUNDER_EMAIL = 'sonic980828@gmail.com';
@@ -145,17 +145,57 @@ function base64UrlToBytes(s: string): Uint8Array {
 // OAuth Flow
 // ========================================================================
 
-/**
- * Step 1: 生成 state，302 跳 Google consent
- */
-export function buildGoogleAuthUrl(env: Env, redirectUri: string): { url: string; state: string } {
-  const clientId = env.GOOGLE_CLIENT_ID;
-  if (!clientId) throw new Error('GOOGLE_CLIENT_ID not configured');
+// ========================================================================
+// HMAC 签名 state（无 cookie 依赖，解决 iOS PWA/Safari 跨 cookie-jar 问题）
+//
+// 老方案: state 存 cookie → iOS standalone PWA 打开 Google 时切换到 Safari，
+//   Safari 拿不到 PWA WKWebView 里的 state cookie → state_mismatch 登录失败。
+// 新方案: state = nonce~exp~HMAC(secret, nonce~exp)，纯 URL 参数传递，无 cookie。
+// ========================================================================
 
-  // 生成随机 state（32 字节 hex）
-  const stateBytes = new Uint8Array(32);
-  crypto.getRandomValues(stateBytes);
-  const state = Array.from(stateBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+async function hmacHex(secret: string, message: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function buildSignedState(secret: string): Promise<string> {
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  const exp = (Date.now() + STATE_TTL_MIN * 60 * 1000).toString();
+  const payload = `${nonce}${STATE_SEP}${exp}`;
+  const sig = await hmacHex(secret, payload);
+  return `${payload}${STATE_SEP}${sig}`;
+}
+
+async function verifySignedState(state: string, secret: string): Promise<boolean> {
+  const parts = state.split(STATE_SEP);
+  if (parts.length !== 3) return false;
+  const [nonce, expStr, sig] = parts as [string, string, string];
+  const exp = parseInt(expStr, 10);
+  if (isNaN(exp) || Date.now() > exp) return false;
+  const expected = await hmacHex(secret, `${nonce}${STATE_SEP}${expStr}`);
+  // 常数时间比较（防时序攻击）
+  if (expected.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
+ * Step 1: 生成 HMAC 签名 state，302 跳 Google consent（无 cookie）
+ */
+export async function buildGoogleAuthUrl(env: Env, redirectUri: string): Promise<{ url: string }> {
+  const clientId = env.GOOGLE_CLIENT_ID;
+  const clientSecret = env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error('GOOGLE_CLIENT_ID/SECRET not configured');
+
+  const state = await buildSignedState(clientSecret);
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -168,7 +208,14 @@ export function buildGoogleAuthUrl(env: Env, redirectUri: string): { url: string
     include_granted_scopes: 'true',
   });
 
-  return { url: `${GOOGLE_AUTHORIZE_URL}?${params}`, state };
+  return { url: `${GOOGLE_AUTHORIZE_URL}?${params}` };
+}
+
+/**
+ * Step 1.5: 验证回调 state（替代 consumeStateFromCookie）
+ */
+export async function verifyCallbackState(state: string, env: Env): Promise<boolean> {
+  return verifySignedState(state, env.GOOGLE_CLIENT_SECRET);
 }
 
 /**
@@ -400,45 +447,8 @@ export function readSessionIdFromCookie(req: Request): string | null {
 }
 
 // ========================================================================
-// State 工具（OAuth CSRF 防护）
-// ========================================================================
-
-export function buildStateCookie(state: string, secure: boolean): string {
-  const expires = new Date(Date.now() + STATE_TTL_MIN * 60 * 1000).toUTCString();
-  const flags = [
-    `${STATE_COOKIE}=${state}`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=None',
-    `Expires=${expires}`,
-  ];
-  if (secure) flags.push('Secure');
-  return flags.join('; ');
-}
-
-export function consumeStateFromCookie(req: Request): string | null {
-  const cookieHeader = req.headers.get('cookie');
-  if (!cookieHeader) return null;
-  const cookies = cookieHeader.split(';').map((c) => c.trim());
-  for (const c of cookies) {
-    if (c.startsWith(`${STATE_COOKIE}=`)) {
-      return c.substring(STATE_COOKIE.length + 1);
-    }
-  }
-  return null;
-}
-
-export function buildClearStateCookie(secure: boolean): string {
-  const flags = [
-    `${STATE_COOKIE}=`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=None',
-    'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
-  ];
-  if (secure) flags.push('Secure');
-  return flags.join('; ');
-}
+// State 工具已迁移至 HMAC 签名方案（buildGoogleAuthUrl / verifyCallbackState），
+// 不再需要 cookie-based state 函数。
 
 // ========================================================================
 // Middleware: requireAuth
