@@ -84,7 +84,7 @@ function App() {
       {/* 顶栏（桌面端：6 项文字 Tab） — 玻璃模糊背景 */}
       <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border glass fixed top-0 inset-x-0 z-30">
         <div className="flex items-center">
-          <Logo size={28} />
+          <Logo size={14} />
         </div>
         <nav className="flex items-center gap-1">
           <NavTab to="/">总览</NavTab>
@@ -106,7 +106,7 @@ function App() {
         }}
       >
         <div className="flex items-center">
-          <Logo size={26} />
+          <Logo size={13} />
         </div>
         <div className="flex items-center gap-1">
           <NavLink
