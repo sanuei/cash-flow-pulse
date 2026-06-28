@@ -7,20 +7,17 @@ import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
 import { LoadingState } from '../components/States';
 import { BillForm } from '../components/BillForm';
-import { SubscriptionForm } from '../components/SubscriptionForm';
 import { CardForm } from '../components/CardForm';
 import { PageTitle } from '../components/PageTitle';
 import { formatYen } from '@cfp/shared';
-import type { RecurringBill, Subscription, CreditCard } from '@cfp/shared';
+import type { RecurringBill, CreditCard } from '@cfp/shared';
 
 export function ExpensesPage() {
   const calc = useStore((s) => s.calc);
   const creditCardsAll = useStore((s) => s.creditCards);
   const billsAll = useStore((s) => s.bills);
-  const subscriptionsAll = useStore((s) => s.subscriptions);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const deleteBill = useStore((s) => s.deleteBill);
-  const deleteSubscription = useStore((s) => s.deleteSubscription);
   const deleteCard = useStore((s) => s.deleteCard);
   const pendingDeletes = useToast((s) => s.pendingDeletes);
   const softDelete = useToast((s) => s.softDelete);
@@ -33,7 +30,6 @@ export function ExpensesPage() {
   const notPending = <T extends { id: string }>(x: T) => !pendingDeletes.includes(x.id);
   const creditCards = creditCardsAll.filter(notPending).filter((c) => match(c.name));
   const bills = billsAll.filter(notPending).filter((b) => match(b.name));
-  const subscriptions = subscriptionsAll.filter(notPending).filter((s) => match(s.name));
 
   // 信用卡：活跃卡（本期要还）排前，非活跃卡排后（与原首页一致）
   const cardRows = [
@@ -173,73 +169,6 @@ export function ExpensesPage() {
         }
       </ManagedListCard>
 
-      {/* 订阅 */}
-      <ManagedListCard<Subscription>
-        icon="subscription"
-        label="订阅"
-        count={subscriptions.length}
-        empty={{
-          icon: 'subscription',
-          title: '还没有订阅',
-          description: '添加 Netflix、Spotify、iCloud 等自动续费服务',
-          addLabel: '添加订阅',
-        }}
-        formTitle={(e) => (e ? '编辑订阅' : '新增订阅')}
-        renderForm={(editing, close) => (
-          <SubscriptionForm
-            initial={
-              editing
-                ? {
-                    name: editing.name,
-                    amount: editing.amount,
-                    billing_day: editing.billing_day,
-                    billing_cycle: editing.billing_cycle,
-                    category: editing.category,
-                    note: editing.note,
-                  }
-                : undefined
-            }
-            onSubmit={async (data) => {
-              if (editing) await useStore.getState().updateSubscription(editing.id, data);
-              else await useStore.getState().addSubscription(data);
-              await loadDashboard();
-              close();
-            }}
-            onCancel={close}
-          />
-        )}
-      >
-        {(openEdit) =>
-          subscriptions.map((s) => (
-            <EntityRow
-              key={s.id}
-              icon="subscription"
-              tone="accent"
-              title={
-                <>
-                  {s.name}{' '}
-                  <span className="badge-warning badge text-[10px] px-1.5 py-0.5">
-                    {s.billing_cycle === 'monthly' ? '月' : '年'}
-                  </span>
-                </>
-              }
-              subtitle={`${s.billing_cycle === 'monthly' ? '每月' : '每年'} ${s.billing_day} 号扣款`}
-              money={<Money amount={s.amount} size="md" sign="negative" />}
-              onEdit={() => openEdit(s)}
-              onDelete={() =>
-                softDelete({
-                  entityId: s.id,
-                  message: `已删除「${s.name}」`,
-                  perform: async () => {
-                    await deleteSubscription(s.id);
-                    await loadDashboard();
-                  },
-                })
-              }
-            />
-          ))
-        }
-      </ManagedListCard>
     </div>
   );
 }
