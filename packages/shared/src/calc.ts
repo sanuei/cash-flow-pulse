@@ -893,17 +893,47 @@ export function computeDashboardV2(
   const totalExpense = totalCreditCards + totalBills + totalSubs + totalInvestments;
 
   // 6. 净可用 + 日均预算
-  //   净可用 = 本期收入 - 本期支出(只看这个发薪周期的预算,不混入历史余额)
-  //   日均   = 净可用 / 剩余天数(到下次发薪日)
-  //   语义: "这个月工资还剩多少能花"(结余视角)
-  //   v1.4 用户要求:净可用是"结余 = 收入 - 支出",日均按剩余天数算
-  //   例(6/28): 收入 310,000 - 支出 253,338 = 结余 56,662 → 56,662/12 = ¥4,721/天
-  //   注: 收入(本月到账)用于预算计算,不只展示
-  const netAvailable = totalIncome - totalExpense;
+  //   净可用 = 现金账户余额 - 未来应付(从今天到下次发薪日)
+  //   日均   = 净可用 / 剩余天数
+  //   语义: "今天以后每天平均能花多少"
+  //   v1.4 用户原话: "现金 - 信用卡应还 - 其他所有消费(当期健身房,房租等) ÷ 剩余天数"
+  //   "未来应付"包括:
+  //     - 信用卡本期应还(已扣或即将扣,v1.active_cards 都算)
+  //     - 账单/订阅:nextOccurrence(today, due_day) >= today
+  //     - 投资:daily/weekly/monthly 在 [today, cycleEnd) 区间内累计
+  //   已过期的支出(6/10 房租)不重复扣
+  //   例(6/28): 现金 271,774 - 信用卡 146,298 - 投资(12天 daily)18,816 = 106,660
+  //             106,660 / 12 = ¥8,888/天
+  //   注: 收入(income)只用于 UI 展示,不参与日均计算
   const safeDays = Math.max(1, v1.days_to_payday);
+
+  // 计算"未来应付"(today ~ cycleEnd)
+  // 信用卡:用 v1.active_cards(本期所有应还)
+  const futureCreditCards = v1.active_cards.reduce((s, ac) => s + ac.amount, 0);
+  // 账单:nextOccurrence >= today 且在 cycleEnd 前
+  let futureBills = 0;
+  for (const bill of bills) {
+    const dueDate = nextOccurrence(today, bill.due_day, config.weekend_shift);
+    if (dueDate >= today && dueDate < cycleEnd) futureBills += bill.amount;
+  }
+  // 订阅:同上
+  let futureSubs = 0;
+  for (const sub of subscriptions) {
+    const dueDate = nextOccurrence(today, sub.billing_day, config.weekend_shift);
+    if (dueDate >= today && dueDate < cycleEnd) futureSubs += sub.amount;
+  }
+  // 投资:daily/weekly/monthly 在 [today, cycleEnd) 累计
+  const futureInv = investments.reduce((s, inv) => {
+    const occ = countInvestmentOccurrences(inv, today, cycleEnd);
+    return s + occ * inv.amount;
+  }, 0);
+
+  const futureExpense = futureCreditCards + futureBills + futureSubs + futureInv;
+  const netAvailable = v1.total_net_cash - futureExpense;
   const dailyBudget = Math.max(0, Math.floor(netAvailable / safeDays));
-  // netFlow 复用同一数值(用于收支图 / UI 展示)
-  const netFlow = netAvailable;
+
+  // netFlow 仍按收入-支出算(整月 totalExpense,用于收支图 / 本期收入明细卡)
+  const netFlow = totalIncome - totalExpense;
 
   return {
     ...v1,
