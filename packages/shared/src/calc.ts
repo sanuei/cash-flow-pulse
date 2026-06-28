@@ -423,6 +423,25 @@ export function detectUnchanged(
 // 辅助
 // ============================================================
 
+/**
+ * 计算"自动快照"所用的 cycle_id 和 offset_index。
+ * offset_index = 当前 cycleDay 所落入的最大已过检查点的索引。
+ * 例：offsets=[0,7,14,21]，cycleDay=10 → offsetIndex=1（offset 7 已过，14 未到）
+ */
+export function getAutoSnapshotParams(
+  today: Date,
+  config: UserConfig,
+): { cycleId: string; offsetIndex: number } {
+  const cycle = getCurrentCycle(today, config.pay_day);
+  const cycleDay = diffDays(cycle.start_date, today);
+  const offsets = config.snapshot_offsets;
+  let offsetIndex = 0;
+  for (let i = 0; i < offsets.length; i++) {
+    if ((offsets[i] ?? 0) <= cycleDay) offsetIndex = i;
+  }
+  return { cycleId: cycle.cycle_id, offsetIndex };
+}
+
 export function defaultConfig(payDay = 10): UserConfig {
   return {
     user_id: 'default',

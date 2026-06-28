@@ -6,6 +6,7 @@
  */
 
 import { create } from 'zustand';
+import { getAutoSnapshotParams } from '@cfp/shared';
 import type {
   CashSource,
   CreditCard,
@@ -211,22 +212,28 @@ export const useStore = create<AppState>((set, get) => ({
   // ===== V1 Actions =====
   async addCash(data) {
     await apiPost('/cash', data);
+    autoSnapshot(get());
   },
   async updateCash(id, data) {
     await apiPut(`/cash/${id}`, data);
+    autoSnapshot(get());
   },
   async deleteCash(id) {
     await apiDelete(`/cash/${id}`);
+    autoSnapshot(get());
   },
 
   async addCard(data) {
     await apiPost('/cards', data);
+    autoSnapshot(get());
   },
   async updateCard(id, data) {
     await apiPut(`/cards/${id}`, data);
+    autoSnapshot(get());
   },
   async deleteCard(id) {
     await apiDelete(`/cards/${id}`);
+    autoSnapshot(get());
   },
 
   async updateConfig(data) {
@@ -240,44 +247,64 @@ export const useStore = create<AppState>((set, get) => ({
   // ===== v0.3 Actions: Investments =====
   async addInvestment(data) {
     await apiPost('/investments', data);
+    autoSnapshot(get());
   },
   async updateInvestment(id, data) {
     await apiPut(`/investments/${id}`, data);
+    autoSnapshot(get());
   },
   async deleteInvestment(id) {
     await apiDelete(`/investments/${id}`);
+    autoSnapshot(get());
   },
 
   // ===== v0.3 Actions: Bills =====
   async addBill(data) {
     await apiPost('/bills', data);
+    autoSnapshot(get());
   },
   async updateBill(id, data) {
     await apiPut(`/bills/${id}`, data);
+    autoSnapshot(get());
   },
   async deleteBill(id) {
     await apiDelete(`/bills/${id}`);
+    autoSnapshot(get());
   },
 
   // ===== v0.3 Actions: Incomes =====
   async addIncome(data) {
     await apiPost('/incomes', data);
+    autoSnapshot(get());
   },
   async updateIncome(id, data) {
     await apiPut(`/incomes/${id}`, data);
+    autoSnapshot(get());
   },
   async deleteIncome(id) {
     await apiDelete(`/incomes/${id}`);
+    autoSnapshot(get());
   },
 
   // ===== v0.3 Actions: Subscriptions =====
   async addSubscription(data) {
     await apiPost('/subscriptions', data);
+    autoSnapshot(get());
   },
   async updateSubscription(id, data) {
     await apiPut(`/subscriptions/${id}`, data);
+    autoSnapshot(get());
   },
   async deleteSubscription(id) {
     await apiDelete(`/subscriptions/${id}`);
+    autoSnapshot(get());
   },
 }));
+
+// 数据变动后静默打快照（fire-and-forget，失败不影响主操作）
+function autoSnapshot(state: { config: UserConfig | null; recordSnapshot: (c: string, o: number, n?: string) => Promise<void> }) {
+  const { config } = state;
+  if (!config) return;
+  const { cycleId, offsetIndex } = getAutoSnapshotParams(new Date(), config);
+  state.recordSnapshot(cycleId, offsetIndex).catch(() => { /* 静默忽略 */ });
+}

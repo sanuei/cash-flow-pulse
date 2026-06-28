@@ -136,7 +136,7 @@ export function EntityRow({
         <div className="text-right shrink-0">{money}</div>
 
         {/* 编辑按钮（始终可见）+ 删除按钮（仅鼠标设备 hover 显示，触屏靠左滑） */}
-        <div className="flex gap-0.5 shrink-0">
+        <div className="flex shrink-0">
           <button
             onClick={onEdit}
             className="
@@ -149,21 +149,6 @@ export function EntityRow({
             aria-label="编辑"
           >
             <Icon name="edit" size={14} strokeWidth={1.75} />
-          </button>
-          {/* 仅在支持 hover 的设备（桌面端）显示删除按钮 */}
-          <button
-            onClick={onDelete}
-            className="
-              hidden [@media(hover:hover)]:inline-flex
-              p-1.5 rounded-[var(--radius-sm)]
-              text-[var(--c-text-muted)] hover:text-[var(--c-warning)]
-              hover:bg-[var(--c-bg-elev)] items-center justify-center
-              transition-all duration-[var(--dur-fast)] ease-[var(--ease-out-expo)]
-              opacity-0 group-hover:opacity-100
-            "
-            aria-label="删除"
-          >
-            <Icon name="close" size={14} strokeWidth={1.75} />
           </button>
         </div>
       </div>
