@@ -217,13 +217,17 @@ export function Overview() {
         </div>
       </section>
 
-      {/* 花费节奏卡 — 时间进度 vs 预算进度（仅本期，且需有快照基线） */}
+      {/* 花费节奏卡 */}
       {isCurrentCycle && !isNewUser && (
         <PaceCard
           timePct={cycleProgress}
           budgetPct={budgetProgress}
           balanceGrew={balanceGrew}
           daysLeft={activeCalc.days_to_payday}
+          cycleSnapshots={snapshots.filter(s => s.cycle_id === activeCalc.cycle_id)}
+          currentNetAvailable={activeCalc.net_available}
+          cycleDay={activeCalc.current_cycle_day}
+          cycleLen={cycleLen}
         />
       )}
 
@@ -477,83 +481,99 @@ export function Overview() {
 // 内部子组件（仅总览页展示用）
 // ============================================================
 
-// ── 花费节奏卡：对比「时间进度」与「预算进度」──
+// ── 花费节奏卡：有快照时显示净可用现金走势折线图，无快照时显示进度条 ──
 function PaceCard({
-  timePct,
-  budgetPct,
-  balanceGrew,
-  daysLeft,
+  timePct, budgetPct, balanceGrew, daysLeft,
+  cycleSnapshots, currentNetAvailable, cycleDay, cycleLen,
 }: {
   timePct: number;
   budgetPct: number | null;
   balanceGrew: boolean;
   daysLeft: number;
+  cycleSnapshots: Snapshot[];
+  currentNetAvailable: number;
+  cycleDay: number;
+  cycleLen: number;
 }) {
+  // 判断是否有足够数据画折线（至少 1 个历史快照）
+  const hasSparkData = cycleSnapshots.length >= 1;
+
+  const ahead = budgetPct !== null && budgetPct <= timePct;
+  const synced = budgetPct !== null && !ahead && budgetPct <= timePct + 12;
+  const verdictLabel = balanceGrew ? '余额增长'
+    : budgetPct === null ? '待记录'
+    : ahead ? '进度健康'
+    : synced ? '基本同步' : '花得偏快';
+  const verdictCls = balanceGrew ? 'text-notion-success bg-[var(--c-success-soft)]'
+    : budgetPct === null ? 'text-notion-text-muted bg-[var(--c-bg-alt)]'
+    : ahead ? 'text-notion-success bg-[var(--c-success-soft)]'
+    : synced ? 'text-notion-text-secondary bg-[var(--c-bg-alt)]'
+    : 'text-notion-warning bg-[var(--c-warning-soft)]';
+
   const titleNode = (
     <div className="flex items-center gap-2">
       <Icon name="gauge" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
-      <span>花费节奏</span>
+      <span>现金走势</span>
     </div>
   );
-
-  // 无快照：引导录入
-  if (budgetPct === null) {
-    return (
-      <Card title={titleNode}>
-        <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
-        <p className="mt-3 text-[12px] text-notion-text-muted leading-relaxed">
-          录入一次本期快照后，这里会对比「时间进度」与「预算进度」，告诉你花得快还是慢。
-        </p>
-      </Card>
-    );
-  }
-
-  // 余额较快照增长（收入到账/存款），显示为"净增"而非 0% 空条
-  if (balanceGrew) {
-    return (
-      <Card
-        title={titleNode}
-        action={<span className="badge text-[10px] px-2 py-0.5 text-notion-success bg-[var(--c-success-soft)]">余额增长</span>}
-      >
-        <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
-        <div className="flex items-center gap-2 mt-2.5">
-          <span className="text-[12px] text-notion-text-muted w-8 flex-shrink-0">预算</span>
-          <div className="flex-1 h-2 rounded-[var(--radius-pill)] bg-[var(--c-bg-alt)] overflow-hidden flex items-center px-2">
-            <span className="text-[10px] text-notion-success font-semibold">↑ 余额较快照时有所增加</span>
-          </div>
-        </div>
-        <p className="mt-3 text-[12px] text-notion-text-secondary leading-relaxed">
-          时间过了 <b className="font-semibold">{timePct}%</b>，但你的净可用余额比记录快照时还高——有收入到账或余额增加，节奏非常好。
-        </p>
-      </Card>
-    );
-  }
-
-  // 正常消费进度
-  const ahead = budgetPct <= timePct;
-  const synced = !ahead && budgetPct <= timePct + 12;
-  const verdict = ahead
-    ? { label: '进度健康', cls: 'text-notion-success bg-[var(--c-success-soft)]',
-        text: <>时间过了 <b className="font-semibold">{timePct}%</b>，预算只用了 <b className="font-semibold">{budgetPct}%</b> — 领先了，可以稍微放松。</> }
-    : synced
-    ? { label: '基本同步', cls: 'text-notion-text-secondary bg-[var(--c-bg-alt)]',
-        text: <>时间 <b className="font-semibold">{timePct}%</b> / 预算已用 <b className="font-semibold">{budgetPct}%</b> — 节奏基本同步。</> }
-    : { label: '花得偏快', cls: 'text-notion-warning bg-[var(--c-warning-soft)]',
-        text: <>时间才过 <b className="font-semibold">{timePct}%</b>，预算已用 <b className="font-semibold">{budgetPct}%</b> — 剩 {daysLeft} 天，注意控制支出。</> };
-  const budgetColor = ahead ? 'var(--c-success)' : synced ? 'var(--c-accent)' : 'var(--c-warning)';
 
   return (
     <Card
       title={titleNode}
-      action={<span className={`badge text-[10px] px-2 py-0.5 ${verdict.cls}`}>{verdict.label}</span>}
+      action={<span className={`badge text-[10px] px-2 py-0.5 ${verdictCls}`}>{verdictLabel}</span>}
     >
-      <div className="space-y-2.5">
-        <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
-        <ProgressBar label="预算" pct={budgetPct} color={budgetColor} />
-      </div>
-      <p className="mt-3 text-[12px] text-notion-text-secondary leading-relaxed">
-        {verdict.text}
-      </p>
+      {hasSparkData ? (
+        /* ── 折线图模式 ── */
+        <div>
+          <div className="flex items-baseline gap-1.5 mb-3">
+            <span className="font-display font-semibold text-[22px] font-numeric text-notion-text">
+              {formatYen(currentNetAvailable)}
+            </span>
+            <span className="text-[12px] text-notion-text-muted">净可用现金</span>
+          </div>
+          <NetSparkline
+            snapshots={cycleSnapshots}
+            currentValue={currentNetAvailable}
+            cycleDay={cycleDay}
+            cycleLen={cycleLen}
+          />
+          <div className="flex items-center justify-between mt-2 text-[11px] text-notion-text-muted">
+            <span>周期第 {cycleDay} 天</span>
+            <span>还剩 {daysLeft} 天</span>
+          </div>
+        </div>
+      ) : (
+        /* ── 进度条回退（无快照） ── */
+        <div>
+          <div className="space-y-2.5">
+            <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
+            {budgetPct !== null && !balanceGrew && (
+              <ProgressBar
+                label="预算"
+                pct={budgetPct}
+                color={ahead ? 'var(--c-success)' : synced ? 'var(--c-accent)' : 'var(--c-warning)'}
+              />
+            )}
+            {balanceGrew && (
+              <div className="flex items-center gap-2.5">
+                <span className="text-[12px] text-notion-text-muted w-8">预算</span>
+                <span className="text-[11px] text-notion-success font-semibold">↑ 余额增长中</span>
+              </div>
+            )}
+          </div>
+          <p className="mt-3 text-[12px] text-notion-text-muted leading-relaxed">
+            {budgetPct === null
+              ? '每次修改数据后会自动记录快照，这里会展示净可用现金的走势曲线。'
+              : balanceGrew
+              ? `时间过了 ${timePct}%，余额比快照时还高 — 节奏非常好。`
+              : ahead
+              ? `时间 ${timePct}%，预算只用了 ${budgetPct}% — 领先了。`
+              : synced
+              ? `时间 ${timePct}% / 预算 ${budgetPct}% — 节奏同步。`
+              : `时间 ${timePct}%，预算已用 ${budgetPct}% — 剩 ${daysLeft} 天注意控制。`}
+          </p>
+        </div>
+      )}
     </Card>
   );
 }
@@ -570,6 +590,110 @@ function ProgressBar({ label, pct, color }: { label: string; pct: number; color:
       </div>
       <span className="text-[12px] font-numeric text-notion-text-secondary w-9 text-right flex-shrink-0">{pct}%</span>
     </div>
+  );
+}
+
+// ── 净可用现金走势 SVG 折线图 ──────────────────────────────────────────────
+function NetSparkline({
+  snapshots, currentValue, cycleDay, cycleLen,
+}: {
+  snapshots: Snapshot[];
+  currentValue: number;
+  cycleDay: number;
+  cycleLen: number;
+}) {
+  const W = 300, H = 80, PAD = 4;
+
+  // 数据点：历史快照 + 当前值
+  const pts: { day: number; val: number }[] = [
+    ...snapshots.map(s => ({
+      day: Math.max(0, cycleDay - Math.max(0,
+        Math.floor((Date.now() - new Date(s.snapshot_date).getTime()) / 86400000)
+      )),
+      val: s.net_available,
+    })),
+    { day: cycleDay, val: currentValue },
+  ].sort((a, b) => a.day - b.day);
+
+  if (pts.length < 2) {
+    // 只有 1 个点时，补一个 day 0 起点
+    const first = pts[0];
+    if (first) pts.unshift({ day: 0, val: first.val });
+  }
+
+  const vals = pts.map(p => p.val);
+  const maxVal = Math.max(...vals, 1);
+  const minVal = Math.min(...vals, 0);
+  const range = maxVal - minVal || 1;
+
+  const toX = (day: number) => PAD + ((day / Math.max(cycleLen, 1)) * (W - PAD * 2));
+  const toY = (val: number) => H - PAD - ((val - minVal) / range) * (H - PAD * 2);
+
+  // 平滑贝塞尔路径
+  const smoothPath = (points: {x:number;y:number}[]) => {
+    if (points.length < 2) return '';
+    const p0 = points[0];
+    if (!p0) return '';
+    let d = `M${p0.x},${p0.y}`;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      if (!prev || !curr) continue;
+      const cx = (prev.x + curr.x) / 2;
+      d += ` C${cx},${prev.y} ${cx},${curr.y} ${curr.x},${curr.y}`;
+    }
+    return d;
+  };
+
+  const xyPts = pts.map(p => ({ x: toX(p.day), y: toY(p.val) }));
+  const linePath = smoothPath(xyPts);
+  const lastPt = xyPts[xyPts.length - 1];
+  const firstPt = xyPts[0];
+  const areaPath = firstPt && lastPt
+    ? `${linePath} L${lastPt.x},${H} L${firstPt.x},${H} Z`
+    : '';
+
+  // 理想参考线（从首点线性降到 0）
+  const idealStartY = toY(pts[0]?.val ?? maxVal);
+  const idealEndY   = toY(0);
+  const idealPath   = `M${toX(pts[0]?.day ?? 0)},${idealStartY} L${toX(cycleLen)},${idealEndY}`;
+
+  return (
+    <svg
+      width="100%" viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      role="img" aria-label="净可用现金走势"
+      style={{ overflow: 'visible' }}
+    >
+      <defs>
+        <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--c-accent)" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="var(--c-accent)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {/* 面积填充 */}
+      {areaPath && <path d={areaPath} fill="url(#sparkGrad)" />}
+      {/* 理想参考虚线 */}
+      <path d={idealPath} stroke="var(--c-text-muted)" strokeWidth="1.5"
+        strokeDasharray="5 4" fill="none" opacity="0.4" />
+      {/* 走势折线 */}
+      <path d={linePath} stroke="var(--c-accent)" strokeWidth="2.5"
+        fill="none" strokeLinejoin="round" strokeLinecap="round" />
+      {/* 各快照节点 */}
+      {xyPts.slice(0, -1).map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r="3"
+          fill="var(--c-bg-elev)" stroke="var(--c-accent)" strokeWidth="1.5" />
+      ))}
+      {/* 当前点（更大，带光晕感） */}
+      {lastPt && (
+        <>
+          <circle cx={lastPt.x} cy={lastPt.y} r="6"
+            fill="var(--c-accent)" opacity="0.2" />
+          <circle cx={lastPt.x} cy={lastPt.y} r="4"
+            fill="var(--c-accent)" stroke="var(--c-bg-elev)" strokeWidth="2" />
+        </>
+      )}
+    </svg>
   );
 }
 

@@ -682,3 +682,43 @@ html[data-theme="violet"] {
   --c-wash-1: color-mix(in oklch, var(--c-accent) 8%, transparent);
   --c-wash-2: color-mix(in oklch, var(--c-accent) 4%, transparent);
 }
+
+/* ── 霓虹绿·暗黑 — 纯黑底 + #D5FF40 霓虹绿，参考赛博金融 UI ─────────────── */
+html[data-theme="neon"] {
+  color-scheme: dark;
+  --c-bg:             oklch(11% 0.012 135);
+  --c-bg-alt:         oklch(15% 0.014 133);
+  --c-bg-elev:        oklch(19% 0.016 131);
+  --c-bg-dark:        oklch(8% 0.008 135);
+  --c-text:           oklch(95% 0.008 130);
+  --c-text-secondary: oklch(70% 0.012 128);
+  --c-text-muted:     oklch(48% 0.01 128);
+  --c-text-on-accent: oklch(12% 0.02 130);
+  --c-border:         oklch(24% 0.022 133);
+  --c-border-strong:  oklch(32% 0.028 132);
+  --c-accent:         oklch(92% 0.27 124);
+  --c-accent-hover:   oklch(96% 0.27 124);
+  --c-accent-soft:    oklch(20% 0.08 130);
+  --c-accent-text:    oklch(92% 0.27 124);
+  --c-success:        oklch(80% 0.2 140);
+  --c-success-soft:   oklch(20% 0.07 140);
+  --c-warning:        oklch(75% 0.18 50);
+  --c-warning-soft:   oklch(22% 0.07 45);
+  --shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.5);
+  --shadow-sm: 0 2px 6px oklch(0% 0 0 / 0.55), 0 1px 2px oklch(0% 0 0 / 0.45);
+  --shadow-md: 0 4px 12px oklch(0% 0 0 / 0.6), 0 2px 4px oklch(0% 0 0 / 0.5);
+  --shadow-lg: 0 12px 32px oklch(0% 0 0 / 0.65), 0 4px 8px oklch(0% 0 0 / 0.5);
+  --shadow-xl: 0 24px 60px oklch(0% 0 0 / 0.75), 0 8px 16px oklch(0% 0 0 / 0.55);
+  --glow-accent: 0 0 20px -2px oklch(92% 0.27 124 / 0.55);
+  /* 玻璃 token：霓虹绿边框点缀 */
+  --c-glass-bg:     color-mix(in srgb, var(--c-bg-elev) 90%, transparent);
+  --c-glass-strong: color-mix(in srgb, var(--c-bg-elev) 96%, transparent);
+  --c-glass-border: oklch(92% 0.27 124 / 0.15);
+  --c-wash-1: oklch(92% 0.27 124 / 0.06);
+  --c-wash-2: oklch(92% 0.27 124 / 0.03);
+}
+html[data-theme="neon"] .hero-gradient {
+  background:
+    radial-gradient(80% 60% at 75% 0%, oklch(92% 0.27 124 / 0.12) 0%, transparent 60%),
+    linear-gradient(180deg, oklch(15% 0.018 133) 0%, oklch(11% 0.012 135) 100%);
+}

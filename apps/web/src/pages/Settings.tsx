@@ -224,6 +224,48 @@ export function Settings() {
         </Card>
       )}
 
+      {/* ── 主题（移至登录设备上方） ── */}
+      <Card title="外观主题">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
+          {THEMES.map((t) => {
+            const isActive = activeTheme === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => { setTheme(t.id); setActiveTheme(t.id); }}
+                className={`
+                  relative flex flex-col items-center gap-2 p-2 sm:p-3 rounded-[var(--radius-lg)]
+                  border-2 transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+                  ${isActive
+                    ? 'border-[var(--c-accent)] shadow-[var(--shadow-md)]'
+                    : 'border-[var(--c-border)] hover:border-[var(--c-border-strong)]'}
+                `}
+                aria-pressed={isActive}
+                title={`${t.label}${t.desc ? ' · ' + t.desc : ''}`}
+              >
+                <span
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-[var(--c-border)] flex-shrink-0 relative overflow-hidden"
+                  style={{ background: t.bg }}
+                >
+                  <span className="absolute bottom-0 right-0 w-5 h-5 rounded-tl-full" style={{ background: t.accent }} />
+                </span>
+                <span className="text-[11px] sm:text-[12px] font-medium text-[var(--c-text-secondary)] leading-tight text-center">
+                  {t.label}
+                </span>
+                {isActive && (
+                  <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[var(--c-accent)] flex items-center justify-center">
+                    <Icon name="check" size={10} strokeWidth={2.5} className="text-[var(--c-text-on-accent)]" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs text-[var(--c-text-muted)]">
+          主题立即生效并持久保存。深色主题不跟随系统模式；霓虹绿为强制暗黑。
+        </p>
+      </Card>
+
       {/* ── 2. 登录设备 ── */}
       <Card title="登录设备">
         <p className="text-sm text-notion-text-secondary mb-4">
@@ -270,53 +312,6 @@ export function Settings() {
             })}
           </ul>
         )}
-      </Card>
-
-      {/* ── 主题 ── */}
-      <Card title="外观主题">
-        <div className="grid grid-cols-5 gap-2 sm:gap-3">
-          {THEMES.map((t) => {
-            const isActive = activeTheme === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => { setTheme(t.id); setActiveTheme(t.id); }}
-                className={`
-                  relative flex flex-col items-center gap-2 p-2 sm:p-3 rounded-[var(--radius-lg)]
-                  border-2 transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
-                  ${isActive
-                    ? 'border-[var(--c-accent)] shadow-[var(--shadow-md)]'
-                    : 'border-[var(--c-border)] hover:border-[var(--c-border-strong)]'}
-                `}
-                aria-pressed={isActive}
-                title={`${t.label}${t.desc ? ' · ' + t.desc : ''}`}
-              >
-                {/* 色盘预览 */}
-                <span
-                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-[var(--c-border)] flex-shrink-0 relative overflow-hidden"
-                  style={{ background: t.bg }}
-                >
-                  <span
-                    className="absolute bottom-0 right-0 w-5 h-5 rounded-tl-full"
-                    style={{ background: t.accent }}
-                  />
-                </span>
-                <span className="text-[11px] sm:text-[12px] font-medium text-[var(--c-text-secondary)] leading-tight text-center">
-                  {t.label}
-                </span>
-                {/* 选中勾 */}
-                {isActive && (
-                  <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[var(--c-accent)] flex items-center justify-center">
-                    <Icon name="check" size={10} strokeWidth={2.5} className="text-[var(--c-text-on-accent)]" />
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <p className="mt-3 text-xs text-[var(--c-text-muted)]">
-          主题立即生效并持久保存，不受系统深色模式影响（炭墨主题除外，它是强制深色）。
-        </p>
       </Card>
 
       {/* ── 3. 发薪日 ── */}
