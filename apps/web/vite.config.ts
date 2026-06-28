@@ -12,6 +12,11 @@ export default defineConfig({
       workbox: {
         // 缓存 app shell（HTML/CSS/JS）
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        // ⚠️ 关键：SPA 导航 fallback 默认会把所有导航请求返回 index.html，
+        // 包括 window.location.href='/api/auth/google' 这种跳转 → 登录请求被 SW 拦截、
+        // 永远到不了 Worker，于是又回登录页（反复出现的登录失败根因）。
+        // denylist 让 /api/* 的导航绕过 SW，直接走网络到 Worker。
+        navigateFallbackDenylist: [/^\/api\//],
         // 运行时缓存：API 请求（网络优先，失败时用缓存）
         runtimeCaching: [
           {
