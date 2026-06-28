@@ -399,6 +399,15 @@ body {
   .anim-scale-in  { animation: scale-in var(--dur-medium) var(--ease-out-expo) both; }
   .anim-slide-up  { animation: slide-up var(--dur-slow) var(--ease-out-expo) both; }
 
+  /* PWA 安全区: main 内容底部留出 bottom-nav 高度,避免被 fixed nav 遮住
+     桌面端 (sm:) 不需要 nav,直接 0 */
+  .pb-safe-nav {
+    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 640px) {
+    .pb-safe-nav { padding-bottom: 0; }
+  }
+
   /* Stagger — 用 CSS 自定义属性控制延迟（避免每行一个 inline style） */
   .stagger > *  { animation: fade-up var(--dur-medium) var(--ease-out-expo) both; }
   .stagger > *:nth-child(1) { animation-delay: 0ms; }

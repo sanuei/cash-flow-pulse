@@ -78,7 +78,8 @@ function App() {
 
   return (
     // 100dvh 钉死外层 + overflow-hidden: iOS 橡皮筋只发生在最外层,内层 main 独立滚动就不会露出 body 背景
-    <div className="h-[100dvh] flex flex-col bg-notion-bg overflow-hidden">
+    // bg 放在 main 上: 容器透明,body 背景的 radial-gradient 色晕可以透出,让整体视觉更通透
+    <div className="h-[100dvh] flex flex-col overflow-hidden">
       {/* 顶栏（桌面端：6 项文字 Tab） — 玻璃模糊背景 */}
       <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border glass fixed top-0 inset-x-0 z-30">
         <div className="flex items-center gap-2">
@@ -142,12 +143,14 @@ function App() {
         </div>
       </header>
 
-      {/* 内容 — 路由切换时 fade-in;pt/pb 给 fixed 头尾留位;overflow-y-auto 让 main 自己滚 */}
+      {/* 内容 — 路由切换时 fade-in;pt/pb 给 fixed 头尾留位;overflow-y-auto 让 main 自己滚
+          mobile 端 pt/pb 用 calc 包含 safe-area,跟 header/nav 实际高度对齐 */}
       <main
         key={useLocation().pathname}
         className={`
           flex-1 overflow-y-auto overscroll-contain
-          pt-14 sm:pt-14
+          bg-notion-bg
+          pt-[calc(3.5rem+env(safe-area-inset-top))] sm:pt-14
           pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-0
           ${loading ? 'opacity-60' : ''}
           transition-opacity duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
