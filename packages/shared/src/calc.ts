@@ -548,13 +548,16 @@ export function countInvestmentOccurrences(
  *
  * 不限制搜索范围，调用方决定看多远
  */
-function nextOccurrence(today: Date, day: number): Date {
-  // 当月
-  const thisMonth = getPaydayInMonth(today.getFullYear(), today.getMonth(), day);
+function nextOccurrence(today: Date, day: number, weekendShift = false): Date {
+  // 关键：顺延必须在"是否已过期"判断之前做。
+  // 否则 6/27(周六) 会被判为"已过"跳到下月，而它本该顺延到 6/29(仍未到)。
+  const shift = (d: Date) => (weekendShift ? shiftToWorkday(d) : d);
+  // 当月（顺延后）
+  const thisMonth = shift(getPaydayInMonth(today.getFullYear(), today.getMonth(), day));
   if (thisMonth >= today) return thisMonth;
-  // 下月
+  // 下月（顺延后）
   const nextMonthDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  return getPaydayInMonth(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), day);
+  return shift(getPaydayInMonth(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), day));
 }
 
 /**
@@ -562,9 +565,10 @@ function nextOccurrence(today: Date, day: number): Date {
  */
 export function getBillNextDueDate(
   bill: Pick<RecurringBill, 'due_day'>,
-  today: Date
+  today: Date,
+  weekendShift = false
 ): Date {
-  return nextOccurrence(today, bill.due_day);
+  return nextOccurrence(today, bill.due_day, weekendShift);
 }
 
 /**
@@ -572,9 +576,10 @@ export function getBillNextDueDate(
  */
 export function getSubscriptionNextDueDate(
   sub: Pick<Subscription, 'billing_day'>,
-  today: Date
+  today: Date,
+  weekendShift = false
 ): Date {
-  return nextOccurrence(today, sub.billing_day);
+  return nextOccurrence(today, sub.billing_day, weekendShift);
 }
 
 /**
@@ -764,10 +769,8 @@ export function computeDashboardV2(
   const billItems: UpcomingExpenseItem[] = [];
   let totalBills = 0;
   for (const bill of bills) {
-    // 找下一次扣款日（用 nextOccurrence，跳过严格匹配）
-    const rawDue = nextOccurrence(today, bill.due_day);
-    // 周末顺延（开启时）：影响展示日期与本期归属判断
-    const dueDate = config.weekend_shift ? shiftToWorkday(rawDue) : rawDue;
+    // 找下一次扣款日（顺延在 nextOccurrence 内部、过期判断之前处理）
+    const dueDate = nextOccurrence(today, bill.due_day, config.weekend_shift);
     // 判断是否在本期内（用于 net_flow 计算）
     const inCycle = dueDate >= cycleStart && dueDate < cycleEnd;
     if (inCycle) {
@@ -795,8 +798,7 @@ export function computeDashboardV2(
   const subscriptionItems: UpcomingExpenseItem[] = [];
   let totalSubs = 0;
   for (const sub of subscriptions) {
-    const rawDue = nextOccurrence(today, sub.billing_day);
-    const dueDate = config.weekend_shift ? shiftToWorkday(rawDue) : rawDue;
+    const dueDate = nextOccurrence(today, sub.billing_day, config.weekend_shift);
     const inCycle = dueDate >= cycleStart && dueDate < cycleEnd;
     if (inCycle) {
       totalSubs += sub.amount;

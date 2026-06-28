@@ -22,6 +22,7 @@ import {
   sumIncomeInCycle,
   computeDashboardV2,
   shiftToWorkday,
+  getBillNextDueDate,
 } from './calc.js';
 import type { CashSource, CreditCard, UserConfig, Snapshot } from './types.js';
 
@@ -103,6 +104,14 @@ describe('周末顺延 shiftToWorkday', () => {
     expect(formatDate(shiftToWorkday(parseDate('2026-06-29')))).toBe('2026-06-29');
     // 2026-06-26 是周五
     expect(formatDate(shiftToWorkday(parseDate('2026-06-26')))).toBe('2026-06-26');
+  });
+
+  it('回归：顺延必须在「是否已过期」判断之前（6/28 看扣款日27，应显示本月顺延后的6/29，而非跳到下月7/27）', () => {
+    const today = parseDate('2026-06-28'); // 周日
+    // 关闭顺延：6/27 已过 → 跳到 7/27
+    expect(formatDate(getBillNextDueDate({ due_day: 27 }, today, false))).toBe('2026-07-27');
+    // 开启顺延：6/27(周六) 顺延到 6/29(周一)，仍未到 → 本月 6/29
+    expect(formatDate(getBillNextDueDate({ due_day: 27 }, today, true))).toBe('2026-06-29');
   });
 });
 

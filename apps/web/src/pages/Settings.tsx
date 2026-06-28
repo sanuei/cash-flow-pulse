@@ -368,13 +368,13 @@ export function Settings() {
             aria-label="周末顺延至工作日"
             onClick={handleToggleWeekendShift}
             disabled={shiftSaving}
-            className={`relative flex-shrink-0 w-12 h-7 rounded-[var(--radius-pill)] transition-colors duration-[var(--dur-base)] ${
-              weekendShift ? 'bg-[var(--c-accent)]' : 'bg-[var(--c-bg-alt)] border border-[var(--c-border-strong)]'
+            className={`relative flex-shrink-0 box-border w-11 h-6 rounded-[var(--radius-pill)] transition-colors duration-[var(--dur-base)] ${
+              weekendShift ? 'bg-[var(--c-accent)]' : 'bg-[var(--c-border-strong)]'
             } ${shiftSaving ? 'opacity-60' : ''}`}
           >
             <span
-              className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-[var(--shadow-sm)] transition-transform duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
-                weekendShift ? 'translate-x-6' : 'translate-x-1'
+              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-[var(--shadow-sm)] transition-transform duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+                weekendShift ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
           </button>
