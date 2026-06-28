@@ -168,13 +168,12 @@ html {
 }
 
 body {
-  /* 单色背景色晕：仅用当前主题强调色（一种色相），给磨砂玻璃提供折射源。
-     fixed 不随滚动移动，整页统一氛围。 */
+  /* 单色背景色晕：仅用当前主题强调色一种色相给磨砂玻璃提供折射源。
+     不用 fixed（iOS PWA 锁 body scroll 时 fixed 会跳位） */
   background:
     radial-gradient(62% 48% at 88% 0%, var(--c-wash-1, transparent) 0%, transparent 70%),
     radial-gradient(54% 42% at 0% 100%, var(--c-wash-2, transparent) 0%, transparent 72%),
     var(--c-bg);
-  background-attachment: fixed;
   color: var(--c-text);
   margin: 0;
   font-size: 15px;
@@ -672,13 +671,13 @@ html[data-theme="green"] {
   --c-glass-border: rgba(255, 255, 255, 0.70);
 }
 
-/* 深色两主题：深色玻璃 + 低透明白边 */
+/* 深色两主题：高不透明度玻璃（减少橙色晕穿透），色晕极克制 */
 html[data-theme="dark"],
 html[data-theme="violet"] {
-  --c-glass-bg:     color-mix(in srgb, var(--c-bg-elev) 55%, transparent);
-  --c-glass-strong: color-mix(in srgb, var(--c-bg-elev) 72%, transparent);
-  --c-glass-border: rgba(255, 255, 255, 0.10);
-  /* 深色下色晕更克制 */
-  --c-wash-1: color-mix(in oklch, var(--c-accent) 20%, transparent);
-  --c-wash-2: color-mix(in oklch, var(--c-accent) 10%, transparent);
+  --c-glass-bg:     color-mix(in srgb, var(--c-bg-elev) 88%, transparent);
+  --c-glass-strong: color-mix(in srgb, var(--c-bg-elev) 94%, transparent);
+  --c-glass-border: rgba(255, 255, 255, 0.08);
+  /* 深色下色晕极弱，避免橙/金色晕穿透深色玻璃 */
+  --c-wash-1: color-mix(in oklch, var(--c-accent) 8%, transparent);
+  --c-wash-2: color-mix(in oklch, var(--c-accent) 4%, transparent);
 }
