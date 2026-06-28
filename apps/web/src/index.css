@@ -50,6 +50,7 @@
   --font-display: 'Fraunces', 'Iowan Old Style', 'Charter', Georgia, 'Songti SC', 'PingFang SC', serif;
   --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-logo:    'Space Grotesk', 'Inter', system-ui, sans-serif;
 
   /* === 节奏 (8pt grid) === */
   --space-0: 0;

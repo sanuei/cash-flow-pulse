@@ -92,9 +92,15 @@ export function Overview() {
 
   // 投资 / 消费（消费 = 信用卡+账单+订阅，不含投资）
   const totalInvestment = upcomingExpenses?.total_investments ?? 0;
-  const totalConsume = (upcomingExpenses?.total_credit_card ?? 0)
-    + (upcomingExpenses?.total_bills ?? 0)
-    + (upcomingExpenses?.total_subscriptions ?? 0);
+  const totalBills = upcomingExpenses?.total_bills ?? 0;
+  const totalSubs  = upcomingExpenses?.total_subscriptions ?? 0;
+  const totalConsume = (upcomingExpenses?.total_credit_card ?? 0) + totalBills + totalSubs;
+
+  // 本期净流入（有收入时）/ 账户真实结余（无收入时）
+  // 无收入时：net_available 已扣信用卡，再扣账单+订阅+投资 = 现金真实剩余
+  const netFlow = totalIncome > 0
+    ? totalIncome - totalConsume - totalInvestment
+    : activeCalc.net_available - totalBills - totalSubs - totalInvestment;
 
   // 新用户引导：本期且所有数字为 0
   const isNewUser = isCurrentCycle
@@ -109,8 +115,7 @@ export function Overview() {
     ? Math.min(100, Math.max(0, Math.round((activeCalc.current_cycle_day / cycleLen) * 100)))
     : 0;
 
-  // 本期净流入（纯流量：本期收入 − 消费 − 投资，不含已有存款）— 环形图与「诚实结余」用
-  const netFlow = totalIncome - totalConsume - totalInvestment;
+  // (netFlow 已在上方统一计算)
 
   // ── 花费节奏（仅本期）：对比「时间进度」与「预算进度」──
   const snapshots = isCurrentCycle ? storeSnapshots : (cycleCalc?.currentSnapshots ?? []);
@@ -228,20 +233,22 @@ export function Overview() {
           title={
             <div className="flex items-center gap-2">
               <Icon name="pie" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
-              <span>{totalIncome > 0 ? '本期收入去向' : '本期支出分布'}</span>
+              <span>{totalIncome > 0 ? '本期收入去向' : netFlow > 0 ? '账户分配概览' : '本期支出分布'}</span>
             </div>
           }
         >
           <FlowChartRow
-            income={totalIncome}
             consume={totalConsume}
             invest={totalInvestment}
             netFlow={netFlow}
+            hasIncome={totalIncome > 0}
           />
           <div className="mt-3 pt-3 border-t border-[var(--c-border)] text-[11px] text-notion-text-muted leading-relaxed">
             {totalIncome > 0
-              ? '净流入 = 本期收入 − 消费 − 投资（不含账户已有存款）'
-              : '本期暂无周期性收入到账，仅显示支出比例分布'}
+              ? '结余 = 本期收入 − 消费 − 投资'
+              : netFlow > 0
+              ? '结余 = 净可用现金 − 账单 − 订阅 − 投资（信用卡已在净可用中扣除）'
+              : '本期暂无收入到账；在「收入」页录入后可查看结余'}
           </div>
         </Card>
       )}
@@ -672,24 +679,22 @@ function IncomeRow({ item }: { item: UpcomingIncomeItem }) {
 type DonutSeg = { value: number; color: string; label: string };
 
 function FlowChartRow({
-  income, consume, invest, netFlow,
-}: { income: number; consume: number; invest: number; netFlow: number }) {
-  const hasIncome = income > 0;
-  // 有收入时：超支 = 净流入为负；无收入时：纯支出分布，不存在"超支"概念
+  consume, invest, netFlow, hasIncome,
+}: { consume: number; invest: number; netFlow: number; hasIncome: boolean }) {
+  // 超支：只有有收入且入不敷出时才算"超支"；无收入时只是"现金不够覆盖账单"
   const overspend = hasIncome && netFlow < 0;
 
   const segments: DonutSeg[] = [
-    { value: consume, color: 'var(--c-accent)',      label: '消费' },
-    { value: invest,  color: 'var(--c-text-muted)',  label: '投资' },
-    ...(hasIncome && netFlow > 0 ? [{ value: netFlow, color: 'var(--c-success)', label: '净流入' }] : []),
+    { value: consume, color: 'var(--c-accent)',     label: '消费' },
+    { value: invest,  color: 'var(--c-text-muted)', label: '投资' },
+    ...(netFlow > 0 ? [{ value: netFlow, color: 'var(--c-success)', label: '结余' }] : []),
   ].filter(s => s.value > 0);
 
   const total = segments.reduce((s, x) => s + x.value, 0);
   if (total <= 0) return null;
 
-  // 中心标签：有收入显示收入额，无收入显示支出总额
-  const centerLabel = hasIncome ? '本期收入' : '本期支出';
-  const centerValue = hasIncome ? income : total;
+  const centerLabel = hasIncome ? '本期收入' : netFlow > 0 ? '现金分配' : '本期支出';
+  const centerValue = total;
 
   return (
     <div className="flex items-center gap-4">
@@ -697,7 +702,7 @@ function FlowChartRow({
       <div className="flex-1 min-w-0 space-y-1.5">
         {segments.map((seg) => {
           const pct = Math.round((seg.value / total) * 100);
-          const isNet = seg.label === '净流入';
+          const isNet = seg.label === '结余';
           return (
             <div key={seg.label} className="flex items-center gap-2 text-[12px]">
               <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: seg.color }} />

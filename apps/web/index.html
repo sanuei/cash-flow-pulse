@@ -5,71 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!-- ══════════════════════════════════════
-         基础 SEO
+         SEO — Primary
     ══════════════════════════════════════ -->
-    <title>现金流 — 个人现金流 · 收入投资消费追踪</title>
+    <title>Cashflow — 个人收支追踪 · 日均预算 · 收入投资消费管理</title>
     <meta name="description"
-          content="可视化管理个人现金流：追踪收入、投资与消费，计算日均可用预算，掌握每月结余。基于 Google 账号登录，数据私有存储在 Cloudflare。" />
+          content="Cashflow 帮你可视化个人现金流：追踪收入、投资与消费，自动计算日均可用预算，掌握每月真实结余。支持 Google 账号登录，数据私有存储在 Cloudflare。" />
     <meta name="keywords"
-          content="现金流,日均预算,个人理财,收入追踪,投资管理,消费分析,cash flow,personal finance" />
-    <meta name="author" content="现金流" />
+          content="cashflow,现金流,日均预算,个人理财,收入追踪,投资管理,消费分析,cash flow,personal finance,budget tracker,家計簿" />
+    <meta name="author" content="Cashflow" />
+    <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://cashflow.soniclab.cc/" />
 
     <!-- ══════════════════════════════════════
-         Open Graph（微信 / LINE / Slack 分享预览）
+         Open Graph
     ══════════════════════════════════════ -->
     <meta property="og:type"        content="website" />
     <meta property="og:url"         content="https://cashflow.soniclab.cc/" />
-    <meta property="og:site_name"   content="现金流" />
-    <meta property="og:title"       content="现金流 — 个人现金流追踪" />
-    <meta property="og:description" content="可视化收入、投资与消费，计算日均可用预算。Google 账号登录，数据完全私有。" />
+    <meta property="og:site_name"   content="Cashflow" />
+    <meta property="og:title"       content="Cashflow — 个人收支追踪与日均预算" />
+    <meta property="og:description" content="可视化收入、投资与消费，自动计算日均可用预算。Google 账号登录，数据完全私有。" />
     <meta property="og:image"       content="https://cashflow.soniclab.cc/og-image.svg" />
     <meta property="og:image:width"  content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt"   content="现金流 应用预览图" />
+    <meta property="og:image:alt"   content="Cashflow 应用预览" />
     <meta property="og:locale"      content="zh_CN" />
 
     <!-- ══════════════════════════════════════
          Twitter / X Card
     ══════════════════════════════════════ -->
     <meta name="twitter:card"        content="summary_large_image" />
-    <meta name="twitter:title"       content="现金流 — 个人现金流追踪" />
-    <meta name="twitter:description" content="可视化收入、投资与消费，计算日均可用预算。Google 账号登录，数据完全私有。" />
+    <meta name="twitter:title"       content="Cashflow — 个人收支追踪与日均预算" />
+    <meta name="twitter:description" content="可视化收入、投资与消费，自动计算日均可用预算。Google 账号登录，数据完全私有。" />
     <meta name="twitter:image"       content="https://cashflow.soniclab.cc/og-image.svg" />
 
     <!-- ══════════════════════════════════════
          PWA / 安装到桌面
     ══════════════════════════════════════ -->
     <link rel="manifest" href="/manifest.json" />
-
-    <!-- Android / Chrome 主题色 -->
-    <meta name="theme-color" content="#E8643C" />
-
-    <!-- iOS Safari：全屏独立运行 -->
+    <meta name="theme-color" content="#C0502F" />
     <meta name="apple-mobile-web-app-capable"          content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title"            content="现金流" />
-
-    <!-- iOS 桌面图标 -->
+    <meta name="apple-mobile-web-app-title"            content="Cashflow" />
     <link rel="apple-touch-icon"             href="/icon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icon.svg" />
-    <link rel="apple-touch-icon" sizes="167x167" href="/icon.svg" />
-    <link rel="apple-touch-icon" sizes="152x152" href="/icon.svg" />
-
-    <!-- 通用 favicon -->
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
 
     <!-- ══════════════════════════════════════
-         JSON-LD 结构化数据（Google 富搜索结果）
+         JSON-LD 结构化数据
     ══════════════════════════════════════ -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
-      "name": "现金流",
-      "alternateName": "Cash Flow Pulse",
+      "name": "Cashflow",
+      "alternateName": ["现金流", "キャッシュフロー"],
       "url": "https://cashflow.soniclab.cc",
-      "description": "个人现金流可视化工具，追踪收入、投资与消费，计算日均可用预算",
+      "description": "Personal cash flow tracker — visualize income, investments and expenses, calculate daily available budget",
       "applicationCategory": "FinanceApplication",
       "operatingSystem": "Web, iOS, Android",
       "offers": {
@@ -77,30 +68,30 @@
         "price": "0",
         "priceCurrency": "JPY"
       },
-      "inLanguage": "zh-CN",
+      "inLanguage": ["zh-CN", "ja"],
       "author": {
         "@type": "Person",
         "name": "sanuei"
       },
       "featureList": [
-        "收入管理",
-        "投资追踪",
-        "消费分析",
-        "日均预算计算",
-        "周期切换查看历史",
-        "趋势曲线图表",
-        "PWA 支持安装到桌面"
+        "Income tracking",
+        "Investment management",
+        "Expense analysis",
+        "Daily budget calculation",
+        "Cash flow trends",
+        "PWA offline support",
+        "Multi-theme UI"
       ]
     }
     </script>
 
     <!-- ══════════════════════════════════════
-         字体
+         字体：Space Grotesk（Logo 用）+ Fraunces + Inter
     ══════════════════════════════════════ -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Fraunces:opsz,wght,SOFT@9..144,300..700,0..100&family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>

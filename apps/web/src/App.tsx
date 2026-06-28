@@ -80,11 +80,13 @@ function App() {
     <div className="min-h-screen flex flex-col bg-notion-bg">
       {/* 顶栏（桌面端：6 项文字 Tab） — 玻璃模糊背景 */}
       <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border glass sticky top-0 z-30">
-        <div className="flex items-center gap-2 font-semibold text-notion-text tracking-tight-section">
+        <div className="flex items-center gap-2">
           <span className="inline-flex items-center justify-center w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)]">
             <Icon name="wallet" size={15} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
           </span>
-          <span>现金流</span>
+          <span style={{ fontFamily: 'var(--font-logo)', fontWeight: 700, fontSize: '17px', letterSpacing: '-0.02em', color: 'var(--c-text)' }}>
+            cash<span style={{ color: 'var(--c-accent)' }}>flow</span>
+          </span>
         </div>
         <nav className="flex items-center gap-1">
           <NavTab to="/">总览</NavTab>
@@ -104,11 +106,13 @@ function App() {
           height: 'calc(3rem + env(safe-area-inset-top))',
         }}
       >
-        <div className="flex items-center gap-2 font-semibold text-notion-text text-[14px] tracking-tight-section">
+        <div className="flex items-center gap-2">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)]">
             <Icon name="wallet" size={13} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
           </span>
-          <span>现金流</span>
+          <span style={{ fontFamily: 'var(--font-logo)', fontWeight: 700, fontSize: '15px', letterSpacing: '-0.02em', color: 'var(--c-text)' }}>
+            cash<span style={{ color: 'var(--c-accent)' }}>flow</span>
+          </span>
         </div>
         <div className="flex items-center gap-1">
           <NavLink

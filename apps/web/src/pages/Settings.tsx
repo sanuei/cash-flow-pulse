@@ -479,7 +479,7 @@ export function Settings() {
 
       {/* ── 页脚版本信息 ── */}
       <div className="text-center text-xs text-notion-text-muted pb-4 space-y-1">
-        <div>现金流 {APP_VERSION} · Cloudflare Pages + Workers + D1</div>
+        <div>Cashflow {APP_VERSION} · Cloudflare Pages + Workers + D1</div>
         <div>数据仅存储在你的 Cloudflare 账户，完全私有</div>
       </div>
     </div>

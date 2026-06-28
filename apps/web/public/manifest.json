@@ -1,11 +1,11 @@
 {
-  "name": "现金流",
-  "short_name": "现金流",
-  "description": "个人现金流可视化 · 收入投资消费追踪 · 日均预算",
+  "name": "Cashflow",
+  "short_name": "Cashflow",
+  "description": "Personal cash flow tracker — income, investment, expenses, daily budget",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FBF7F2",
-  "theme_color": "#E8643C",
+  "background_color": "#F3EEE7",
+  "theme_color": "#C0502F",
   "lang": "zh-CN",
   "orientation": "portrait-primary",
   "categories": ["finance"],
@@ -29,7 +29,7 @@
       "sizes": "1200x630",
       "type": "image/svg+xml",
       "form_factor": "wide",
-      "label": "现金流 概览"
+      "label": "Cashflow overview"
     }
   ]
 }
