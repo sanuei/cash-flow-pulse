@@ -15,6 +15,7 @@ export function Money({
   size = 'md',
   className = '',
   sign,
+  color = 'default',
   animate = false,
   durationMs = 640,
 }: {
@@ -22,6 +23,12 @@ export function Money({
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'hero';
   className?: string;
   sign?: 'positive' | 'negative' | 'neutral';
+  /**
+   * 数字颜色：
+   *   - default: 跟随 sign 或墨色（兼容旧调用）
+   *   - accent:  主题色渐变（accent → accent-hover, 135deg），用于 hero 等"需要点亮"的场景
+   */
+  color?: 'default' | 'accent';
   /** 是否启用 count-up 翻动动画（默认关闭，避免每次渲染都触发） */
   animate?: boolean;
   durationMs?: number;
@@ -39,16 +46,29 @@ export function Money({
     hero: 'text-[44px] sm:text-[56px] leading-[1.05] tracking-tight-display',
   }[size];
 
-  const colorClass =
+  const signColorClass =
     sign === 'positive'
       ? 'text-notion-success'
       : sign === 'negative'
       ? 'text-notion-warning'
       : 'text-notion-text';
 
+  // accent 渐变：背景剪切文字,只显示字形的渐变填充
+  // -webkit-text-fill-color: transparent 配合 background-clip 才能让字形透出
+  const accentStyle: React.CSSProperties = color === 'accent'
+    ? {
+        backgroundImage: 'linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent-hover) 100%)',
+        WebkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        color: 'transparent',
+      }
+    : {};
+
   return (
     <span
-      className={`font-numeric font-semibold tabular-nums ${sizeClass} ${colorClass} ${className}`}
+      className={`font-numeric font-semibold tabular-nums ${sizeClass} ${color === 'accent' ? '' : signColorClass} ${className}`}
+      style={accentStyle}
     >
       {formatYen(shown)}
     </span>
