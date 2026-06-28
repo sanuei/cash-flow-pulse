@@ -452,172 +452,178 @@ input[type='number'] {
       （html[data-theme] specificity 0-1-1 > :root 0-1-0，覆盖 @media dark）
    ─────────────────────────────────────────────────────────────────────────── */
 
-/* ── 暖橙（默认 / 显式恢复亮色） ──────────────────────────────────────────── */
+/* ============================================================================
+   配色哲学（v1.3 参考编辑/复古品牌设计重调）：
+   暖奶油 / 灰米底色 + 克制有质感的强调色（降饱和，去霓虹）。
+   亮色三主题共享暖米底，仅换强调色相；深色两主题：炭墨 + 午夜蓝（深蓝底+奶油金）。
+   ============================================================================ */
+
+/* ── 奶油橙（默认）— 暖灰米底 + 番茄珊瑚 ─────────────────────────────────── */
 html[data-theme="warm"] {
   color-scheme: light;
-  --c-bg:             oklch(97.5% 0.012 75);
-  --c-bg-alt:         oklch(95.5% 0.016 70);
-  --c-bg-elev:        oklch(100% 0 0);
-  --c-bg-dark:        oklch(22% 0.014 55);
-  --c-text:           oklch(22% 0.014 50);
-  --c-text-secondary: oklch(47% 0.014 50);
-  --c-text-muted:     oklch(67% 0.012 58);
-  --c-text-on-accent: oklch(99% 0.005 80);
-  --c-border:         oklch(90% 0.014 65);
-  --c-border-strong:  oklch(82% 0.016 60);
-  --c-accent:         oklch(64% 0.165 42);
-  --c-accent-hover:   oklch(58% 0.175 40);
-  --c-accent-soft:    oklch(94% 0.035 50);
-  --c-accent-text:    oklch(55% 0.175 42);
-  --c-success:        oklch(53% 0.14 152);
-  --c-success-soft:   oklch(95% 0.038 152);
-  --c-warning:        oklch(55% 0.18 32);
-  --c-warning-soft:   oklch(95% 0.045 38);
-  --shadow-xs: 0 1px 2px oklch(45% 0.1 45 / 0.06);
-  --shadow-sm: 0 2px 8px oklch(45% 0.1 45 / 0.08), 0 1px 2px oklch(45% 0.1 45 / 0.05);
-  --shadow-md: 0 6px 16px oklch(45% 0.1 45 / 0.1), 0 2px 4px oklch(45% 0.1 45 / 0.06);
-  --shadow-lg: 0 14px 34px oklch(45% 0.1 45 / 0.14), 0 4px 8px oklch(45% 0.1 45 / 0.07);
-  --shadow-xl: 0 24px 60px oklch(45% 0.1 45 / 0.2), 0 8px 16px oklch(45% 0.1 45 / 0.1);
-  --glow-accent: 0 8px 20px -6px oklch(64% 0.165 42 / 0.5);
+  --c-bg:             oklch(96% 0.014 83);
+  --c-bg-alt:         oklch(92.5% 0.02 80);
+  --c-bg-elev:        oklch(99% 0.006 85);
+  --c-bg-dark:        oklch(24% 0.014 55);
+  --c-text:           oklch(24% 0.014 50);
+  --c-text-secondary: oklch(46% 0.013 52);
+  --c-text-muted:     oklch(64% 0.011 56);
+  --c-text-on-accent: oklch(98% 0.008 80);
+  --c-border:         oklch(89% 0.016 72);
+  --c-border-strong:  oklch(81% 0.018 66);
+  --c-accent:         oklch(60% 0.155 40);
+  --c-accent-hover:   oklch(54% 0.16 38);
+  --c-accent-soft:    oklch(92.5% 0.04 48);
+  --c-accent-text:    oklch(52% 0.155 40);
+  --c-success:        oklch(52% 0.12 150);
+  --c-success-soft:   oklch(93.5% 0.038 150);
+  --c-warning:        oklch(54% 0.155 32);
+  --c-warning-soft:   oklch(93.5% 0.045 36);
+  --shadow-xs: 0 1px 2px oklch(45% 0.08 45 / 0.06);
+  --shadow-sm: 0 2px 8px oklch(45% 0.08 45 / 0.07), 0 1px 2px oklch(45% 0.08 45 / 0.05);
+  --shadow-md: 0 6px 16px oklch(45% 0.08 45 / 0.09), 0 2px 4px oklch(45% 0.08 45 / 0.05);
+  --shadow-lg: 0 14px 34px oklch(45% 0.08 45 / 0.12), 0 4px 8px oklch(45% 0.08 45 / 0.06);
+  --shadow-xl: 0 24px 60px oklch(45% 0.08 45 / 0.18), 0 8px 16px oklch(45% 0.08 45 / 0.09);
+  --glow-accent: 0 8px 20px -6px oklch(60% 0.155 40 / 0.42);
 }
 html[data-theme="warm"] .hero-gradient {
   background:
-    radial-gradient(120% 130% at 82% 6%, oklch(78% 0.14 58) 0%, transparent 52%),
-    linear-gradient(140deg, oklch(69% 0.17 47) 0%, oklch(61% 0.185 40) 52%, oklch(53% 0.175 33) 100%);
+    radial-gradient(120% 130% at 82% 6%, oklch(72% 0.12 55) 0%, transparent 54%),
+    linear-gradient(140deg, oklch(64% 0.15 46) 0%, oklch(57% 0.16 38) 52%, oklch(49% 0.15 32) 100%);
 }
 
-/* ── 纯白·苹果风 ─────────────────────────────────────────────────────────── */
+/* ── 皇家蓝 — 暖米底 + 沉静皇家蓝（Brand FWD / Cambí 风） ─────────────────── */
 html[data-theme="white"] {
   color-scheme: light;
-  --c-bg:             oklch(99.5% 0.002 260);
-  --c-bg-alt:         oklch(97% 0.004 260);
-  --c-bg-elev:        oklch(100% 0 0);
-  --c-bg-dark:        oklch(15% 0.005 260);
-  --c-text:           oklch(15% 0.005 260);
-  --c-text-secondary: oklch(45% 0.01 260);
-  --c-text-muted:     oklch(65% 0.008 260);
-  --c-text-on-accent: oklch(99% 0.005 260);
-  --c-border:         oklch(92% 0.006 260);
-  --c-border-strong:  oklch(83% 0.008 260);
-  --c-accent:         oklch(55% 0.22 264);
-  --c-accent-hover:   oklch(49% 0.23 264);
-  --c-accent-soft:    oklch(94% 0.05 264);
-  --c-accent-text:    oklch(48% 0.22 264);
-  --c-success:        oklch(53% 0.14 152);
-  --c-success-soft:   oklch(95% 0.038 152);
-  --c-warning:        oklch(55% 0.18 32);
-  --c-warning-soft:   oklch(95% 0.045 38);
-  --shadow-xs: 0 1px 2px oklch(20% 0.01 260 / 0.06);
-  --shadow-sm: 0 2px 8px oklch(20% 0.01 260 / 0.08), 0 1px 2px oklch(20% 0.01 260 / 0.05);
-  --shadow-md: 0 6px 16px oklch(20% 0.01 260 / 0.1), 0 2px 4px oklch(20% 0.01 260 / 0.06);
-  --shadow-lg: 0 14px 34px oklch(20% 0.01 260 / 0.14), 0 4px 8px oklch(20% 0.01 260 / 0.07);
-  --shadow-xl: 0 24px 60px oklch(20% 0.01 260 / 0.2), 0 8px 16px oklch(20% 0.01 260 / 0.1);
-  --glow-accent: 0 8px 20px -6px oklch(55% 0.22 264 / 0.5);
+  --c-bg:             oklch(96% 0.012 85);
+  --c-bg-alt:         oklch(92.5% 0.015 82);
+  --c-bg-elev:        oklch(99% 0.005 85);
+  --c-bg-dark:        oklch(22% 0.03 264);
+  --c-text:           oklch(24% 0.018 264);
+  --c-text-secondary: oklch(46% 0.02 264);
+  --c-text-muted:     oklch(64% 0.015 264);
+  --c-text-on-accent: oklch(98% 0.01 260);
+  --c-border:         oklch(89% 0.013 90);
+  --c-border-strong:  oklch(81% 0.016 100);
+  --c-accent:         oklch(47% 0.15 264);
+  --c-accent-hover:   oklch(42% 0.155 264);
+  --c-accent-soft:    oklch(92% 0.05 262);
+  --c-accent-text:    oklch(44% 0.15 264);
+  --c-success:        oklch(52% 0.12 150);
+  --c-success-soft:   oklch(93.5% 0.038 150);
+  --c-warning:        oklch(54% 0.155 32);
+  --c-warning-soft:   oklch(93.5% 0.045 36);
+  --shadow-xs: 0 1px 2px oklch(30% 0.05 264 / 0.06);
+  --shadow-sm: 0 2px 8px oklch(30% 0.05 264 / 0.07), 0 1px 2px oklch(30% 0.05 264 / 0.05);
+  --shadow-md: 0 6px 16px oklch(30% 0.05 264 / 0.09), 0 2px 4px oklch(30% 0.05 264 / 0.05);
+  --shadow-lg: 0 14px 34px oklch(30% 0.05 264 / 0.12), 0 4px 8px oklch(30% 0.05 264 / 0.06);
+  --shadow-xl: 0 24px 60px oklch(30% 0.05 264 / 0.18), 0 8px 16px oklch(30% 0.05 264 / 0.09);
+  --glow-accent: 0 8px 20px -6px oklch(47% 0.15 264 / 0.4);
 }
 html[data-theme="white"] .hero-gradient {
   background:
-    radial-gradient(120% 130% at 82% 6%, oklch(70% 0.2 270) 0%, transparent 52%),
-    linear-gradient(140deg, oklch(58% 0.22 260) 0%, oklch(50% 0.23 264) 52%, oklch(42% 0.22 268) 100%);
+    radial-gradient(120% 130% at 82% 6%, oklch(58% 0.14 270) 0%, transparent 54%),
+    linear-gradient(140deg, oklch(50% 0.15 262) 0%, oklch(43% 0.15 264) 52%, oklch(36% 0.13 266) 100%);
 }
 
-/* ── 森林绿 ──────────────────────────────────────────────────────────────── */
+/* ── 森林绿 — 暖米绿底 + 深松绿（Tial 风） ──────────────────────────────── */
 html[data-theme="green"] {
   color-scheme: light;
-  --c-bg:             oklch(97.5% 0.014 148);
-  --c-bg-alt:         oklch(95% 0.02 148);
-  --c-bg-elev:        oklch(99.5% 0.005 148);
-  --c-bg-dark:        oklch(22% 0.018 155);
-  --c-text:           oklch(22% 0.018 155);
-  --c-text-secondary: oklch(47% 0.016 152);
-  --c-text-muted:     oklch(65% 0.012 152);
-  --c-text-on-accent: oklch(99% 0.005 80);
-  --c-border:         oklch(90% 0.02 148);
-  --c-border-strong:  oklch(82% 0.025 148);
-  --c-accent:         oklch(52% 0.145 152);
-  --c-accent-hover:   oklch(46% 0.15 152);
-  --c-accent-soft:    oklch(93% 0.045 148);
-  --c-accent-text:    oklch(46% 0.145 152);
-  --c-success:        oklch(53% 0.14 152);
-  --c-success-soft:   oklch(95% 0.038 152);
-  --c-warning:        oklch(55% 0.18 32);
-  --c-warning-soft:   oklch(95% 0.045 38);
-  --shadow-xs: 0 1px 2px oklch(22% 0.018 155 / 0.06);
-  --shadow-sm: 0 2px 8px oklch(22% 0.018 155 / 0.08), 0 1px 2px oklch(22% 0.018 155 / 0.05);
-  --shadow-md: 0 6px 16px oklch(22% 0.018 155 / 0.1), 0 2px 4px oklch(22% 0.018 155 / 0.06);
-  --shadow-lg: 0 14px 34px oklch(22% 0.018 155 / 0.14), 0 4px 8px oklch(22% 0.018 155 / 0.07);
-  --shadow-xl: 0 24px 60px oklch(22% 0.018 155 / 0.2), 0 8px 16px oklch(22% 0.018 155 / 0.1);
-  --glow-accent: 0 8px 20px -6px oklch(52% 0.145 152 / 0.5);
+  --c-bg:             oklch(96% 0.013 130);
+  --c-bg-alt:         oklch(92.5% 0.018 132);
+  --c-bg-elev:        oklch(99% 0.005 130);
+  --c-bg-dark:        oklch(22% 0.02 155);
+  --c-text:           oklch(23% 0.016 155);
+  --c-text-secondary: oklch(45% 0.015 152);
+  --c-text-muted:     oklch(63% 0.012 150);
+  --c-text-on-accent: oklch(98% 0.01 130);
+  --c-border:         oklch(89% 0.018 135);
+  --c-border-strong:  oklch(81% 0.022 138);
+  --c-accent:         oklch(47% 0.125 152);
+  --c-accent-hover:   oklch(42% 0.13 152);
+  --c-accent-soft:    oklch(92% 0.04 148);
+  --c-accent-text:    oklch(43% 0.125 152);
+  --c-success:        oklch(50% 0.12 150);
+  --c-success-soft:   oklch(93.5% 0.038 150);
+  --c-warning:        oklch(54% 0.155 32);
+  --c-warning-soft:   oklch(93.5% 0.045 36);
+  --shadow-xs: 0 1px 2px oklch(30% 0.04 155 / 0.06);
+  --shadow-sm: 0 2px 8px oklch(30% 0.04 155 / 0.07), 0 1px 2px oklch(30% 0.04 155 / 0.05);
+  --shadow-md: 0 6px 16px oklch(30% 0.04 155 / 0.09), 0 2px 4px oklch(30% 0.04 155 / 0.05);
+  --shadow-lg: 0 14px 34px oklch(30% 0.04 155 / 0.12), 0 4px 8px oklch(30% 0.04 155 / 0.06);
+  --shadow-xl: 0 24px 60px oklch(30% 0.04 155 / 0.18), 0 8px 16px oklch(30% 0.04 155 / 0.09);
+  --glow-accent: 0 8px 20px -6px oklch(47% 0.125 152 / 0.4);
 }
 html[data-theme="green"] .hero-gradient {
   background:
-    radial-gradient(120% 130% at 82% 6%, oklch(72% 0.15 145) 0%, transparent 52%),
-    linear-gradient(140deg, oklch(58% 0.17 148) 0%, oklch(50% 0.165 152) 52%, oklch(42% 0.155 155) 100%);
+    radial-gradient(120% 130% at 82% 6%, oklch(60% 0.12 145) 0%, transparent 54%),
+    linear-gradient(140deg, oklch(51% 0.135 148) 0%, oklch(44% 0.125 152) 52%, oklch(37% 0.11 155) 100%);
 }
 
-/* ── 炭墨·深色（强制深色，不跟随系统） ──────────────────────────────────── */
+/* ── 炭墨·深色（暖炭灰，柔珊瑚强调）──────────────────────────────────────── */
 html[data-theme="dark"] {
   color-scheme: dark;
-  --c-bg:             oklch(16% 0.008 60);
-  --c-bg-alt:         oklch(20% 0.008 60);
-  --c-bg-elev:        oklch(24% 0.008 60);
-  --c-bg-dark:        oklch(12% 0.005 60);
-  --c-text:           oklch(95% 0.005 80);
-  --c-text-secondary: oklch(72% 0.008 70);
-  --c-text-muted:     oklch(52% 0.008 60);
-  --c-text-on-accent: oklch(98% 0.005 85);
-  --c-border:         oklch(28% 0.008 60);
-  --c-border-strong:  oklch(36% 0.01 60);
-  --c-accent:         oklch(72% 0.155 48);
-  --c-accent-hover:   oklch(78% 0.15 48);
-  --c-accent-soft:    oklch(30% 0.06 42);
-  --c-accent-text:    oklch(78% 0.15 48);
-  --c-success:        oklch(70% 0.14 152);
-  --c-success-soft:   oklch(27% 0.05 152);
-  --c-warning:        oklch(70% 0.16 38);
-  --c-warning-soft:   oklch(30% 0.06 38);
+  --c-bg:             oklch(19% 0.008 65);
+  --c-bg-alt:         oklch(23% 0.008 65);
+  --c-bg-elev:        oklch(26% 0.009 65);
+  --c-bg-dark:        oklch(14% 0.005 60);
+  --c-text:           oklch(93% 0.006 80);
+  --c-text-secondary: oklch(71% 0.008 70);
+  --c-text-muted:     oklch(53% 0.008 62);
+  --c-text-on-accent: oklch(20% 0.012 50);
+  --c-border:         oklch(30% 0.008 62);
+  --c-border-strong:  oklch(38% 0.01 62);
+  --c-accent:         oklch(70% 0.13 48);
+  --c-accent-hover:   oklch(76% 0.12 48);
+  --c-accent-soft:    oklch(31% 0.05 42);
+  --c-accent-text:    oklch(76% 0.13 50);
+  --c-success:        oklch(70% 0.12 150);
+  --c-success-soft:   oklch(28% 0.045 150);
+  --c-warning:        oklch(70% 0.135 38);
+  --c-warning-soft:   oklch(30% 0.05 38);
   --shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.3);
   --shadow-sm: 0 2px 6px oklch(0% 0 0 / 0.35), 0 1px 2px oklch(0% 0 0 / 0.25);
   --shadow-md: 0 4px 12px oklch(0% 0 0 / 0.4), 0 2px 4px oklch(0% 0 0 / 0.3);
   --shadow-lg: 0 12px 32px oklch(0% 0 0 / 0.5), 0 4px 8px oklch(0% 0 0 / 0.35);
   --shadow-xl: 0 24px 60px oklch(0% 0 0 / 0.6), 0 8px 16px oklch(0% 0 0 / 0.4);
-  --glow-accent: 0 8px 20px -6px oklch(72% 0.155 48 / 0.45);
+  --glow-accent: 0 8px 20px -6px oklch(70% 0.13 48 / 0.4);
 }
 html[data-theme="dark"] .hero-gradient {
   background:
-    radial-gradient(120% 130% at 82% 6%, oklch(62% 0.15 55) 0%, transparent 52%),
-    linear-gradient(140deg, oklch(56% 0.16 45) 0%, oklch(47% 0.16 38) 55%, oklch(38% 0.14 32) 100%);
+    radial-gradient(120% 130% at 82% 6%, oklch(56% 0.12 52) 0%, transparent 54%),
+    linear-gradient(140deg, oklch(50% 0.13 45) 0%, oklch(42% 0.13 38) 55%, oklch(35% 0.11 32) 100%);
 }
 
-/* ── 紫罗兰 ──────────────────────────────────────────────────────────────── */
+/* ── 午夜蓝 — 深蓝底 + 奶油金（Cambí 风，强制深色）──────────────────────── */
 html[data-theme="violet"] {
-  color-scheme: light;
-  --c-bg:             oklch(97.5% 0.012 290);
-  --c-bg-alt:         oklch(95.5% 0.018 285);
-  --c-bg-elev:        oklch(100% 0 0);
-  --c-bg-dark:        oklch(22% 0.016 285);
-  --c-text:           oklch(22% 0.016 285);
-  --c-text-secondary: oklch(47% 0.016 285);
-  --c-text-muted:     oklch(67% 0.012 285);
-  --c-text-on-accent: oklch(99% 0.005 285);
-  --c-border:         oklch(90% 0.018 285);
-  --c-border-strong:  oklch(82% 0.02 285);
-  --c-accent:         oklch(58% 0.22 290);
-  --c-accent-hover:   oklch(52% 0.23 290);
-  --c-accent-soft:    oklch(94% 0.05 285);
-  --c-accent-text:    oklch(52% 0.22 290);
-  --c-success:        oklch(53% 0.14 152);
-  --c-success-soft:   oklch(95% 0.038 152);
-  --c-warning:        oklch(55% 0.18 32);
-  --c-warning-soft:   oklch(95% 0.045 38);
-  --shadow-xs: 0 1px 2px oklch(22% 0.016 285 / 0.06);
-  --shadow-sm: 0 2px 8px oklch(22% 0.016 285 / 0.08), 0 1px 2px oklch(22% 0.016 285 / 0.05);
-  --shadow-md: 0 6px 16px oklch(22% 0.016 285 / 0.1), 0 2px 4px oklch(22% 0.016 285 / 0.06);
-  --shadow-lg: 0 14px 34px oklch(22% 0.016 285 / 0.14), 0 4px 8px oklch(22% 0.016 285 / 0.07);
-  --shadow-xl: 0 24px 60px oklch(22% 0.016 285 / 0.2), 0 8px 16px oklch(22% 0.016 285 / 0.1);
-  --glow-accent: 0 8px 20px -6px oklch(58% 0.22 290 / 0.5);
+  color-scheme: dark;
+  --c-bg:             oklch(26% 0.055 264);
+  --c-bg-alt:         oklch(30% 0.055 264);
+  --c-bg-elev:        oklch(33% 0.05 264);
+  --c-bg-dark:        oklch(20% 0.045 264);
+  --c-text:           oklch(93% 0.014 85);
+  --c-text-secondary: oklch(75% 0.02 250);
+  --c-text-muted:     oklch(57% 0.025 256);
+  --c-text-on-accent: oklch(25% 0.05 264);
+  --c-border:         oklch(37% 0.04 264);
+  --c-border-strong:  oklch(45% 0.045 264);
+  --c-accent:         oklch(83% 0.085 80);
+  --c-accent-hover:   oklch(88% 0.08 82);
+  --c-accent-soft:    oklch(34% 0.05 250);
+  --c-accent-text:    oklch(85% 0.085 82);
+  --c-success:        oklch(74% 0.12 150);
+  --c-success-soft:   oklch(32% 0.05 160);
+  --c-warning:        oklch(74% 0.13 45);
+  --c-warning-soft:   oklch(33% 0.05 40);
+  --shadow-xs: 0 1px 2px oklch(10% 0.03 264 / 0.35);
+  --shadow-sm: 0 2px 6px oklch(10% 0.03 264 / 0.4), 0 1px 2px oklch(10% 0.03 264 / 0.3);
+  --shadow-md: 0 4px 12px oklch(10% 0.03 264 / 0.45), 0 2px 4px oklch(10% 0.03 264 / 0.35);
+  --shadow-lg: 0 12px 32px oklch(10% 0.03 264 / 0.55), 0 4px 8px oklch(10% 0.03 264 / 0.4);
+  --shadow-xl: 0 24px 60px oklch(10% 0.03 264 / 0.65), 0 8px 16px oklch(10% 0.03 264 / 0.45);
+  --glow-accent: 0 8px 20px -6px oklch(83% 0.085 80 / 0.35);
 }
 html[data-theme="violet"] .hero-gradient {
   background:
-    radial-gradient(120% 130% at 82% 6%, oklch(74% 0.19 285) 0%, transparent 52%),
-    linear-gradient(140deg, oklch(62% 0.22 288) 0%, oklch(53% 0.23 291) 52%, oklch(44% 0.22 294) 100%);
+    radial-gradient(120% 130% at 82% 6%, oklch(50% 0.1 270) 0%, transparent 54%),
+    linear-gradient(140deg, oklch(42% 0.1 264) 0%, oklch(35% 0.09 266) 52%, oklch(29% 0.07 268) 100%);
 }

@@ -20,10 +20,10 @@ import {
   Download,
   Check,
   // v0.3 新增
-  TrendingDown,    // 投资（钱流出）
   Receipt,         // 账单
   Briefcase,       // 收入/工作
-  Tv,              // 订阅/娱乐
+  Repeat,          // 订阅/循环续费
+  PiggyBank,       // 投资/储蓄
   ChevronDown,     // 折叠展开
   ChevronRight,    // 折叠收起
   CalendarDays,    // 日历/周期
@@ -34,6 +34,9 @@ import {
   Loader2,         // 加载 spinner
   // v1.2 新增
   Search,          // 搜索
+  // v1.3 新增
+  ChartPie,        // 饼图（收支分布）
+  Gauge,           // 仪表盘（花费节奏）
   type LucideIcon,
 } from 'lucide-react';
 import { forwardRef } from 'react';
@@ -78,7 +81,10 @@ export type IconName =
   | 'user'       // 用户
   | 'logout'     // 注销
   | 'loading'    // 加载
-  | 'search';    // 搜索
+  | 'search'     // 搜索
+  // v1.3 新增
+  | 'pie'        // 饼图（收支分布）
+  | 'gauge';     // 仪表盘（花费节奏）
 
 const map: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -102,10 +108,10 @@ const map: Record<IconName, LucideIcon> = {
   download: Download,
   check: Check,
   // v0.3 新增
-  investment: TrendingUp,
+  investment: PiggyBank,
   bill: Receipt,
   income: Briefcase,
-  subscription: Tv,
+  subscription: Repeat,
   'chevron-down': ChevronDown,
   'chevron-right': ChevronRight,
   calendar: CalendarDays,
@@ -115,6 +121,9 @@ const map: Record<IconName, LucideIcon> = {
   logout: LogOut,
   loading: Loader2,
   search: Search,
+  // v1.3 新增
+  pie: ChartPie,
+  gauge: Gauge,
 };
 
 type Props = {

@@ -227,7 +227,7 @@ export function Overview() {
         <Card
           title={
             <div className="flex items-center gap-2">
-              <Icon name="sparkle" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
+              <Icon name="pie" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
               <span>{totalIncome > 0 ? '本期收入去向' : '本期支出分布'}</span>
             </div>
           }
@@ -484,7 +484,7 @@ function PaceCard({
 }) {
   const titleNode = (
     <div className="flex items-center gap-2">
-      <Icon name="bar-chart" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
+      <Icon name="gauge" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
       <span>花费节奏</span>
     </div>
   );
