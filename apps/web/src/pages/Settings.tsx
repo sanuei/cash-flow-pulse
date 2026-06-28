@@ -180,7 +180,7 @@ export function Settings() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 pb-safe-nav">
       <header>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight-section flex items-center gap-2">
           <Icon name="settings" size={28} strokeWidth={1.5} className="text-notion-text-secondary" />

@@ -101,7 +101,7 @@ export function Trends() {
   if (!config) return <LoadingState />;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 pb-safe-nav">
       <PageTitle icon="chart" title="趋势曲线" subtitle="净可用现金 · 日均预算 · 收入/投资/消费对比" />
 
       {/* 时间范围 — 分段药丸 */}

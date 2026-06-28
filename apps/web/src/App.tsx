@@ -132,7 +132,7 @@ function App() {
           flex-1 overflow-y-auto overscroll-contain
           bg-notion-bg
           pt-[calc(3.5rem+env(safe-area-inset-top))] sm:pt-0
-          pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-0
+          pb-0 sm:pb-0
           ${loading ? 'opacity-60' : ''}
           transition-opacity duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
           ${reduced ? '' : 'anim-fade-up'}
@@ -150,9 +150,12 @@ function App() {
         </Routes>
       </main>
 
-      {/* 底部 Tab（移动端：4 个主要页面） — 玻璃模糊 + 顶边阴影 */}
+      {/* 底部 Tab（移动端：4 个主要页面） — 实色背景 + 顶边阴影
+          v1.4: glass → bg-notion-bg,避免 main 底部 padding 区域(90px 留白)
+                露出 body 黑色时,nav 玻璃模糊显示"色差",造成"nav 之下多空白"假象
+                实色让 nav + main 底部 padding 区域都是 --c-bg,视觉融合 */}
       <nav
-        className="sm:hidden flex items-center justify-around glass border-t border-[var(--c-border)] fixed bottom-0 inset-x-0 z-30 shadow-[var(--shadow-md)]"
+        className="sm:hidden flex items-center justify-around bg-notion-bg border-t border-[var(--c-border)] fixed bottom-0 inset-x-0 z-30 shadow-[var(--shadow-md)]"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom)',
           height: 'calc(3.5rem + env(safe-area-inset-bottom))',

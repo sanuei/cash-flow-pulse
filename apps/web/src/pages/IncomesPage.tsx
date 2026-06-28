@@ -33,7 +33,7 @@ export function IncomesPage() {
     .filter((cs) => match(cs.name));
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 pb-safe-nav">
       <PageTitle icon="income" title="收入" subtitle="固定到账收入 · 现金账户余额" />
       <SearchBar value={query} onChange={setQuery} placeholder="搜索收入 / 现金账户..." />
 

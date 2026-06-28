@@ -138,7 +138,7 @@ export function Overview() {
   return (
     // stagger — 每个 section 依次入场（60ms 间隔）
     // 桌面端: max-w-6xl + sm:py-8 留更多垂直空间,信息密度更高
-    <div className="max-w-3xl sm:max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-5 stagger">
+    <div className="max-w-3xl sm:max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-5 stagger pb-safe-nav">
 
       {/* Hero — 磨砂玻璃面板（深色字 + 单一强调色点缀，无大色块） */}
       <section className="hero-glass px-5 pt-4 pb-5">
