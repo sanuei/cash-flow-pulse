@@ -675,6 +675,7 @@ export function isSubscriptionActiveInCycle(
  *
  * monthly: 找周期内所有 pay_day（最多 2 次：起点月 + 终点月）
  * weekly:  遍历周期内每一天，找出 day_of_week 匹配的天
+ * single:  检查 start_date 是否在周期内(单次到账,start_date == end_date)
  */
 export function sumIncomeInCycle(
   incomes: RecurringIncome[],
@@ -718,6 +719,19 @@ export function sumIncomeInCycle(
         if (d.getDay() !== inc.day_of_week) continue;
         if (startDate && d < startDate) continue;
         if (endDate && d > endDate) continue;
+        total += inc.amount;
+        items.push({
+          id: inc.id,
+          name: inc.name,
+          amount: inc.amount,
+          pay_date: formatDate(d),
+          days_until: Math.max(0, diffDays(cycleStart, d)),
+        });
+      }
+    } else if (inc.frequency === 'single' && inc.start_date) {
+      // 单次到账：start_date 在周期内才计入,只在那个周期算一次
+      const d = parseDate(inc.start_date);
+      if (d >= cycleStart && d < cycleEnd) {
         total += inc.amount;
         items.push({
           id: inc.id,
@@ -774,9 +788,11 @@ export function computeDashboardV2(
   // 1. 调用 V1（保持完全向后兼容）
   const v1 = computeDashboard(today, config, cashSources, creditCards, snapshots);
 
-  // 2. 本期区间 = [今天, 下个发薪日)
-  const cycleStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const cycleEnd = getNextPayday(today, config.pay_day);
+  // 2. 本期区间 = 用 v1 的 cycle（不是今天!）— 今天会漏掉本周期内已发生的工资/账单
+  // 周期定义: [上期发薪日, 下期发薪日) = [6/10, 7/10) for pay_day=10
+  const currentCycle = getCurrentCycle(today, config.pay_day);
+  const cycleStart = currentCycle.start_date;
+  const cycleEnd = currentCycle.end_date;
 
   // 3. 计算本期支出明细
   // 3a. 信用卡（已在 V1 中算过，复用）

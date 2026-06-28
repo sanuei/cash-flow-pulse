@@ -159,8 +159,9 @@ export interface RecurringBill {
  * 固定收入（工资、副业等）
  * monthly: 用 pay_day 1-31
  * weekly:  用 day_of_week 0-6（0=周日）
+ * single:  用 start_date (单次到账,start_date == end_date)
  */
-export type IncomeFrequency = 'monthly' | 'weekly';
+export type IncomeFrequency = 'monthly' | 'weekly' | 'single';
 
 export interface RecurringIncome {
   id: string;

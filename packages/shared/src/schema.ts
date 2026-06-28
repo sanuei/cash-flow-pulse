@@ -162,7 +162,7 @@ export const BillUpdateSchema = BillInputSchema.partial();
 const IncomeBaseSchema = z.object({
   name: z.string().min(1).max(50),
   amount: z.number().nonnegative(),
-  frequency: z.enum(['monthly', 'weekly']),
+  frequency: z.enum(['monthly', 'weekly', 'single']),
   pay_day: z.number().int().min(1).max(31).nullable().optional(),
   day_of_week: z.number().int().min(0).max(6).nullable().optional(),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -173,16 +173,18 @@ const IncomeBaseSchema = z.object({
 export const IncomeInputSchema = IncomeBaseSchema.refine(
   (d) =>
     (d.frequency === 'monthly' && d.pay_day != null && d.day_of_week == null) ||
-    (d.frequency === 'weekly' && d.day_of_week != null && d.pay_day == null),
-  { message: 'monthly 必须填 pay_day，weekly 必须填 day_of_week', path: ['frequency'] },
+    (d.frequency === 'weekly' && d.day_of_week != null && d.pay_day == null) ||
+    (d.frequency === 'single' && d.pay_day == null && d.day_of_week == null),
+  { message: 'monthly 必须填 pay_day；weekly 必须填 day_of_week；single 都不填', path: ['frequency'] },
 );
 
 export const IncomeUpdateSchema = IncomeBaseSchema.partial().refine(
   (d) => {
-    // 更新时如果两者都给了，验证一致性；如果只给一个就跳过
+    // 更新时如果三者都给了，验证一致性；如果只给一个就跳过
     if (d.frequency && d.pay_day != null && d.day_of_week != null) {
       return (d.frequency === 'monthly' && d.pay_day != null) ||
-             (d.frequency === 'weekly' && d.day_of_week != null);
+             (d.frequency === 'weekly' && d.day_of_week != null) ||
+             d.frequency === 'single';
     }
     return true;
   },

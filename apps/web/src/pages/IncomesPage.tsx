@@ -80,7 +80,9 @@ export function IncomesPage() {
             const freqLabel =
               inc.frequency === 'monthly'
                 ? `每月 ${inc.pay_day} 号`
-                : `每${WEEKDAYS[inc.day_of_week ?? 0]}`;
+                : inc.frequency === 'weekly'
+                ? `每${WEEKDAYS[inc.day_of_week ?? 0]}`
+                : `单次 ${inc.start_date}`;  // single 模式
             return (
               <EntityRow
                 key={inc.id}

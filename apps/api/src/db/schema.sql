@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS recurring_incomes (
   user_id       TEXT NOT NULL DEFAULT 'default',
   name          TEXT NOT NULL,
   amount        REAL NOT NULL CHECK (amount >= 0),
-  frequency     TEXT NOT NULL CHECK (frequency IN ('monthly','weekly')),
+  frequency     TEXT NOT NULL CHECK (frequency IN ('monthly','weekly','single')),
   pay_day       INTEGER CHECK (pay_day >= 1 AND pay_day <= 31),
   day_of_week   INTEGER CHECK (day_of_week >= 0 AND day_of_week <= 6),
   start_date    TEXT NOT NULL,
@@ -128,7 +128,8 @@ CREATE TABLE IF NOT EXISTS recurring_incomes (
   updated_at    INTEGER NOT NULL,
   CHECK (
     (frequency = 'monthly' AND pay_day IS NOT NULL) OR
-    (frequency = 'weekly'  AND day_of_week IS NOT NULL)
+    (frequency = 'weekly'  AND day_of_week IS NOT NULL) OR
+    (frequency = 'single')
   )
 );
 CREATE INDEX IF NOT EXISTS idx_incomes_user ON recurring_incomes(user_id);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { HeroAmount, Field, Segmented, Collapsible, FormError, FormActions } from './FormKit';
 
-type Frequency = 'monthly' | 'weekly';
+type Frequency = 'monthly' | 'weekly' | 'single';
 
 type FormData = {
   name: string;
@@ -60,6 +60,8 @@ export function IncomeForm({
     }
     setSaving(true);
     try {
+      // single 模式: 把 start_date 同时设为 end_date 表示只入账一次
+      const finalEndDate = frequency === 'single' ? startDate : (endDate || null);
       await onSubmit({
         name: name.trim(),
         amount,
@@ -67,7 +69,7 @@ export function IncomeForm({
         pay_day: frequency === 'monthly' ? payDay : null,
         day_of_week: frequency === 'weekly' ? dayOfWeek : null,
         start_date: startDate,
-        end_date: endDate || null,
+        end_date: finalEndDate,
         note: note.trim() || null,
       });
     } catch (e) {
@@ -90,9 +92,13 @@ export function IncomeForm({
         />
       </Field>
 
-      <Field label="频率">
+      <Field label="频率" hint="单次收入用于不固定日期到账的副业/兼职">
         <Segmented
-          options={[{ value: 'monthly', label: '每月' }, { value: 'weekly', label: '每周' }]}
+          options={[
+            { value: 'monthly', label: '每月' },
+            { value: 'weekly', label: '每周' },
+            { value: 'single', label: '单次' },
+          ]}
           value={frequency}
           onChange={setFrequency}
         />
@@ -109,27 +115,39 @@ export function IncomeForm({
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[14px] text-notion-text-muted">号</span>
           </div>
         </Field>
-      ) : (
+      ) : frequency === 'weekly' ? (
         <Field label="每周几到账">
           <select className="input" value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>
             {WEEKDAY_LABELS.map((label, i) => <option key={i} value={i}>{label}</option>)}
           </select>
         </Field>
+      ) : (
+        <Field label="到账日期" hint="只在指定日期入账一次,不会按月/按周循环">
+          <input type="date" className="input font-numeric" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        </Field>
       )}
 
-      <Collapsible>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="开始日期">
-            <input type="date" className="input font-numeric" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+      {frequency !== 'single' && (
+        <Collapsible>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="开始日期">
+              <input type="date" className="input font-numeric" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </Field>
+            <Field label="结束日期（可选）">
+              <input type="date" className="input font-numeric" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </Field>
+          </div>
+          <Field label="备注（可选）">
+            <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 25 号发放" />
           </Field>
-          <Field label="结束日期（可选）">
-            <input type="date" className="input font-numeric" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-          </Field>
-        </div>
+        </Collapsible>
+      )}
+
+      {frequency === 'single' && (
         <Field label="备注（可选）">
-          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 25 号发放" />
+          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 7 月份一笔设计稿费" />
         </Field>
-      </Collapsible>
+      )}
 
       <FormError msg={error} />
       <FormActions onCancel={onCancel} saving={saving} disabled={!name.trim()} />
