@@ -8,6 +8,7 @@ import { Login } from './pages/Login';
 import { useStore } from './lib/store';
 import { useEffect, lazy, Suspense } from 'react';
 import { Icon, type IconName } from './components/Icon';
+import { Logo } from './components/Logo';
 import { LoadingState } from './components/States';
 import { Toaster } from './components/Toaster';
 import { useReducedMotion } from './lib/motion';
@@ -82,13 +83,8 @@ function App() {
     <div className="h-[100dvh] flex flex-col overflow-hidden">
       {/* 顶栏（桌面端：6 项文字 Tab） — 玻璃模糊背景 */}
       <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border glass fixed top-0 inset-x-0 z-30">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)]">
-            <Icon name="wallet" size={15} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
-          </span>
-          <span style={{ fontFamily: 'var(--font-logo)', fontWeight: 700, fontSize: '17px', letterSpacing: '-0.02em', color: 'var(--c-text)' }}>
-            cash<span style={{ color: 'var(--c-accent)' }}>flow</span>
-          </span>
+        <div className="flex items-center">
+          <Logo size={28} />
         </div>
         <nav className="flex items-center gap-1">
           <NavTab to="/">总览</NavTab>
@@ -109,13 +105,8 @@ function App() {
           height: 'calc(3.5rem + env(safe-area-inset-top))',
         }}
       >
-        <div className="flex items-center gap-2.5">
-          <span className="inline-flex items-center justify-center w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)]">
-            <Icon name="wallet" size={15} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
-          </span>
-          <span style={{ fontFamily: 'var(--font-logo)', fontWeight: 700, fontSize: '17px', letterSpacing: '-0.02em', color: 'var(--c-text)' }}>
-            cash<span style={{ color: 'var(--c-accent)' }}>flow</span>
-          </span>
+        <div className="flex items-center">
+          <Logo size={26} />
         </div>
         <div className="flex items-center gap-1">
           <NavLink

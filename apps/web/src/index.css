@@ -408,6 +408,20 @@ body {
     .pb-safe-nav { padding-bottom: 0; }
   }
 
+  /* 品牌 Logo 主题适配: 亮色主题用原图(深色文字);
+     深色主题用 filter invert(1) 反色为浅色文字。
+     brightness(1.4) 是因为纯反色在深色背景上偏暗,需要提亮 */
+  .logo-themed {
+    filter: invert(0);
+    transition: filter var(--dur-base) var(--ease-out-expo);
+  }
+  /* dark/violet/neon 主题(深色背景)反色 */
+  html[data-theme="dark"] .logo-themed,
+  html[data-theme="violet"] .logo-themed,
+  html[data-theme="neon"] .logo-themed {
+    filter: invert(1) brightness(1.4);
+  }
+
   /* Stagger — 用 CSS 自定义属性控制延迟（避免每行一个 inline style） */
   .stagger > *  { animation: fade-up var(--dur-medium) var(--ease-out-expo) both; }
   .stagger > *:nth-child(1) { animation-delay: 0ms; }
