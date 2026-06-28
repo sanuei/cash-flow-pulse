@@ -96,7 +96,7 @@ function App() {
         }}
       >
         <div className="flex items-center">
-          <Logo size={13} />
+          <Logo size={18} />
         </div>
         <div className="flex items-center gap-1">
           <NavLink
