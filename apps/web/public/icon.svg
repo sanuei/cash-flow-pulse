@@ -1,40 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <!-- 主背景：深海军蓝 → 宝蓝，左上到右下 -->
+    <!-- 主背景：珊瑚橙对角渐变 -->
     <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#1e40af"/>
+      <stop offset="0%"   stop-color="#FF9A5A"/>
+      <stop offset="52%"  stop-color="#E8643C"/>
+      <stop offset="100%" stop-color="#C8501F"/>
     </linearGradient>
-    <!-- 中心光晕：增加层次感 -->
-    <radialGradient id="glow" cx="50%" cy="44%" r="52%">
-      <stop offset="0%"   stop-color="#60a5fa" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
+    <!-- 左上高光：增加质感 -->
+    <radialGradient id="glow" cx="26%" cy="20%" r="70%">
+      <stop offset="0%"   stop-color="#FFD9B8" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFD9B8" stop-opacity="0"/>
     </radialGradient>
   </defs>
 
   <!-- 背景 -->
-  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
-  <rect width="512" height="512" rx="108" fill="url(#glow)"/>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#glow)"/>
+
+  <!-- 上升现金流脉冲线（半透明白，暗示增长/流动） -->
+  <polyline points="92,322 168,256 224,300 312,176 392,232"
+            fill="none" stroke="white" stroke-opacity="0.35"
+            stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 脉冲末端高亮点 -->
+  <circle cx="392" cy="232" r="17" fill="white"/>
 
   <!--
-    ¥ 符号：手工路径，保证在任意分辨率都清晰
-    布局（512×512 坐标系）：
-      V 臂左端  (108, 80)
-      V 臂右端  (404, 80)
-      V 汇聚点  (256, 252)
-      竖干末端  (256, 432)
-      上横线    y=312，x: 158–354
-      下横线    y=372，x: 158–354
-    笔画宽度   52
+    ¥ 符号：白色实心笔画，居中略偏下
+      V 臂左端 (150,148)  右端 (362,148)  汇聚 (256,272)
+      竖干末端 (256,420)
+      上横线 y=320 / 下横线 y=372，x: 178–334
+      笔画宽度 46
   -->
-  <g fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="52">
-    <!-- V 形（¥ 顶部两臂） -->
-    <polyline points="108,80 256,252 404,80"/>
-    <!-- 竖干 -->
-    <line x1="256" y1="252" x2="256" y2="432"/>
-    <!-- 上横线 -->
-    <line x1="158" y1="312" x2="354" y2="312"/>
-    <!-- 下横线 -->
-    <line x1="158" y1="372" x2="354" y2="372"/>
+  <g fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="46">
+    <polyline points="150,148 256,272 362,148"/>
+    <line x1="256" y1="272" x2="256" y2="420"/>
+    <line x1="178" y1="324" x2="334" y2="324"/>
+    <line x1="178" y1="374" x2="334" y2="374"/>
   </g>
 </svg>

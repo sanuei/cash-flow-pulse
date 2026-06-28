@@ -5,13 +5,13 @@ import { EmptyState } from './States';
 import { Icon, type IconName } from './Icon';
 
 /**
- * 通用「列表卡 + 增删改 Modal」骨架。
+ * ManagedListCard — 列表卡 + 增删改 Modal 骨架（v2 升级）
  *
- * 内部管理「新增 / 编辑」弹窗状态，调用方只需提供：
- * - children：列表项渲染（回调里拿到 openEdit，用于行内编辑按钮）
- * - renderForm：表单渲染（拿到当前编辑对象 editing + close 回调）
- *
- * 泛型 T = 该列表的数据类型（CashSource / RecurringIncome / ...）。
+ * 升级点：
+ *   1) 列表项首次进入用 stagger 动画（--stagger utility，已在 index.css）
+ *   2) 新增按钮在 hover 时 "+" 图标旋转 90°（160ms）
+ *   3) 列表行 hover 时左侧 indicator 滑入（来自 EntityRow 内部）
+ *   4) Modal 入场用 scale-in（与 Modal 组件统一）
  */
 export function ManagedListCard<T>({
   icon,
@@ -39,18 +39,35 @@ export function ManagedListCard<T>({
 
   return (
     <Card
+      divided={count > 0}
       title={
         <div className="flex items-center gap-2">
-          <Icon name={icon} size={18} className="text-notion-text-secondary" strokeWidth={1.75} />
-          <span>{label} ({count})</span>
+          <span className="flex items-center justify-center w-7 h-7 rounded-[var(--radius-md)] bg-[var(--c-accent-soft)]">
+            <Icon name={icon} size={15} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
+          </span>
+          <span>{label}</span>
+          {count > 0 && (
+            <span className="badge badge-muted text-[11px] px-2 py-0.5 ml-0.5">{count}</span>
+          )}
         </div>
       }
       action={
         <button
           onClick={() => setShowAdd(true)}
-          className="btn-ghost text-notion-blue flex items-center gap-1"
+          className="
+            group flex items-center gap-1 px-3 py-1.5 rounded-[var(--radius-pill)]
+            text-[13px] font-semibold text-[var(--c-accent-text)] bg-[var(--c-accent-soft)]
+            transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+            hover:bg-[var(--c-accent)] hover:text-[var(--c-text-on-accent)]
+            active:scale-95
+          "
         >
-          <Icon name="add" size={14} strokeWidth={2} />
+          <Icon
+            name="add"
+            size={14}
+            strokeWidth={2}
+            className="transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out-expo)] group-hover:rotate-90"
+          />
           <span>新增</span>
         </button>
       }
@@ -61,20 +78,20 @@ export function ManagedListCard<T>({
           title={empty.title}
           description={empty.description}
           action={
-            <button
-              onClick={() => setShowAdd(true)}
-              className="btn-primary flex items-center gap-1.5 mx-auto"
-            >
+            <button onClick={() => setShowAdd(true)} className="btn-primary flex items-center gap-1.5 mx-auto">
               <Icon name="add" size={16} strokeWidth={2} />
               <span>{empty.addLabel}</span>
             </button>
           }
         />
       ) : (
-        <ul className="divide-y divide-notion-border -mx-5">{children(setEditing)}</ul>
+        // stagger — 第一行 0ms 延迟，第二行 60ms，依次递增
+        <ul className="stagger divide-y divide-[var(--c-border)] -mx-5 -mb-5 overflow-hidden rounded-b-[var(--radius-xl)]">
+          {children(setEditing)}
+        </ul>
       )}
 
-      <Modal open={showAdd || editing !== null} onClose={close} title={formTitle(editing)}>
+      <Modal open={showAdd || editing !== null} onClose={close} title={formTitle(editing)} icon={icon}>
         {renderForm(editing, close)}
       </Modal>
     </Card>

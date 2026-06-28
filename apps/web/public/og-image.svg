@@ -1,29 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <defs>
+    <!-- 暖奶油底 -->
     <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#1e3a8a"/>
+      <stop offset="0%"   stop-color="#FFF6EE"/>
+      <stop offset="100%" stop-color="#FAF0E6"/>
     </linearGradient>
+    <!-- 图标珊瑚橙 -->
     <linearGradient id="iconbg" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#0f172a"/>
-      <stop offset="100%" stop-color="#1e40af"/>
+      <stop offset="0%"   stop-color="#FF9A5A"/>
+      <stop offset="52%"  stop-color="#E8643C"/>
+      <stop offset="100%" stop-color="#C8501F"/>
     </linearGradient>
-    <radialGradient id="iconglow" cx="50%" cy="44%" r="52%">
-      <stop offset="0%"   stop-color="#60a5fa" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
+    <radialGradient id="iconglow" cx="26%" cy="20%" r="70%">
+      <stop offset="0%"   stop-color="#FFD9B8" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFD9B8" stop-opacity="0"/>
     </radialGradient>
-    <!-- 装饰用网格渐变 -->
-    <linearGradient id="gridfade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#334155" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#334155" stop-opacity="0"/>
-    </linearGradient>
   </defs>
 
   <!-- 背景 -->
   <rect width="1200" height="630" fill="url(#bg)"/>
 
   <!-- 装饰：右侧点阵 -->
-  <g fill="#60a5fa" opacity="0.08">
+  <g fill="#E8643C" opacity="0.07">
     <circle cx="780" cy="80"  r="3"/><circle cx="840" cy="80"  r="3"/><circle cx="900" cy="80"  r="3"/><circle cx="960" cy="80"  r="3"/><circle cx="1020" cy="80" r="3"/><circle cx="1080" cy="80" r="3"/><circle cx="1140" cy="80" r="3"/>
     <circle cx="780" cy="140" r="3"/><circle cx="840" cy="140" r="3"/><circle cx="900" cy="140" r="3"/><circle cx="960" cy="140" r="3"/><circle cx="1020" cy="140" r="3"/><circle cx="1080" cy="140" r="3"/><circle cx="1140" cy="140" r="3"/>
     <circle cx="780" cy="200" r="3"/><circle cx="840" cy="200" r="3"/><circle cx="900" cy="200" r="3"/><circle cx="960" cy="200" r="3"/><circle cx="1020" cy="200" r="3"/><circle cx="1080" cy="200" r="3"/><circle cx="1140" cy="200" r="3"/>
@@ -31,70 +29,73 @@
     <circle cx="780" cy="320" r="3"/><circle cx="840" cy="320" r="3"/><circle cx="900" cy="320" r="3"/><circle cx="960" cy="320" r="3"/><circle cx="1020" cy="320" r="3"/><circle cx="1080" cy="320" r="3"/><circle cx="1140" cy="320" r="3"/>
     <circle cx="780" cy="380" r="3"/><circle cx="840" cy="380" r="3"/><circle cx="900" cy="380" r="3"/><circle cx="960" cy="380" r="3"/><circle cx="1020" cy="380" r="3"/><circle cx="1080" cy="380" r="3"/><circle cx="1140" cy="380" r="3"/>
     <circle cx="780" cy="440" r="3"/><circle cx="840" cy="440" r="3"/><circle cx="900" cy="440" r="3"/><circle cx="960" cy="440" r="3"/><circle cx="1020" cy="440" r="3"/><circle cx="1080" cy="440" r="3"/><circle cx="1140" cy="440" r="3"/>
-    <circle cx="780" cy="500" r="3"/><circle cx="840" cy="500" r="3"/><circle cx="900" cy="500" r="3"/><circle cx="960" cy="500" r="3"/><circle cx="1020" cy="500" r="3"/><circle cx="1080" cy="500" r="3"/><circle cx="1140" cy="500" r="3"/>
-    <circle cx="780" cy="560" r="3"/><circle cx="840" cy="560" r="3"/><circle cx="900" cy="560" r="3"/><circle cx="960" cy="560" r="3"/><circle cx="1020" cy="560" r="3"/><circle cx="1080" cy="560" r="3"/><circle cx="1140" cy="560" r="3"/>
   </g>
 
-  <!-- 装饰：右下折线图 -->
+  <!-- 装饰：右下上升折线 -->
   <polyline
-    points="760,520 820,480 880,495 940,440 1000,460 1060,400 1120,380 1180,340"
-    fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+    points="760,520 820,470 880,490 940,420 1000,448 1060,380 1120,360 1180,310"
+    fill="none" stroke="#E8643C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/>
   <polyline
     points="760,560 820,545 880,555 940,520 1000,530 1060,500 1120,488 1180,460"
-    fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.25"/>
+    fill="none" stroke="#F0875F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.3"/>
 
   <!-- 左侧 App 图标 (200×200) -->
   <g transform="translate(80, 215)">
-    <rect width="200" height="200" rx="42" fill="url(#iconbg)"/>
-    <rect width="200" height="200" rx="42" fill="url(#iconglow)"/>
-    <!-- 小版 ¥（坐标按 200×200 缩放） -->
-    <g fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="20">
-      <polyline points="42,31 100,98 158,31"/>
-      <line x1="100" y1="98" x2="100" y2="168"/>
-      <line x1="62"  y1="122" x2="138" y2="122"/>
-      <line x1="62"  y1="145" x2="138" y2="145"/>
+    <rect width="200" height="200" rx="46" fill="url(#iconbg)"/>
+    <rect width="200" height="200" rx="46" fill="url(#iconglow)"/>
+    <!-- 上升脉冲线 -->
+    <polyline points="36,126 66,100 88,118 122,69 153,91"
+              fill="none" stroke="white" stroke-opacity="0.35"
+              stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="153" cy="91" r="7" fill="white"/>
+    <!-- 小版 ¥ -->
+    <g fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" stroke-width="18">
+      <polyline points="59,58 100,106 141,58"/>
+      <line x1="100" y1="106" x2="100" y2="164"/>
+      <line x1="70"  y1="127" x2="130" y2="127"/>
+      <line x1="70"  y1="146" x2="130" y2="146"/>
     </g>
   </g>
 
   <!-- 竖分隔线 -->
-  <line x1="326" y1="200" x2="326" y2="430" stroke="#334155" stroke-width="1.5"/>
+  <line x1="326" y1="200" x2="326" y2="430" stroke="#E6D8C9" stroke-width="1.5"/>
 
   <!-- App 名称 -->
-  <text x="366" y="282"
+  <text x="366" y="290"
     font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif"
-    font-size="64" font-weight="700" fill="white" letter-spacing="-1">
-    Cash Flow Pulse
+    font-size="84" font-weight="700" fill="#1F1B18" letter-spacing="2">
+    现金流
   </text>
 
   <!-- 副标题 -->
-  <text x="366" y="338"
+  <text x="366" y="340"
     font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif"
-    font-size="30" fill="#94a3b8" letter-spacing="0.5">
+    font-size="30" fill="#8A7A6C" letter-spacing="0.5">
     个人现金流可视化 · 日均预算追踪
   </text>
 
   <!-- 公式 -->
-  <rect x="366" y="368" width="380" height="46" rx="8" fill="#1e3a8a" opacity="0.6"/>
-  <text x="556" y="397"
+  <rect x="366" y="372" width="380" height="46" rx="12" fill="#FBE6DB"/>
+  <text x="556" y="401"
     font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif"
-    font-size="22" fill="#93c5fd" text-anchor="middle" letter-spacing="2">
+    font-size="22" fill="#C8501F" text-anchor="middle" letter-spacing="2">
     收入 − 投资 = 消费
   </text>
 
   <!-- 三个功能标签 -->
-  <g font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-size="18" fill="#64748b">
-    <rect x="366" y="430" width="100" height="32" rx="6" fill="#1e293b"/>
-    <text x="416" y="451" text-anchor="middle" fill="#60a5fa">收入管理</text>
-    <rect x="480" y="430" width="100" height="32" rx="6" fill="#1e293b"/>
-    <text x="530" y="451" text-anchor="middle" fill="#60a5fa">投资追踪</text>
-    <rect x="594" y="430" width="100" height="32" rx="6" fill="#1e293b"/>
-    <text x="644" y="451" text-anchor="middle" fill="#60a5fa">消费分析</text>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif" font-size="18">
+    <rect x="366" y="434" width="100" height="32" rx="16" fill="#FFFFFF" stroke="#ECE3D9"/>
+    <text x="416" y="455" text-anchor="middle" fill="#E8643C">收入管理</text>
+    <rect x="480" y="434" width="100" height="32" rx="16" fill="#FFFFFF" stroke="#ECE3D9"/>
+    <text x="530" y="455" text-anchor="middle" fill="#E8643C">投资追踪</text>
+    <rect x="594" y="434" width="100" height="32" rx="16" fill="#FFFFFF" stroke="#ECE3D9"/>
+    <text x="644" y="455" text-anchor="middle" fill="#E8643C">消费分析</text>
   </g>
 
   <!-- 域名 -->
-  <text x="366" y="510"
+  <text x="366" y="514"
     font-family="-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif"
-    font-size="22" fill="#475569" letter-spacing="0.5">
+    font-size="22" fill="#A89A8E" letter-spacing="0.5">
     cashflow.soniclab.cc
   </text>
 </svg>

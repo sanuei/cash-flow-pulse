@@ -37,8 +37,8 @@ export function ExpensesPage() {
 
   // 信用卡：活跃卡（本期要还）排前，非活跃卡排后（与原首页一致）
   const cardRows = [
-    ...calc.active_cards.map((ac) => ({ card: ac.card, active: true, days_until_due: ac.days_until_due })),
-    ...calc.inactive_cards.map((c) => ({ card: c, active: false, days_until_due: -1 })),
+    ...calc.active_cards.map((ac) => ({ card: ac.card, active: true, days_until_due: ac.days_until_due, amount: ac.amount })),
+    ...calc.inactive_cards.map((c) => ({ card: c, active: false, days_until_due: -1, amount: c.statement_amount })),
   ].filter((r) => notPending(r.card));
 
   return (
@@ -62,7 +62,12 @@ export function ExpensesPage() {
           <CardForm
             initial={
               editing
-                ? { name: editing.name, statement_amount: editing.statement_amount, due_day: editing.due_day }
+                ? {
+                    name: editing.name,
+                    statement_amount: editing.statement_amount,
+                    due_day: editing.due_day,
+                    monthly_statements: editing.monthly_statements,
+                  }
                 : undefined
             }
             onSubmit={async (data) => {
@@ -71,13 +76,18 @@ export function ExpensesPage() {
               await loadDashboard();
               close();
             }}
+            onCancel={close}
           />
         )}
       >
         {(openEdit) =>
-          cardRows.map(({ card, active, days_until_due }) => (
+          cardRows.map(({ card, active, days_until_due, amount }) => {
+            const hasMonthly = card.monthly_statements && Object.keys(card.monthly_statements).length > 0;
+            return (
             <EntityRow
               key={card.id}
+              icon="card"
+              tone="warning"
               title={
                 <>
                   {card.name}{' '}
@@ -90,8 +100,8 @@ export function ExpensesPage() {
                   )}
                 </>
               }
-              subtitle={`每月 ${card.due_day} 号扣款 · 账单 ${formatYen(card.statement_amount)}`}
-              money={<Money amount={card.statement_amount} size="md" sign={active ? 'negative' : 'neutral'} />}
+              subtitle={`每月 ${card.due_day} 号扣款 · 账单 ${formatYen(amount)}${hasMonthly ? ' · 按月账单' : ''}`}
+              money={<Money amount={amount} size="md" sign={active ? 'negative' : 'neutral'} />}
               onEdit={() => openEdit(card)}
               onDelete={() =>
                 softDelete({
@@ -104,7 +114,8 @@ export function ExpensesPage() {
                 })
               }
             />
-          ))
+            );
+          })
         }
       </ManagedListCard>
 
@@ -133,6 +144,7 @@ export function ExpensesPage() {
               await loadDashboard();
               close();
             }}
+            onCancel={close}
           />
         )}
       >
@@ -140,6 +152,8 @@ export function ExpensesPage() {
           bills.map((b) => (
             <EntityRow
               key={b.id}
+              icon="bill"
+              tone="warning"
               title={b.name}
               subtitle={`每月 ${b.due_day} 号扣款`}
               money={<Money amount={b.amount} size="md" sign="negative" />}
@@ -191,6 +205,7 @@ export function ExpensesPage() {
               await loadDashboard();
               close();
             }}
+            onCancel={close}
           />
         )}
       >
@@ -198,6 +213,8 @@ export function ExpensesPage() {
           subscriptions.map((s) => (
             <EntityRow
               key={s.id}
+              icon="subscription"
+              tone="accent"
               title={
                 <>
                   {s.name}{' '}

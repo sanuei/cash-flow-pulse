@@ -14,12 +14,12 @@ export function Login() {
     <div className="min-h-screen flex items-center justify-center p-6 bg-notion-bg">
       <div className="card p-10 max-w-md w-full text-center">
         {/* Logo */}
-        <div className="inline-flex items-center justify-center w-14 h-14 mb-6 rounded-full bg-notion-bg-alt">
-          <Icon name="wallet" size={28} className="text-notion-text" strokeWidth={1.5} />
+        <div className="inline-flex items-center justify-center w-14 h-14 mb-6 rounded-[var(--radius-lg)] bg-[var(--c-accent-soft)]">
+          <Icon name="wallet" size={28} className="text-[var(--c-accent-text)]" strokeWidth={1.5} />
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold mb-2 text-notion-text">Cash Flow Pulse</h1>
+        <h1 className="text-2xl font-bold mb-2 text-notion-text font-display">现金流</h1>
         <p className="text-notion-text-secondary text-sm mb-8">
           个人现金流可视化 · 日均可用预算
         </p>

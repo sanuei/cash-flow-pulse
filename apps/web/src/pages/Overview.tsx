@@ -1,18 +1,13 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../lib/store';
-import { useToast } from '../lib/toast';
 import { Card } from '../components/Card';
 import { Money } from '../components/Money';
 import { LoadingState } from '../components/States';
-import { CashForm } from '../components/CashForm';
 import { Icon } from '../components/Icon';
-import { ManagedListCard } from '../components/ManagedListCard';
-import { EntityRow } from '../components/EntityRow';
 import { formatYen } from '@cfp/shared';
 import { apiGet } from '../lib/api';
 import type {
-  CashSource,
   UpcomingExpenseItem,
   UpcomingIncomeItem,
   InvestmentFrequency,
@@ -48,15 +43,10 @@ type DashboardResponse = {
 export function Overview() {
   // 全局 store（本期数据 + 基础列表）
   const storeCalc = useStore((s) => s.calc);
-  const cashSourcesAll = useStore((s) => s.cashSources);
+  const cashSources = useStore((s) => s.cashSources);
   const config = useStore((s) => s.config);
   const loading = useStore((s) => s.loading);
-  const loadDashboard = useStore((s) => s.loadDashboard);
-  const deleteCash = useStore((s) => s.deleteCash);
-  const pendingDeletes = useToast((s) => s.pendingDeletes);
-  const softDelete = useToast((s) => s.softDelete);
-  // 乐观隐藏正在删除的现金来源
-  const cashSources = cashSourcesAll.filter((cs) => !pendingDeletes.includes(cs.id));
+  const storeSnapshots = useStore((s) => s.snapshots);
 
   // 周期切换本地状态
   const [cycleOffset, setCycleOffset] = useState(0);
@@ -100,15 +90,11 @@ export function Overview() {
   const totalExpense = upcomingExpenses?.grand_total ?? activeCalc.total_due;
   const totalIncome = upcomingIncomes?.total ?? 0;
 
-  // 公式数据：收入 − 投资 = 理论可消费；实际消费 = 信用卡+账单+订阅（不含投资）
+  // 投资 / 消费（消费 = 信用卡+账单+订阅，不含投资）
   const totalInvestment = upcomingExpenses?.total_investments ?? 0;
   const totalConsume = (upcomingExpenses?.total_credit_card ?? 0)
     + (upcomingExpenses?.total_bills ?? 0)
     + (upcomingExpenses?.total_subscriptions ?? 0);
-  // 收入 = 手头净现金（余额-锁定）+ 本期到账收入
-  const formulaIncome = activeCalc.total_net_cash + totalIncome;
-  const theoretical = formulaIncome - totalInvestment;  // 理论可消费
-  const formulaBalance = theoretical - totalConsume;    // 结余（正=盈余，负=超支）
 
   // 新用户引导：本期且所有数字为 0
   const isNewUser = isCurrentCycle
@@ -117,44 +103,65 @@ export function Overview() {
     && totalInvestment === 0
     && totalConsume === 0;
 
-  return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+  // 周期进度（本期已过百分比）
+  const cycleLen = activeCalc.current_cycle_day + activeCalc.days_to_payday;
+  const cycleProgress = cycleLen > 0
+    ? Math.min(100, Math.max(0, Math.round((activeCalc.current_cycle_day / cycleLen) * 100)))
+    : 0;
 
-      {/* 周期切换器 */}
-      <div className="flex items-center justify-center gap-3">
-        <button
-          onClick={() => { setCycleOffset(o => o - 1); setExpensesExpanded(false); setIncomesExpanded(false); }}
-          className="p-1.5 rounded-micro hover:bg-notion-bg-alt transition-colors text-notion-text-secondary hover:text-notion-text"
-          aria-label="上一期"
-        >
-          <Icon name="chevron-right" size={18} className="rotate-180" />
-        </button>
-        <div className="flex items-center gap-2 text-sm font-semibold text-notion-text min-w-[7rem] justify-center">
-          {cycleLoading
-            ? <Icon name="loading" size={16} className="animate-spin text-notion-text-muted" />
-            : <span>{displayCycleId || '加载中'}</span>
-          }
-          {isPredicted && (
-            <span className="badge text-[10px] px-1.5 py-0.5 bg-notion-blue/10 text-notion-blue border-notion-blue/20">预测</span>
-          )}
-          {snapshotBased && (
-            <span className="badge text-[10px] px-1.5 py-0.5">历史快照</span>
-          )}
-          {!isCurrentCycle && !isPredicted && !snapshotBased && !cycleLoading && (
-            <span className="badge-muted badge text-[10px] px-1.5 py-0.5">无快照</span>
-          )}
+  // 本期净流入（纯流量：本期收入 − 消费 − 投资，不含已有存款）— 环形图与「诚实结余」用
+  const netFlow = totalIncome - totalConsume - totalInvestment;
+
+  // ── 花费节奏（仅本期）：对比「时间进度」与「预算进度」──
+  // 预算进度 = 自周期最早一次快照以来，净可用现金消耗的百分比
+  const snapshots = isCurrentCycle ? storeSnapshots : (cycleCalc?.currentSnapshots ?? []);
+  const baseline = snapshots.length > 0
+    ? snapshots.reduce((earliest, s) => (s.snapshot_date < earliest.snapshot_date ? s : earliest))
+    : null;
+  let budgetProgress: number | null = null;
+  if (baseline && baseline.net_available > 0) {
+    const spent = baseline.net_available - activeCalc.net_available;
+    budgetProgress = Math.min(100, Math.max(0, Math.round((spent / baseline.net_available) * 100)));
+  }
+
+  return (
+    // stagger — 每个 section 依次入场（60ms 间隔）
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 stagger">
+
+      {/* 周期切换器 — 居中药丸组 */}
+      <div className="flex items-center justify-center gap-2">
+        <div className="inline-flex items-center gap-0.5 bg-[var(--c-bg-elev)] border border-[var(--c-border)] rounded-[var(--radius-pill)] p-1 shadow-[var(--shadow-xs)]">
+          <button
+            onClick={() => { setCycleOffset(o => o - 1); setExpensesExpanded(false); setIncomesExpanded(false); }}
+            className="p-1.5 rounded-[var(--radius-pill)] hover:bg-[var(--c-bg-alt)] transition-colors text-notion-text-secondary hover:text-notion-text"
+            aria-label="上一期"
+          >
+            <Icon name="chevron-right" size={16} className="rotate-180" />
+          </button>
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-notion-text min-w-[5.5rem] justify-center px-1">
+            {cycleLoading
+              ? <Icon name="loading" size={15} className="animate-spin text-notion-text-muted" />
+              : <span className="font-numeric">{displayCycleId || '加载中'}</span>
+            }
+            {isPredicted && (
+              <span className="badge text-[10px] px-1.5 py-0.5">预测</span>
+            )}
+            {snapshotBased && (
+              <span className="badge-muted badge text-[10px] px-1.5 py-0.5">快照</span>
+            )}
+          </div>
+          <button
+            onClick={() => { setCycleOffset(o => o + 1); setExpensesExpanded(false); setIncomesExpanded(false); }}
+            className="p-1.5 rounded-[var(--radius-pill)] hover:bg-[var(--c-bg-alt)] transition-colors text-notion-text-secondary hover:text-notion-text"
+            aria-label="下一期"
+          >
+            <Icon name="chevron-right" size={16} />
+          </button>
         </div>
-        <button
-          onClick={() => { setCycleOffset(o => o + 1); setExpensesExpanded(false); setIncomesExpanded(false); }}
-          className="p-1.5 rounded-micro hover:bg-notion-bg-alt transition-colors text-notion-text-secondary hover:text-notion-text"
-          aria-label="下一期"
-        >
-          <Icon name="chevron-right" size={18} />
-        </button>
         {cycleOffset !== 0 && (
           <button
             onClick={() => { setCycleOffset(0); setExpensesExpanded(false); setIncomesExpanded(false); }}
-            className="text-xs text-notion-text-muted hover:text-notion-text transition-colors"
+            className="text-xs font-medium text-[var(--c-accent-text)] hover:text-[var(--c-accent)] transition-colors px-2"
           >
             回本期
           </button>
@@ -168,161 +175,137 @@ export function Overview() {
         </div>
       )}
 
-      {/* Hero - 日均预算 */}
-      <section className="text-center pt-4 pb-6">
-        <div className="text-xs uppercase tracking-wider text-notion-text-muted mb-2">
+      {/* Hero - 日均预算（v3: 珊瑚橙渐变横幅 + 衬线大数字） */}
+      <section className="hero-gradient rounded-[var(--radius-xl)] shadow-[var(--shadow-lg)] px-6 pt-7 pb-6 -mt-1">
+        <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-caps font-semibold text-white/90 bg-white/20 rounded-[var(--radius-pill)] px-3 py-1 mb-4">
           {isPredicted ? '预测日均预算' : '日均可用预算'}
         </div>
-        <div className="mb-3">
-          <Money amount={activeCalc.daily_budget} size="hero" className="tracking-tight-display" />
-          <span className="text-2xl sm:text-3xl text-notion-text-secondary font-medium ml-2">/ 日</span>
+        <div className="mb-1.5">
+          <Money
+            amount={activeCalc.daily_budget}
+            size="hero"
+            className="font-display !text-white drop-shadow-sm"
+            animate
+          />
+          <span className="text-[16px] sm:text-[18px] text-white/85 font-normal ml-1.5">
+            / 日
+          </span>
         </div>
-        <div className="text-sm text-notion-text-secondary">
+        <div className="text-[13px] text-white/90">
           {isCurrentCycle
-            ? <>距离下个发薪日（{activeCalc.next_payday_date}）还有 <b className="text-notion-text font-semibold">{activeCalc.days_to_payday}</b> 天</>
+            ? <>距离下个发薪日（{activeCalc.next_payday_date}）还有 <b className="text-white font-semibold">{activeCalc.days_to_payday}</b> 天</>
             : <>{cycleMeta?.cycle_start} — {cycleMeta?.cycle_end}</>
           }
         </div>
+
+        {/* 净可用现金 — 全饱和底色，白字清晰可读 */}
+        <div className="mt-4 pt-3.5 border-t border-white/25 flex items-baseline justify-between">
+          <span className="text-[12px] text-white/85">净可用现金</span>
+          <span className="font-display font-semibold text-[20px] text-white tabular-nums">
+            {formatYen(activeCalc.net_available)}
+          </span>
+        </div>
       </section>
 
-      {/* 公式卡：收入 − 投资 = 消费 */}
+      {/* 花费节奏卡 — 时间进度 vs 预算进度（仅本期，且需有快照基线） */}
+      {isCurrentCycle && !isNewUser && (
+        <PaceCard timePct={cycleProgress} budgetPct={budgetProgress} daysLeft={activeCalc.days_to_payday} />
+      )}
+
+      {/* 本期收入去向：环形图 + 图例（中心=本期收入，净流入=诚实结余） */}
       <Card
         title={
           <div className="flex items-center gap-2">
-            <Icon name="sparkle" size={18} className="text-notion-text-secondary" strokeWidth={1.75} />
-            <span>收入 − 投资 = 消费</span>
+            <Icon name="sparkle" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
+            <span>本期收入去向</span>
           </div>
         }
       >
-        {/* 三列：整列可点击跳转，无多余「管理」链接 */}
-        <div className="grid grid-cols-3 divide-x divide-notion-border mb-4 -mx-1">
-          <FormulaCol label="收入" sublabel="含现金余额" amount={formulaIncome} to="/incomes" />
-          <FormulaCol label="投资" amount={totalInvestment} to="/investments" />
-          <FormulaCol label="消费" amount={totalConsume} to="/expenses" />
-        </div>
-
-        {/* 等式行 + 结余：只有结果数字有颜色 */}
-        <div className="border-t border-notion-border pt-3 space-y-2">
-          <div className="flex items-center justify-center gap-1.5 text-xs text-notion-text-muted flex-wrap">
-            <span className="font-numeric text-notion-text">{formatYen(formulaIncome)}</span>
-            <span>−</span>
-            <span className="font-numeric text-notion-text">{formatYen(totalInvestment)}</span>
-            <span>−</span>
-            <span className="font-numeric text-notion-text">{formatYen(totalConsume)}</span>
-            <span>=</span>
-            <span className={`font-semibold font-numeric ${formulaBalance >= 0 ? 'text-notion-success' : 'text-notion-warning'}`}>
-              {formulaBalance >= 0 ? `+${formatYen(formulaBalance)}` : formatYen(formulaBalance)}
-            </span>
-          </div>
-
-          <div className={`text-center text-base font-bold font-numeric py-2 rounded-micro ${
-            formulaBalance >= 0
-              ? 'text-notion-success bg-notion-success/5'
-              : 'text-notion-warning bg-notion-warning/5'
-          }`}>
-            {formulaBalance >= 0 ? '结余' : '超支'}&nbsp;
-            {formulaBalance >= 0 ? `+${formatYen(formulaBalance)}` : formatYen(formulaBalance)}
-          </div>
+        <FlowChartRow
+          income={totalIncome}
+          consume={totalConsume}
+          invest={totalInvestment}
+          netFlow={netFlow}
+        />
+        <div className="mt-3 pt-3 border-t border-[var(--c-border)] text-[11px] text-notion-text-muted leading-relaxed">
+          净流入 = 本期收入 − 消费 − 投资（不含账户已有存款）
         </div>
       </Card>
 
       {/* 新用户引导卡（首次使用，所有数据为空时显示） */}
       {isNewUser && (
-        <div className="card p-5 border-2 border-dashed border-notion-border">
-          <div className="text-sm font-semibold text-notion-text mb-1">👋 欢迎使用 Cash Flow Pulse</div>
-          <p className="text-sm text-notion-text-secondary mb-4">
+        <div className="card p-5 border-dashed border-[var(--c-border-strong)] anim-fade-up">
+          <div className="text-[15px] font-semibold text-notion-text mb-1.5 tracking-tight-section">
+            👋 欢迎使用现金流
+          </div>
+          <p className="text-[13px] text-notion-text-secondary mb-4 leading-relaxed">
             添加数据后，这里会自动计算你的日均可用预算和收支结余。从这三步开始：
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <Link to="/incomes"
-              className="flex items-center gap-2 px-3 py-2.5 rounded-standard border border-notion-border hover:bg-notion-bg-alt transition-colors">
-              <Icon name="income" size={16} className="text-notion-success flex-shrink-0" strokeWidth={1.75} />
+              className="
+                group flex items-center gap-2.5 px-3 py-2.5
+                rounded-[var(--radius-md)] border border-[var(--c-border)]
+                bg-[var(--c-bg-elev)]
+                transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+                hover:border-[var(--c-success)] hover:bg-[var(--c-success-soft)] hover:-translate-y-0.5
+              ">
+              <span className="flex-shrink-0 w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--c-success-soft)] flex items-center justify-center group-hover:bg-[var(--c-bg-elev)] transition-colors">
+                <Icon name="income" size={14} className="text-notion-success" strokeWidth={1.75} />
+              </span>
               <div>
-                <div className="text-sm font-medium text-notion-text">添加收入</div>
-                <div className="text-xs text-notion-text-muted">工资、副业等</div>
+                <div className="text-[13px] font-semibold text-notion-text">添加收入</div>
+                <div className="text-[11px] text-notion-text-muted">工资、副业等</div>
               </div>
             </Link>
             <Link to="/investments"
-              className="flex items-center gap-2 px-3 py-2.5 rounded-standard border border-notion-border hover:bg-notion-bg-alt transition-colors">
-              <Icon name="investment" size={16} className="text-notion-blue flex-shrink-0" strokeWidth={1.75} />
+              className="
+                group flex items-center gap-2.5 px-3 py-2.5
+                rounded-[var(--radius-md)] border border-[var(--c-border)]
+                bg-[var(--c-bg-elev)]
+                transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+                hover:border-[var(--c-accent)] hover:bg-[var(--c-accent-soft)] hover:-translate-y-0.5
+              ">
+              <span className="flex-shrink-0 w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)] flex items-center justify-center group-hover:bg-[var(--c-bg-elev)] transition-colors">
+                <Icon name="investment" size={14} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
+              </span>
               <div>
-                <div className="text-sm font-medium text-notion-text">添加投资</div>
-                <div className="text-xs text-notion-text-muted">基金定投、积存等</div>
+                <div className="text-[13px] font-semibold text-notion-text">添加投资</div>
+                <div className="text-[11px] text-notion-text-muted">基金定投、积存等</div>
               </div>
             </Link>
             <Link to="/expenses"
-              className="flex items-center gap-2 px-3 py-2.5 rounded-standard border border-notion-border hover:bg-notion-bg-alt transition-colors">
-              <Icon name="bill" size={16} className="text-notion-warning flex-shrink-0" strokeWidth={1.75} />
+              className="
+                group flex items-center gap-2.5 px-3 py-2.5
+                rounded-[var(--radius-md)] border border-[var(--c-border)]
+                bg-[var(--c-bg-elev)]
+                transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+                hover:border-[var(--c-warning)] hover:bg-[var(--c-warning-soft)] hover:-translate-y-0.5
+              ">
+              <span className="flex-shrink-0 w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--c-warning-soft)] flex items-center justify-center group-hover:bg-[var(--c-bg-elev)] transition-colors">
+                <Icon name="bill" size={14} className="text-notion-warning" strokeWidth={1.75} />
+              </span>
               <div>
-                <div className="text-sm font-medium text-notion-text">添加消费</div>
-                <div className="text-xs text-notion-text-muted">账单、订阅、信用卡</div>
+                <div className="text-[13px] font-semibold text-notion-text">添加消费</div>
+                <div className="text-[11px] text-notion-text-muted">账单、订阅、信用卡</div>
               </div>
             </Link>
           </div>
-          <p className="text-xs text-notion-text-muted mt-3">
-            💡 还可以在总览底部添加现金来源（PayPay、银行账户等），让收入数字更准确。
+          <p className="text-[12px] text-notion-text-muted mt-3 leading-relaxed">
+            💡 在「收入」页可添加现金来源（PayPay、银行账户等），让收入数字更准确。
           </p>
         </div>
       )}
 
-      {/* 摘要卡片（含本期支出/收入两行） */}
-      <Card
-        title={
-          <div className="flex items-center gap-2">
-            <Icon name="sparkle" size={18} className="text-notion-blue" strokeWidth={1.75} />
-            <span>本期概览</span>
-          </div>
-        }
-      >
-        {/* 输入项：现金 + 收支 */}
-        <dl className="divide-y divide-notion-border">
-          <Row label="现金来源总额" value={formatYen(activeCalc.total_balance)} />
-          <Row
-            label="锁定金额"
-            value={`-${formatYen(activeCalc.total_locked)}`}
-            muted
-            icon={<Icon name="lock" size={14} className="text-notion-text-muted" />}
-          />
-          <Row
-            label="本期支出（含订阅）"
-            value={`-${formatYen(totalExpense)}`}
-            warning={totalExpense > 0}
-            icon={<Icon name="warning" size={14} className="text-notion-warning" />}
-            onClick={() => setExpensesExpanded(!expensesExpanded)}
-            collapsible
-            expanded={expensesExpanded}
-          />
-          <Row
-            label="本期收入"
-            value={`+${formatYen(totalIncome)}`}
-            success={totalIncome > 0}
-            icon={<Icon name="trending-up" size={14} className="text-notion-success" />}
-            onClick={() => setIncomesExpanded(!incomesExpanded)}
-            collapsible
-            expanded={incomesExpanded}
-          />
-        </dl>
-
-        {/* 结果项：净可用 + 日均（视觉上与输入项分开）*/}
-        <dl className="divide-y divide-notion-border mt-3 pt-3 border-t-2 border-notion-border">
-          <Row label="净可用现金" value={formatYen(activeCalc.net_available)} bold />
-          <Row
-            label="日均预算"
-            value={`${formatYen(activeCalc.daily_budget)} / 日`}
-            bold
-            highlight
-          />
-        </dl>
-      </Card>
 
       {/* 本期支出汇总卡 */}
       {upcomingExpenses && (
         <Card
           title={
             <div className="flex items-center gap-2">
-              <Icon name="warning" size={18} className="text-notion-warning" strokeWidth={1.75} />
+              <Icon name="warning" size={16} className="text-notion-warning" strokeWidth={1.75} />
               <span>本期支出明细</span>
-              <span className="badge-warning badge text-[10px] ml-1">
+              <span className="badge badge-warning text-[10px] ml-1 px-1.5 py-0.5">
                 {formatYen(totalExpense)}
               </span>
             </div>
@@ -330,15 +313,26 @@ export function Overview() {
           action={
             <button
               onClick={() => setExpensesExpanded(!expensesExpanded)}
-              className="btn-ghost flex items-center gap-1 text-xs"
+              className="btn-ghost flex items-center gap-1 text-[12px]"
             >
               <span>{expensesExpanded ? '收起' : '展开'}</span>
-              <Icon name={expensesExpanded ? 'chevron-down' : 'chevron-right'} size={14} />
+              <Icon
+                name="chevron-down"
+                size={12}
+                className={`transition-transform duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+                  expensesExpanded ? 'rotate-0' : '-rotate-90'
+                }`}
+              />
             </button>
           }
         >
-          {expensesExpanded && (
-            <div className="space-y-3 text-sm">
+          <div
+            className="grid transition-[grid-template-rows] duration-[var(--dur-medium)] ease-[var(--ease-out-expo)]"
+            style={{ gridTemplateRows: expensesExpanded ? '1fr' : '0fr' }}
+          >
+            <div className="overflow-hidden">
+              {expensesExpanded && (
+                <div className="space-y-3 text-[13px] anim-fade-up">
               {/* 信用卡 */}
               {upcomingExpenses.credit_cards.length > 0 && (
                 <SubCategory title="信用卡" icon="card" total={upcomingExpenses.total_credit_card}>
@@ -346,7 +340,7 @@ export function Overview() {
                     <ExpenseRow
                       key={ac.card.id}
                       name={ac.card.name}
-                      amount={ac.card.statement_amount}
+                      amount={ac.amount}
                       date={ac.due_date}
                       daysUntil={ac.days_until_due}
                     />
@@ -395,12 +389,14 @@ export function Overview() {
                 upcomingExpenses.subscriptions.length === 0 &&
                 upcomingExpenses.bills.length === 0 &&
                 upcomingExpenses.investments.length === 0 && (
-                  <div className="text-center text-notion-text-muted text-xs py-4">
+                  <div className="text-center text-notion-text-muted text-[12px] py-4">
                     本期暂无支出明细
                   </div>
                 )}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </Card>
       )}
 
@@ -409,91 +405,49 @@ export function Overview() {
         <Card
           title={
             <div className="flex items-center gap-2">
-              <Icon name="trending-up" size={18} className="text-notion-success" strokeWidth={1.75} />
+              <Icon name="trending-up" size={16} className="text-notion-success" strokeWidth={1.75} />
               <span>本期收入明细</span>
-              <span className="badge text-[10px] ml-1">{formatYen(totalIncome)}</span>
+              <span className="badge text-[10px] ml-1 px-1.5 py-0.5">{formatYen(totalIncome)}</span>
             </div>
           }
           action={
             <button
               onClick={() => setIncomesExpanded(!incomesExpanded)}
-              className="btn-ghost flex items-center gap-1 text-xs"
+              className="btn-ghost flex items-center gap-1 text-[12px]"
             >
               <span>{incomesExpanded ? '收起' : '展开'}</span>
-              <Icon name={incomesExpanded ? 'chevron-down' : 'chevron-right'} size={14} />
+              <Icon
+                name="chevron-down"
+                size={12}
+                className={`transition-transform duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+                  incomesExpanded ? 'rotate-0' : '-rotate-90'
+                }`}
+              />
             </button>
           }
         >
-          {incomesExpanded && (
-            <div className="space-y-2 text-sm">
-              {upcomingIncomes.items.length === 0 ? (
-                <div className="text-center text-notion-text-muted text-xs py-4">
-                  本期暂无收入明细
+          <div
+            className="grid transition-[grid-template-rows] duration-[var(--dur-medium)] ease-[var(--ease-out-expo)]"
+            style={{ gridTemplateRows: incomesExpanded ? '1fr' : '0fr' }}
+          >
+            <div className="overflow-hidden">
+              {incomesExpanded && (
+                <div className="space-y-2 text-[13px] anim-fade-up">
+                  {upcomingIncomes.items.length === 0 ? (
+                    <div className="text-center text-notion-text-muted text-[12px] py-4">
+                      本期暂无收入明细
+                    </div>
+                  ) : (
+                    upcomingIncomes.items.map((inc, i) => <IncomeRow key={`${inc.id}-${i}`} item={inc} />)
+                  )}
                 </div>
-              ) : (
-                upcomingIncomes.items.map((inc, i) => <IncomeRow key={`${inc.id}-${i}`} item={inc} />)
               )}
             </div>
-          )}
+          </div>
         </Card>
       )}
 
-      {/* 现金来源（仅本期可编辑，其他周期仅展示历史值） */}
-      <ManagedListCard<CashSource>
-        icon="cash"
-        label="现金来源"
-        count={cashSources.length}
-        empty={{
-          icon: 'cash',
-          title: '还没有现金来源',
-          description: '添加 PayPay、钱包现金、银行活期等',
-          addLabel: '添加第一个',
-        }}
-        formTitle={(e) => (e ? '编辑现金来源' : '新增现金来源')}
-        renderForm={(editing, close) => (
-          <CashForm
-            initial={editing ?? undefined}
-            onSubmit={async (data) => {
-              if (editing) await useStore.getState().updateCash(editing.id, data);
-              else await useStore.getState().addCash(data);
-              await loadDashboard();
-              close();
-            }}
-          />
-        )}
-      >
-        {(openEdit) =>
-          cashSources.map((cs) => (
-            <EntityRow
-              key={cs.id}
-              title={cs.name}
-              subtitle={
-                <span className="font-numeric flex items-center gap-2">
-                  <span>余额 {formatYen(cs.balance)}</span>
-                  {cs.locked_amount > 0 && (
-                    <span className="inline-flex items-center gap-0.5">
-                      <Icon name="lock" size={10} />
-                      <span>锁定 {formatYen(cs.locked_amount)}</span>
-                    </span>
-                  )}
-                </span>
-              }
-              money={<Money amount={cs.balance - cs.locked_amount} size="md" />}
-              onEdit={() => openEdit(cs)}
-              onDelete={() =>
-                softDelete({
-                  entityId: cs.id,
-                  message: `已删除「${cs.name}」`,
-                  perform: async () => {
-                    await deleteCash(cs.id);
-                    await loadDashboard();
-                  },
-                })
-              }
-            />
-          ))
-        }
-      </ManagedListCard>
+      {/* 现金来源已并入「收入」页（收入 = 现金余额 + 本期到账） */}
     </div>
   );
 }
@@ -502,92 +456,87 @@ export function Overview() {
 // 内部子组件（仅总览页展示用）
 // ============================================================
 
-function FormulaCol({
-  label,
-  sublabel,
-  amount,
-  to,
+// ── 花费节奏卡：对比「时间进度」与「预算进度」──
+function PaceCard({
+  timePct,
+  budgetPct,
+  daysLeft,
 }: {
-  label: string;
-  sublabel?: string;
-  amount: number;
-  to: string;
+  timePct: number;
+  budgetPct: number | null;
+  daysLeft: number;
 }) {
+  // 无快照基线：给出引导，而非假数据
+  if (budgetPct === null) {
+    return (
+      <Card
+        title={
+          <div className="flex items-center gap-2">
+            <Icon name="bar-chart" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
+            <span>花费节奏</span>
+          </div>
+        }
+      >
+        <div className="flex items-center gap-2 text-[13px] text-notion-text-secondary">
+          <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
+        </div>
+        <p className="mt-3 text-[12px] text-notion-text-muted leading-relaxed">
+          录入一次本期快照后，这里会对比「时间进度」与「预算进度」，告诉你是领先还是花得太快。
+        </p>
+      </Card>
+    );
+  }
+
+  const ahead = budgetPct <= timePct;
+  const synced = !ahead && budgetPct <= timePct + 12;
+  const verdict = ahead
+    ? { label: '进度健康', cls: 'text-notion-success bg-[var(--c-success-soft)]',
+        text: <>时间过了 <b className="font-semibold">{timePct}%</b>，预算只用了 <b className="font-semibold">{budgetPct}%</b> — 你领先了，可以稍微放松。</> }
+    : synced
+    ? { label: '基本同步', cls: 'text-notion-text-secondary bg-[var(--c-bg-alt)]',
+        text: <>时间 <b className="font-semibold">{timePct}%</b> / 预算 <b className="font-semibold">{budgetPct}%</b> — 节奏基本同步。</> }
+    : { label: '花得偏快', cls: 'text-notion-warning bg-[var(--c-warning-soft)]',
+        text: <>时间才过 <b className="font-semibold">{timePct}%</b>，预算已用 <b className="font-semibold">{budgetPct}%</b> — 剩下 {daysLeft} 天要省着点。</> };
+  const budgetColor = ahead ? 'var(--c-success)' : synced ? 'var(--c-accent)' : 'var(--c-warning)';
+
   return (
-    <Link
-      to={to}
-      className="group flex flex-col items-center gap-1 py-3 px-2 rounded-micro hover:bg-notion-bg-alt transition-colors"
+    <Card
+      title={
+        <div className="flex items-center gap-2">
+          <Icon name="bar-chart" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
+          <span>花费节奏</span>
+        </div>
+      }
+      action={
+        <span className={`badge text-[10px] px-2 py-0.5 ${verdict.cls}`}>{verdict.label}</span>
+      }
     >
-      <div className="text-xs text-notion-text-muted">{label}</div>
-      {/* 固定高度保证三列等高 */}
-      <div className="text-[10px] text-notion-text-muted/60 h-4 leading-4">
-        {sublabel ?? ''}
+      <div className="space-y-2.5">
+        <ProgressBar label="时间" pct={timePct} color="var(--c-text-muted)" />
+        <ProgressBar label="预算" pct={budgetPct} color={budgetColor} />
       </div>
-      <div className="text-lg sm:text-xl font-bold font-numeric text-notion-text group-hover:text-notion-blue transition-colors">
-        {formatYen(amount)}
-      </div>
-    </Link>
+      <p className="mt-3 text-[12px] text-notion-text-secondary leading-relaxed">
+        {verdict.text}
+      </p>
+    </Card>
   );
 }
 
-function Row({
-  label,
-  value,
-  bold,
-  muted,
-  warning,
-  success,
-  highlight,
-  icon,
-  onClick,
-  collapsible,
-  expanded,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-  muted?: boolean;
-  warning?: boolean;
-  success?: boolean;
-  highlight?: boolean;
-  icon?: ReactNode;
-  onClick?: () => void;
-  collapsible?: boolean;
-  expanded?: boolean;
-  divider?: boolean;
-}) {
-  const cursorClass = onClick ? 'cursor-pointer hover:bg-notion-bg-alt/50' : '';
-
+function ProgressBar({ label, pct, color }: { label: string; pct: number; color: string }) {
   return (
-    <div
-      onClick={onClick}
-      className={`flex items-center justify-between py-2.5 px-2 -mx-2 rounded-micro transition-colors ${cursorClass}`}
-    >
-      <dt
-        className={`text-sm flex items-center gap-1.5 ${
-          muted ? 'text-notion-text-muted' : 'text-notion-text-secondary'
-        }`}
-      >
-        {icon}
-        <span>{label}</span>
-        {collapsible && (
-          <Icon
-            name={expanded ? 'chevron-down' : 'chevron-right'}
-            size={12}
-            className="text-notion-text-muted ml-0.5"
-          />
-        )}
-      </dt>
-      <dd
-        className={`font-numeric text-sm ${
-          highlight ? 'text-base font-bold text-notion-text' : bold ? 'font-bold text-notion-text' : ''
-        } ${warning ? 'text-notion-warning' : ''} ${success ? 'text-notion-success' : ''} ${muted ? 'text-notion-text-muted' : ''}`}
-      >
-        {value}
-      </dd>
+    <div className="flex items-center gap-2.5">
+      <span className="text-[12px] text-notion-text-muted w-8 flex-shrink-0">{label}</span>
+      <div className="flex-1 h-2 rounded-[var(--radius-pill)] bg-[var(--c-bg-alt)] overflow-hidden">
+        <div
+          className="h-full rounded-[var(--radius-pill)] transition-[width] duration-[var(--dur-deliberate)] ease-[var(--ease-out-expo)]"
+          style={{ width: `${pct}%`, background: color }}
+        />
+      </div>
+      <span className="text-[12px] font-numeric text-notion-text-secondary w-9 text-right flex-shrink-0">{pct}%</span>
     </div>
   );
 }
+
 
 function SubCategory({
   title,
@@ -602,12 +551,12 @@ function SubCategory({
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between text-xs text-notion-text-secondary mb-2">
+      <div className="flex items-center justify-between text-[12px] text-notion-text-secondary mb-2 tracking-tight-section">
         <div className="flex items-center gap-1.5">
-          <Icon name={icon} size={12} />
-          <span className="font-medium">{title}</span>
+          <Icon name={icon} size={12} strokeWidth={1.75} />
+          <span className="font-semibold uppercase tracking-caps text-[11px]">{title}</span>
         </div>
-        <span className="font-numeric">{formatYen(total)}</span>
+        <span className="font-numeric font-semibold">{formatYen(total)}</span>
       </div>
       <div className="space-y-1.5 pl-4">{children}</div>
     </div>
@@ -628,17 +577,23 @@ function ExpenseRow({
   inCurrentCycle?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between text-sm">
+    <div className="flex items-center justify-between text-[13px] py-1">
       <div className="flex-1 min-w-0">
-        <span className={inCurrentCycle ? 'text-notion-text' : 'text-notion-text-muted'}>{name}</span>
-        <span className="text-notion-text-muted ml-2 text-xs">
+        <span className={inCurrentCycle ? 'text-notion-text' : 'text-notion-text-muted'}>
+          {name}
+        </span>
+        <span className="text-notion-text-muted ml-2 text-[11px]">
           {date}
           {daysUntil > 0 && <span> · {daysUntil} 天后</span>}
           {daysUntil === 0 && <span> · 今天</span>}
           {!inCurrentCycle && <span className="ml-1 text-notion-text-muted">· 下期扣款</span>}
         </span>
       </div>
-      <span className={`font-numeric ${inCurrentCycle ? 'text-notion-warning' : 'text-notion-text-muted'}`}>
+      <span
+        className={`font-numeric font-semibold ${
+          inCurrentCycle ? 'text-notion-warning' : 'text-notion-text-muted'
+        }`}
+      >
         {formatYen(amount)}
       </span>
     </div>
@@ -653,30 +608,156 @@ function InvestmentExpenseRow({ item }: { item: UpcomingExpenseItem }) {
     yearly: '每年',
   };
   return (
-    <div className="flex items-center justify-between text-sm">
+    <div className="flex items-center justify-between text-[13px] py-1">
       <div className="flex-1 min-w-0">
         <span className="text-notion-text">{item.name}</span>
-        <span className="text-notion-text-muted ml-2 text-xs">
+        <span className="text-notion-text-muted ml-2 text-[11px]">
           {freqLabel[item.frequency ?? 'monthly']} × {item.occurrences} 次
         </span>
       </div>
-      <span className="font-numeric text-notion-warning">{formatYen(item.total)}</span>
+      <span className="font-numeric font-semibold text-notion-warning">{formatYen(item.total)}</span>
     </div>
   );
 }
 
 function IncomeRow({ item }: { item: UpcomingIncomeItem }) {
   return (
-    <div className="flex items-center justify-between text-sm">
+    <div className="flex items-center justify-between text-[13px] py-1">
       <div className="flex-1 min-w-0">
         <span className="text-notion-text">{item.name}</span>
-        <span className="text-notion-text-muted ml-2 text-xs">
+        <span className="text-notion-text-muted ml-2 text-[11px]">
           {item.pay_date}
           {item.days_until > 0 && <span> · {item.days_until} 天后</span>}
           {item.days_until === 0 && <span> · 今天</span>}
         </span>
       </div>
-      <span className="font-numeric text-notion-success">+{formatYen(item.amount)}</span>
+      <span className="font-numeric font-semibold text-notion-success">+{formatYen(item.amount)}</span>
     </div>
+  );
+}
+
+// ── 本期收入去向环形图 ──────────────────────────────────────────────────────
+// 分母 = 本期收入（纯流量）。消费 + 投资 + 净流入 = 本期收入。
+// 若超支（净流入<0），分母退化为本期支出，并单列「超支」。
+
+type DonutSeg = { value: number; color: string; label: string };
+
+function FlowChartRow({
+  income, consume, invest, netFlow,
+}: { income: number; consume: number; invest: number; netFlow: number }) {
+  const overspend = netFlow < 0;
+  const segments: DonutSeg[] = [
+    { value: consume, color: 'var(--c-warning)', label: '消费' },
+    { value: invest,  color: 'var(--c-accent)',  label: '投资' },
+    ...(netFlow > 0 ? [{ value: netFlow, color: 'var(--c-success)', label: '净流入' }] : []),
+  ].filter(s => s.value > 0);
+
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  if (total <= 0) {
+    return (
+      <div className="text-center text-notion-text-muted text-[13px] py-6">
+        本期暂无收支数据
+      </div>
+    );
+  }
+
+  const centerLabel = overspend ? '本期支出' : '本期收入';
+  const centerValue = overspend ? total : income;
+
+  return (
+    <div className="flex items-center gap-4">
+      <FlowDonut segments={segments} centerLabel={centerLabel} centerValue={centerValue} />
+      {/* 图例 */}
+      <div className="flex-1 min-w-0 space-y-1.5">
+        {segments.map((seg) => {
+          const pct = Math.round((seg.value / total) * 100);
+          const isNet = seg.label === '净流入';
+          return (
+            <div key={seg.label} className="flex items-center gap-2 text-[12px]">
+              <span
+                className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                style={{ background: seg.color }}
+              />
+              <span className={`flex-shrink-0 ${isNet ? 'text-notion-success font-semibold' : 'text-notion-text-muted'}`}>
+                {seg.label}
+              </span>
+              <span className={`font-numeric ml-auto ${isNet ? 'text-notion-success font-semibold' : 'text-notion-text'}`}>
+                {isNet ? `+${formatYen(seg.value)}` : formatYen(seg.value)}
+              </span>
+              <span className={`w-8 text-right flex-shrink-0 ${isNet ? 'text-notion-success font-semibold' : 'text-notion-text-muted'}`}>
+                {pct}%
+              </span>
+            </div>
+          );
+        })}
+        {overspend && (
+          <div className="flex items-center gap-2 text-[12px] pt-1.5 border-t border-[var(--c-border)] mt-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0 bg-[var(--c-warning)]" />
+            <span className="text-notion-warning font-semibold flex-shrink-0">超支</span>
+            <span className="font-numeric text-notion-warning font-semibold ml-auto">
+              {formatYen(netFlow)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FlowDonut({
+  segments, centerLabel, centerValue,
+}: { segments: DonutSeg[]; centerLabel: string; centerValue: number }) {
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  if (total <= 0) return null;
+
+  const cx = 50, cy = 50, R = 45, rInner = 33;
+  const hasGap = segments.length > 1;
+  let angle = -Math.PI / 2;
+
+  const arcs = segments.map((seg) => {
+    const sweep = (seg.value / total) * 2 * Math.PI;
+    const gap = hasGap ? 0.04 : 0;
+    const sa = angle + gap / 2;
+    const ea = angle + sweep - gap / 2;
+    angle += sweep;
+    const actualSweep = ea - sa;
+    if (actualSweep <= 0) return null;
+    const large = actualSweep > Math.PI ? 1 : 0;
+    const cos1 = Math.cos(sa), sin1 = Math.sin(sa);
+    const cos2 = Math.cos(ea), sin2 = Math.sin(ea);
+    return {
+      d: [
+        `M${cx + R * cos1},${cy + R * sin1}`,
+        `A${R},${R},0,${large},1,${cx + R * cos2},${cy + R * sin2}`,
+        `L${cx + rInner * cos2},${cy + rInner * sin2}`,
+        `A${rInner},${rInner},0,${large},0,${cx + rInner * cos1},${cy + rInner * sin1}`,
+        'Z',
+      ].join(' '),
+      color: seg.color,
+    };
+  }).filter(Boolean) as { d: string; color: string }[];
+
+  return (
+    <svg
+      width="104" height="104"
+      viewBox="0 0 100 100"
+      className="flex-shrink-0"
+      role="img"
+      aria-label={`${centerLabel} ${formatYen(centerValue)}`}
+    >
+      {arcs.map((arc, i) => (
+        <path key={i} d={arc.d} style={{ fill: arc.color }} />
+      ))}
+      <text x="50" y="46" textAnchor="middle" style={{ fontSize: '7px', fill: 'var(--c-text-muted)' }}>
+        {centerLabel}
+      </text>
+      <text
+        x="50" y="59" textAnchor="middle"
+        className="font-numeric"
+        style={{ fontSize: '11px', fontWeight: 600, fill: 'var(--c-text)' }}
+      >
+        {formatYen(centerValue)}
+      </text>
+    </svg>
   );
 }

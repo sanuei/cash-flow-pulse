@@ -73,7 +73,7 @@ interface AppState {
   addCash: (data: { name: string; balance: number; locked_amount: number }) => Promise<void>;
   updateCash: (id: string, data: Partial<CashSource>) => Promise<void>;
   deleteCash: (id: string) => Promise<void>;
-  addCard: (data: { name: string; statement_amount: number; due_day: number }) => Promise<void>;
+  addCard: (data: { name: string; statement_amount: number; due_day: number; monthly_statements?: Record<string, number> }) => Promise<void>;
   updateCard: (id: string, data: Partial<CreditCard>) => Promise<void>;
   deleteCard: (id: string) => Promise<void>;
   updateConfig: (data: Partial<Pick<UserConfig, 'pay_day' | 'snapshot_offsets'>>) => Promise<void>;

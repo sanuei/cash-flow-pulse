@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { HeroAmount, Field, Segmented, Collapsible, FormError, FormActions } from './FormKit';
 
 type Frequency = 'monthly' | 'weekly';
 
@@ -18,9 +19,11 @@ const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周�
 export function IncomeForm({
   initial,
   onSubmit,
+  onCancel,
 }: {
   initial?: FormData;
   onSubmit: (data: FormData) => Promise<void>;
+  onCancel?: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [amount, setAmount] = useState(initial?.amount ?? 0);
@@ -51,13 +54,9 @@ export function IncomeForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!name.trim()) {
-      setError('名称不能为空');
-      return;
-    }
+    if (!name.trim()) { setError('名称不能为空'); return; }
     if (frequency === 'monthly' && (payDay < 1 || payDay > 31)) {
-      setError('发薪日必须在 1-31 之间');
-      return;
+      setError('到账日必须在 1-31 之间'); return;
     }
     setSaving(true);
     try {
@@ -80,125 +79,60 @@ export function IncomeForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="label">名称</label>
+      <HeroAmount label="收入金额" value={amount} onChange={setAmount} tone="success" />
+
+      <Field label="名称">
         <input
           className="input"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="如 工资 / 副业 / 兼职"
-          autoFocus
         />
-      </div>
-      <div>
-        <label className="label">金额（¥）</label>
-        <input
-          type="number"
-          inputMode="numeric"
-          className="input font-numeric"
-          value={amount}
-          onChange={(e) => setAmount(Number(e.target.value) || 0)}
-          min="0"
-          step="1"
+      </Field>
+
+      <Field label="频率">
+        <Segmented
+          options={[{ value: 'monthly', label: '每月' }, { value: 'weekly', label: '每周' }]}
+          value={frequency}
+          onChange={setFrequency}
         />
-      </div>
-      <div>
-        <label className="label">频率</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setFrequency('monthly')}
-            className={`px-3 py-2 rounded-micro text-sm font-medium transition-colors ${
-              frequency === 'monthly'
-                ? 'bg-notion-blue text-white'
-                : 'bg-black/[0.05] text-notion-text-secondary hover:bg-black/[0.08]'
-            }`}
-          >
-            每月
-          </button>
-          <button
-            type="button"
-            onClick={() => setFrequency('weekly')}
-            className={`px-3 py-2 rounded-micro text-sm font-medium transition-colors ${
-              frequency === 'weekly'
-                ? 'bg-notion-blue text-white'
-                : 'bg-black/[0.05] text-notion-text-secondary hover:bg-black/[0.08]'
-            }`}
-          >
-            每周
-          </button>
-        </div>
-      </div>
+      </Field>
+
       {frequency === 'monthly' ? (
-        <div>
-          <label className="label">每月到账日（1-31）</label>
-          <input
-            type="number"
-            inputMode="numeric"
-            className="input font-numeric max-w-[120px]"
-            value={payDay}
-            onChange={(e) => setPayDay(Number(e.target.value) || 0)}
-            min="1"
-            max="31"
-            step="1"
-          />
-          <p className="text-xs text-notion-text-muted mt-1">大于当月天数按月末到账</p>
-        </div>
+        <Field label="每月到账日" hint="大于当月天数按月末到账">
+          <div className="relative max-w-[140px]">
+            <input
+              type="number" inputMode="numeric" className="input font-numeric pr-9"
+              value={payDay} onChange={(e) => setPayDay(Number(e.target.value) || 0)}
+              min="1" max="31" step="1"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[14px] text-notion-text-muted">号</span>
+          </div>
+        </Field>
       ) : (
-        <div>
-          <label className="label">每周几到账</label>
-          <select
-            className="input"
-            value={dayOfWeek}
-            onChange={(e) => setDayOfWeek(Number(e.target.value))}
-          >
-            {WEEKDAY_LABELS.map((label, i) => (
-              <option key={i} value={i}>
-                {label}
-              </option>
-            ))}
+        <Field label="每周几到账">
+          <select className="input" value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>
+            {WEEKDAY_LABELS.map((label, i) => <option key={i} value={i}>{label}</option>)}
           </select>
-        </div>
+        </Field>
       )}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">开始日期</label>
-          <input
-            type="date"
-            className="input font-numeric"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
+
+      <Collapsible>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="开始日期">
+            <input type="date" className="input font-numeric" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </Field>
+          <Field label="结束日期（可选）">
+            <input type="date" className="input font-numeric" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </Field>
         </div>
-        <div>
-          <label className="label">结束日期（可选）</label>
-          <input
-            type="date"
-            className="input font-numeric"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
-        </div>
-      </div>
-      <div>
-        <label className="label">备注（可选）</label>
-        <input
-          className="input"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="如 25 号发放"
-        />
-      </div>
-      {error && (
-        <div className="text-sm text-notion-warning bg-[#fff4eb] px-3 py-2 rounded-micro">
-          {error}
-        </div>
-      )}
-      <div className="flex gap-2 pt-2">
-        <button type="submit" className="btn-primary flex-1" disabled={saving}>
-          {saving ? '保存中...' : '保存'}
-        </button>
-      </div>
+        <Field label="备注（可选）">
+          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 25 号发放" />
+        </Field>
+      </Collapsible>
+
+      <FormError msg={error} />
+      <FormActions onCancel={onCancel} saving={saving} disabled={!name.trim()} />
     </form>
   );
 }

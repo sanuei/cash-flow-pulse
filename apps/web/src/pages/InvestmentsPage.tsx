@@ -64,6 +64,7 @@ export function InvestmentsPage() {
               await loadDashboard();
               close();
             }}
+            onCancel={close}
           />
         )}
       >
@@ -71,6 +72,8 @@ export function InvestmentsPage() {
           investments.map((inv) => (
             <EntityRow
               key={inv.id}
+              icon="investment"
+              tone="accent"
               title={inv.name}
               subtitle={`${FREQ_LABEL[inv.frequency]}扣款 ${formatYen(inv.amount)} · 始于 ${inv.start_date}`}
               money={<Money amount={inv.amount} size="md" sign="negative" />}

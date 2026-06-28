@@ -4,6 +4,7 @@ import { Card } from '../components/Card';
 import { LoadingState } from '../components/States';
 import { Icon } from '../components/Icon';
 import { apiGet } from '../lib/api';
+import { THEMES, getStoredTheme, setTheme, type Theme } from '../lib/theme';
 
 type SessionInfo = {
   id: string;
@@ -24,6 +25,7 @@ export function Settings() {
   const currentUser = useStore((s) => s.currentUser);
   const logout = useStore((s) => s.logout);
 
+  const [activeTheme, setActiveTheme] = useState<Theme>(getStoredTheme);
   const [payDay, setPayDay] = useState(config?.pay_day ?? 10);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -253,10 +255,59 @@ export function Settings() {
         )}
       </Card>
 
+      {/* ── 主题 ── */}
+      <Card title="外观主题">
+        <div className="grid grid-cols-5 gap-2 sm:gap-3">
+          {THEMES.map((t) => {
+            const isActive = activeTheme === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => { setTheme(t.id); setActiveTheme(t.id); }}
+                className={`
+                  relative flex flex-col items-center gap-2 p-2 sm:p-3 rounded-[var(--radius-lg)]
+                  border-2 transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+                  ${isActive
+                    ? 'border-[var(--c-accent)] shadow-[var(--shadow-md)]'
+                    : 'border-[var(--c-border)] hover:border-[var(--c-border-strong)]'}
+                `}
+                aria-pressed={isActive}
+                title={`${t.label}${t.desc ? ' · ' + t.desc : ''}`}
+              >
+                {/* 色盘预览 */}
+                <span
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-[var(--c-border)] flex-shrink-0 relative overflow-hidden"
+                  style={{ background: t.bg }}
+                >
+                  <span
+                    className="absolute bottom-0 right-0 w-5 h-5 rounded-tl-full"
+                    style={{ background: t.accent }}
+                  />
+                </span>
+                <span className="text-[11px] sm:text-[12px] font-medium text-[var(--c-text-secondary)] leading-tight text-center">
+                  {t.label}
+                </span>
+                {/* 选中勾 */}
+                {isActive && (
+                  <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[var(--c-accent)] flex items-center justify-center">
+                    <Icon name="check" size={10} strokeWidth={2.5} className="text-[var(--c-text-on-accent)]" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs text-[var(--c-text-muted)]">
+          主题立即生效并持久保存，不受系统深色模式影响（炭墨主题除外，它是强制深色）。
+        </p>
+      </Card>
+
       {/* ── 3. 发薪日 ── */}
-      <Card title="发薪日">
+      <Card title="发薪日（预算周期起点）">
         <p className="text-sm text-notion-text-secondary mb-4">
-          设置你每月的发薪日，所有周期计算和日均预算都以此为基准。
+          这是<b className="text-notion-text font-medium">预算周期的分界线</b>：每到这天，新一轮日均预算重新开始。通常填你主工资到账日。
+          <br />
+          它只决定「一个月预算从哪天算到哪天」，<b className="text-notion-text font-medium">不会自己产生收入</b>——具体每笔工资/副业请在「收入」页按各自到账日录入，两者互不冲突。
         </p>
         <div className="flex items-center gap-3 mb-4">
           <span className="text-sm text-notion-text-secondary">每月</span>
@@ -382,7 +433,7 @@ export function Settings() {
 
       {/* ── 页脚版本信息 ── */}
       <div className="text-center text-xs text-notion-text-muted pb-4 space-y-1">
-        <div>Cash Flow Pulse {APP_VERSION} · Cloudflare Pages + Workers + D1</div>
+        <div>现金流 {APP_VERSION} · Cloudflare Pages + Workers + D1</div>
         <div>数据仅存储在你的 Cloudflare 账户，完全私有</div>
       </div>
     </div>

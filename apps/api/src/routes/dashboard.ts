@@ -59,6 +59,18 @@ dashboardRoute.get('/', async (c) => {
     updated_at: config!.updated_at,
   };
 
+  // 信用卡：解析 monthly_statements（DB 存的是 TEXT JSON，calc 需要对象）
+  const cards = (cardRows.results || []).map((row: any) => {
+    let monthly_statements: Record<string, number> = {};
+    if (row?.monthly_statements) {
+      try {
+        const parsed = JSON.parse(row.monthly_statements);
+        if (parsed && typeof parsed === 'object') monthly_statements = parsed;
+      } catch { /* 损坏 JSON 当空表 */ }
+    }
+    return { ...row, monthly_statements };
+  });
+
   const today = new Date();
 
   // 周期偏移：0=本期，-1=上一期，+1=下一期（以此类推）
@@ -74,7 +86,7 @@ dashboardRoute.get('/', async (c) => {
     refDate,
     userConfig,
     cashRows.results || [],
-    cardRows.results || [],
+    cards,
     snapshotRows.results || [],
     investmentRows.results || [],
     billRows.results || [],
@@ -104,7 +116,7 @@ dashboardRoute.get('/', async (c) => {
   return c.json({
     config: userConfig,
     cash_sources: cashRows.results || [],
-    credit_cards: cardRows.results || [],
+    credit_cards: cards,
     investments: investmentRows.results || [],
     bills: billRows.results || [],
     incomes: incomeRows.results || [],

@@ -225,6 +225,16 @@ export function isCardActiveInCycle(
   return { active: false, dueDate: null };
 }
 
+/**
+ * 取信用卡在指定扣款日生效的账单金额：
+ * 优先用 monthly_statements[YYYY-MM]（扣款日所在年月），否则回退到 statement_amount。
+ */
+export function getCardAmountForDate(card: CreditCard, dueDate: Date): number {
+  const ym = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`;
+  const override = card.monthly_statements?.[ym];
+  return override !== undefined ? override : card.statement_amount;
+}
+
 // ============================================================
 // 仪表盘核心计算
 // ============================================================
@@ -262,6 +272,7 @@ export function computeDashboard(
         card,
         due_date: formatDate(dueDate),
         days_until_due: Math.max(0, diffDays(today, dueDate)),
+        amount: getCardAmountForDate(card, dueDate),
       });
     } else {
       inactiveCards.push(card);
@@ -271,8 +282,8 @@ export function computeDashboard(
   // 按扣款日排序（最近的在前）
   activeCards.sort((a, b) => a.days_until_due - b.days_until_due);
 
-  // 4. 应还总额
-  const total_due = activeCards.reduce((sum, ac) => sum + ac.card.statement_amount, 0);
+  // 4. 应还总额（按月覆盖后的生效金额）
+  const total_due = activeCards.reduce((sum, ac) => sum + ac.amount, 0);
 
   // 5. 净可用 + 日均预算
   const net_available = total_net_cash - total_due;

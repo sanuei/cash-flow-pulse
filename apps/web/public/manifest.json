@@ -1,11 +1,11 @@
 {
-  "name": "Cash Flow Pulse",
+  "name": "现金流",
   "short_name": "现金流",
   "description": "个人现金流可视化 · 收入投资消费追踪 · 日均预算",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#FBF7F2",
+  "theme_color": "#E8643C",
   "lang": "zh-CN",
   "orientation": "portrait-primary",
   "categories": ["finance"],
@@ -29,7 +29,7 @@
       "sizes": "1200x630",
       "type": "image/svg+xml",
       "form_factor": "wide",
-      "label": "Cash Flow Pulse 概览"
+      "label": "现金流 概览"
     }
   ]
 }

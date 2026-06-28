@@ -33,8 +33,13 @@ export interface CreditCard {
   id: string;
   user_id: string;
   name: string;
-  statement_amount: number;    // 账单金额 ≥ 0
+  statement_amount: number;    // 默认账单金额 ≥ 0（未单独设置的月份用此值）
   due_day: number;             // 扣款日 1-31
+  /**
+   * 按月账单金额覆盖表：键为 YYYY-MM（扣款日所在年月），值为该月账单金额。
+   * 某月有条目则用该值，否则回退到 statement_amount。
+   */
+  monthly_statements?: Record<string, number>;
   sort_order: number;
   created_at: number;
   updated_at: number;
@@ -87,6 +92,7 @@ export interface ActiveCard {
   card: CreditCard;
   due_date: string;               // 本周期内的实际扣款日 YYYY-MM-DD
   days_until_due: number;         // 距扣款日天数
+  amount: number;                 // 本期生效账单金额（按月覆盖后的实际值）
 }
 
 export interface SnapshotPrompt {

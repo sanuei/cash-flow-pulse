@@ -1,27 +1,27 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
   ResponsiveContainer,
+  ComposedChart,
   LineChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
 } from 'recharts';
 import { useStore } from '../lib/store';
 import { Card } from '../components/Card';
 import { PageTitle } from '../components/PageTitle';
 import { LoadingState, EmptyState } from '../components/States';
-import { Icon } from '../components/Icon';
 import { formatYen } from '@cfp/shared';
 import { apiGet } from '../lib/api';
 
 const RANGES = [
-  { label: '最近 30 天', value: '30d' },
-  { label: '最近 90 天', value: '90d' },
-  { label: '最近 6 期', value: '6c' },
-  { label: '最近 12 期', value: '12c' },
+  { label: '30 天', value: '30d' },
+  { label: '90 天', value: '90d' },
+  { label: '6 期', value: '6c' },
+  { label: '12 期', value: '12c' },
   { label: '全部', value: 'all' },
 ];
 
@@ -48,7 +48,6 @@ function parseRangeParam(rangeValue: string): string {
 export function Trends() {
   const config = useStore((s) => s.config);
   const loading = useStore((s) => s.loading);
-  const calc = useStore((s) => s.calc);
   const [range, setRange] = useState('90d');
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [loadingCharts, setLoadingCharts] = useState(false);
@@ -103,17 +102,23 @@ export function Trends() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-        <PageTitle icon="chart" title="趋势曲线" subtitle="净可用现金 · 日均预算 · 收入/投资/消费对比" />
-        <select
-          value={range}
-          onChange={(e) => setRange(e.target.value)}
-          className="input w-auto self-start sm:self-auto"
-        >
-          {RANGES.map((r) => (
-            <option key={r.value} value={r.value}>{r.label}</option>
-          ))}
-        </select>
+      <PageTitle icon="chart" title="趋势曲线" subtitle="净可用现金 · 日均预算 · 收入/投资/消费对比" />
+
+      {/* 时间范围 — 分段药丸 */}
+      <div className="flex flex-wrap gap-1.5">
+        {RANGES.map((r) => (
+          <button
+            key={r.value}
+            onClick={() => setRange(r.value)}
+            className={`px-3.5 py-1.5 rounded-[var(--radius-pill)] text-[13px] font-semibold transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+              range === r.value
+                ? 'bg-[var(--c-accent)] text-[var(--c-text-on-accent)] shadow-[var(--glow-accent)]'
+                : 'bg-[var(--c-bg-alt)] text-notion-text-secondary border border-[var(--c-border)] hover:border-[var(--c-border-strong)] hover:text-notion-text'
+            }`}
+          >
+            {r.label}
+          </button>
+        ))}
       </div>
 
       {/* 统计卡 */}
@@ -123,11 +128,11 @@ export function Trends() {
         <StatCard
           label="最新环比"
           value={trendPct === null ? '—' : `${trendPct > 0 ? '+' : ''}${trendPct}%`}
-          valueClass={trendPct === null ? '' : trendPct >= 0 ? 'text-notion-success' : 'text-notion-warning'}
+          trend={trendPct === null ? undefined : trendPct >= 0 ? 'up' : 'down'}
         />
       </div>
 
-      {/* 图1：净可用 + 日均预算折线图 */}
+      {/* 图1：净可用 + 日均预算（面积 + 渐变） */}
       <Card title="净可用现金 & 日均预算">
         {loadingCharts ? (
           <LoadingState />
@@ -139,42 +144,59 @@ export function Trends() {
           />
         ) : (
           <ChartContainer>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+            <ComposedChart data={chartData} margin={{ top: 8, right: 6, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="grad-net" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--c-accent)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="var(--c-accent)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke="var(--c-border)" strokeDasharray="2 6" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }}
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+                tickMargin={10}
+              />
               <YAxis
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }}
                 tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-                width={48}
+                tickLine={false}
+                axisLine={false}
+                width={40}
               />
-              <Tooltip
-                labelFormatter={(l) => `日期：${l}`}
-                formatter={(v: number, name: string) => [formatYen(v), name]}
-                contentStyle={{ border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, fontSize: 12 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line
+              <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--c-border-strong)', strokeWidth: 1 }} />
+              <Area
                 type="monotone"
                 dataKey="net_available"
                 name="净可用现金"
-                stroke="#0075de"
-                strokeWidth={2}
+                stroke="var(--c-accent)"
+                strokeWidth={2.5}
+                fill="url(#grad-net)"
                 dot={false}
-                activeDot={{ r: 4 }}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--c-bg-elev)', fill: 'var(--c-accent)' }}
               />
               <Line
                 type="monotone"
                 dataKey="daily_budget"
                 name="日均预算"
-                stroke="#dd5b00"
+                stroke="var(--c-text-muted)"
                 strokeWidth={1.5}
+                strokeDasharray="4 3"
                 dot={false}
                 activeDot={{ r: 4 }}
-                strokeDasharray="4 2"
               />
-            </LineChart>
+            </ComposedChart>
           </ChartContainer>
         )}
+        <ChartLegend
+          items={[
+            { name: '净可用现金', color: 'var(--c-accent)' },
+            { name: '日均预算', color: 'var(--c-text-muted)', dashed: true },
+          ]}
+        />
       </Card>
 
       {/* 图2：收入 / 投资 / 消费对比（仅 v1.1 后有数据） */}
@@ -198,50 +220,37 @@ export function Trends() {
           />
         ) : (
           <ChartContainer>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+            <LineChart data={chartData} margin={{ top: 8, right: 6, left: 0, bottom: 0 }}>
+              <CartesianGrid vertical={false} stroke="var(--c-border)" strokeDasharray="2 6" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }}
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+                tickMargin={10}
+              />
               <YAxis
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }}
                 tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-                width={48}
+                tickLine={false}
+                axisLine={false}
+                width={40}
               />
-              <Tooltip
-                labelFormatter={(l) => `日期：${l}`}
-                formatter={(v: number, name: string) => [formatYen(v), name]}
-                contentStyle={{ border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, fontSize: 12 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line
-                type="monotone"
-                dataKey="total_income"
-                name="收入"
-                stroke="#0e9f6e"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="total_investment"
-                name="投资"
-                stroke="#6875f5"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="total_expense"
-                name="消费"
-                stroke="#e02424"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
+              <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--c-border-strong)', strokeWidth: 1 }} />
+              <Line type="monotone" dataKey="total_income" name="收入" stroke="var(--c-success)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--c-bg-elev)' }} />
+              <Line type="monotone" dataKey="total_investment" name="投资" stroke="var(--c-accent)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--c-bg-elev)' }} />
+              <Line type="monotone" dataKey="total_expense" name="消费" stroke="var(--c-warning)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--c-bg-elev)' }} />
             </LineChart>
           </ChartContainer>
         )}
+        <ChartLegend
+          items={[
+            { name: '收入', color: 'var(--c-success)' },
+            { name: '投资', color: 'var(--c-accent)' },
+            { name: '消费', color: 'var(--c-warning)' },
+          ]}
+        />
       </Card>
     </div>
   );
@@ -257,11 +266,52 @@ function ChartContainer({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StatCard({ label, value, valueClass = '' }: { label: string; value: string; valueClass?: string }) {
+// 自定义 Tooltip — 圆角浮层 + 衬线数字，跟随主题
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-[var(--c-border)] bg-[var(--c-bg-elev)] shadow-[var(--shadow-lg)] px-3 py-2.5 min-w-[140px]">
+      <div className="text-[11px] text-notion-text-muted mb-1.5">{label}</div>
+      <div className="space-y-1">
+        {payload.map((p: any) => (
+          <div key={p.name} className="flex items-center gap-2 text-[12px]">
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
+            <span className="text-notion-text-secondary">{p.name}</span>
+            <span className="font-numeric font-semibold text-notion-text ml-auto">{formatYen(p.value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 自定义图例 — 比 recharts 默认更轻、风格统一
+function ChartLegend({ items }: { items: { name: string; color: string; dashed?: boolean }[] }) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 mt-3 pt-3 border-t border-[var(--c-border)]">
+      {items.map((it) => (
+        <div key={it.name} className="flex items-center gap-1.5 text-[12px] text-notion-text-secondary">
+          <span
+            className="inline-block w-4 h-0.5 rounded-full"
+            style={{ background: it.dashed ? `repeating-linear-gradient(90deg, ${it.color} 0 4px, transparent 4px 7px)` : it.color }}
+          />
+          <span>{it.name}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatCard({ label, value, trend }: { label: string; value: string; trend?: 'up' | 'down' }) {
+  const trendClass = trend === 'up' ? 'text-notion-success' : trend === 'down' ? 'text-notion-warning' : '';
   return (
     <div className="card p-4">
-      <div className="text-xs text-notion-text-muted uppercase tracking-wider">{label}</div>
-      <div className={`text-lg sm:text-2xl font-bold font-numeric mt-1 ${valueClass}`}>{value}</div>
+      <div className="text-[11px] text-notion-text-muted uppercase tracking-caps font-semibold">{label}</div>
+      <div className={`text-lg sm:text-2xl font-semibold font-numeric mt-1.5 flex items-center gap-1 ${trendClass}`}>
+        {trend === 'up' && <span aria-hidden>▲</span>}
+        {trend === 'down' && <span aria-hidden>▼</span>}
+        <span>{value}</span>
+      </div>
     </div>
   );
 }

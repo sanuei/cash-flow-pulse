@@ -49,11 +49,16 @@ exportImportRoutes.get('/export', async (c) => {
       balance: r.balance,
       locked_amount: r.locked_amount,
     })),
-    credit_cards: (cards.results || []).map((r: any) => ({
-      name: r.name,
-      statement_amount: r.statement_amount,
-      due_day: r.due_day,
-    })),
+    credit_cards: (cards.results || []).map((r: any) => {
+      let monthly_statements: Record<string, number> = {};
+      try { const p = JSON.parse(r.monthly_statements || '{}'); if (p && typeof p === 'object') monthly_statements = p; } catch { /* 空表 */ }
+      return {
+        name: r.name,
+        statement_amount: r.statement_amount,
+        due_day: r.due_day,
+        monthly_statements,
+      };
+    }),
     // v0.3 新增（可选，老 JSON 不带这些字段也能导入）
     investments: (investments.results || []).map((r: any) => ({
       name: r.name,
@@ -174,8 +179,8 @@ exportImportRoutes.post('/import', async (c) => {
 
     // 3. 信用卡
     const cardStmts = credit_cards.map((cc, i) =>
-      db.prepare('INSERT OR REPLACE INTO credit_cards (id, user_id, name, statement_amount, due_day, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), userId, cc.name, cc.statement_amount, cc.due_day, i, ts, ts)
+      db.prepare('INSERT OR REPLACE INTO credit_cards (id, user_id, name, statement_amount, due_day, monthly_statements, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(generateId(), userId, cc.name, cc.statement_amount, cc.due_day, JSON.stringify(cc.monthly_statements ?? {}), i, ts, ts)
     );
 
     // 4. 投资

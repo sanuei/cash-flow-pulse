@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Icon } from './Icon';
+import { HeroAmount, Field, Segmented, Collapsible, FormError, FormActions } from './FormKit';
 
 type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
@@ -15,9 +15,11 @@ type FormData = {
 export function InvestmentForm({
   initial,
   onSubmit,
+  onCancel,
 }: {
   initial?: FormData;
   onSubmit: (data: FormData) => Promise<void>;
+  onCancel?: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [amount, setAmount] = useState(initial?.amount ?? 0);
@@ -44,18 +46,9 @@ export function InvestmentForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!name.trim()) {
-      setError('名称不能为空');
-      return;
-    }
-    if (amount <= 0) {
-      setError('金额必须大于 0');
-      return;
-    }
-    if (!startDate) {
-      setError('开始日期必填');
-      return;
-    }
+    if (!name.trim()) { setError('名称不能为空'); return; }
+    if (amount <= 0) { setError('金额必须大于 0'); return; }
+    if (!startDate) { setError('开始日期必填'); return; }
     setSaving(true);
     try {
       await onSubmit({
@@ -82,90 +75,37 @@ export function InvestmentForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="label">名称</label>
+      <HeroAmount label="投资金额（每次）" value={amount} onChange={setAmount} tone="accent" />
+
+      <Field label="名称">
         <input
           className="input"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="如 基金定投 / 黄金积存"
-          autoFocus
         />
-      </div>
-      <div>
-        <label className="label">金额（¥）</label>
-        <input
-          type="number"
-          inputMode="numeric"
-          className="input font-numeric"
-          value={amount}
-          onChange={(e) => setAmount(Number(e.target.value) || 0)}
-          min="0"
-          step="1"
-        />
-      </div>
-      <div>
-        <label className="label">频率</label>
-        <div className="grid grid-cols-4 gap-2">
-          {freqOptions.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setFrequency(opt.value)}
-              className={`px-3 py-2 rounded-micro text-sm font-medium transition-colors ${
-                frequency === opt.value
-                  ? 'bg-notion-blue text-white'
-                  : 'bg-black/[0.05] text-notion-text-secondary hover:bg-black/[0.08]'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+      </Field>
+
+      <Field label="频率" hint="按周期内发生次数自动计算总额">
+        <Segmented options={freqOptions} value={frequency} onChange={setFrequency} />
+      </Field>
+
+      <Collapsible>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="开始日期">
+            <input type="date" className="input font-numeric" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </Field>
+          <Field label="结束日期（可选）">
+            <input type="date" className="input font-numeric" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </Field>
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">开始日期</label>
-          <input
-            type="date"
-            className="input font-numeric"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="label">结束日期（可选）</label>
-          <input
-            type="date"
-            className="input font-numeric"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
-        </div>
-      </div>
-      <div>
-        <label className="label">备注（可选）</label>
-        <input
-          className="input"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="如 每月 15 号执行"
-        />
-      </div>
-      {error && (
-        <div className="text-sm text-notion-warning bg-[#fff4eb] px-3 py-2 rounded-micro">
-          {error}
-        </div>
-      )}
-      <div className="flex items-center gap-2 text-xs text-notion-text-muted">
-        <Icon name="calendar" size={12} />
-        <span>频率 {freqOptions.find((f) => f.value === frequency)?.label} × 当前周期内会自动计算发生次数</span>
-      </div>
-      <div className="flex gap-2 pt-2">
-        <button type="submit" className="btn-primary flex-1" disabled={saving}>
-          {saving ? '保存中...' : '保存'}
-        </button>
-      </div>
+        <Field label="备注（可选）">
+          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 每月 15 号执行" />
+        </Field>
+      </Collapsible>
+
+      <FormError msg={error} />
+      <FormActions onCancel={onCancel} saving={saving} disabled={!name.trim()} />
     </form>
   );
 }

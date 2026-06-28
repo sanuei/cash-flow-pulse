@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS credit_cards (
                      CHECK (statement_amount >= 0),
   due_day          INTEGER NOT NULL
                      CHECK (due_day >= 1 AND due_day <= 31),
+  -- 按月账单金额覆盖表（JSON：{"YYYY-MM": amount}），默认空对象
+  monthly_statements TEXT NOT NULL DEFAULT '{}',
   sort_order       INTEGER NOT NULL DEFAULT 0,
   created_at       INTEGER NOT NULL,
   updated_at       INTEGER NOT NULL

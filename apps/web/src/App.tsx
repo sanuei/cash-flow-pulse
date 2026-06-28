@@ -1,4 +1,4 @@
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { Overview } from './pages/Overview';
 import { IncomesPage } from './pages/IncomesPage';
 import { InvestmentsPage } from './pages/InvestmentsPage';
@@ -10,17 +10,22 @@ import { useEffect, lazy, Suspense } from 'react';
 import { Icon, type IconName } from './components/Icon';
 import { LoadingState } from './components/States';
 import { Toaster } from './components/Toaster';
+import { useReducedMotion } from './lib/motion';
+import { getStoredTheme, applyTheme } from './lib/theme';
 
 // Trends 依赖 recharts（gzip ~105KB），懒加载以减小首屏 bundle
 const Trends = lazy(() => import('./pages/Trends').then((m) => ({ default: m.Trends })));
 
 function App() {
   const authStatus = useStore((s) => s.authStatus);
-  const currentUser = useStore((s) => s.currentUser);
   const checkSession = useStore((s) => s.checkSession);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const loading = useStore((s) => s.loading);
   const error = useStore((s) => s.error);
+  const reduced = useReducedMotion();
+
+  // 主题初始化（SSR-safe 兜底，inline script 已先行执行）
+  useEffect(() => { applyTheme(getStoredTheme()); }, []);
 
   // 1. 启动时 check session（一次）
   useEffect(() => {
@@ -38,7 +43,7 @@ function App() {
   if (authStatus === 'unknown') {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Icon name="loading" size={32} className="text-notion-text-secondary animate-spin" strokeWidth={1.5} />
+        <Icon name="loading" size={28} className="text-notion-text-secondary animate-spin" strokeWidth={1.5} />
       </div>
     );
   }
@@ -57,12 +62,12 @@ function App() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="card p-8 max-w-md text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 mb-4 rounded-full bg-[#fff4eb]">
+        <div className="card p-8 max-w-md text-center anim-slide-up">
+          <div className="inline-flex items-center justify-center w-14 h-14 mb-4 rounded-full bg-[var(--c-warning-soft)]">
             <Icon name="warning" size={28} className="text-notion-warning" strokeWidth={1.5} />
           </div>
-          <h2 className="text-xl font-bold mb-2">加载失败</h2>
-          <p className="text-notion-text-secondary text-sm mb-4">{error}</p>
+          <h2 className="text-xl font-semibold mb-2 tracking-tight-section">加载失败</h2>
+          <p className="text-notion-text-secondary text-[14px] mb-4 leading-relaxed">{error}</p>
           <button className="btn-primary" onClick={() => loadDashboard()}>
             重试
           </button>
@@ -73,11 +78,13 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-notion-bg">
-      {/* 顶栏（桌面端：6 项文字 Tab） */}
-      <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border bg-notion-bg">
-        <div className="flex items-center gap-2 font-bold text-notion-text">
-          <Icon name="wallet" size={20} className="text-notion-text" />
-          <span>Cash Flow Pulse</span>
+      {/* 顶栏（桌面端：6 项文字 Tab） — 玻璃模糊背景 */}
+      <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border glass sticky top-0 z-30">
+        <div className="flex items-center gap-2 font-semibold text-notion-text tracking-tight-section">
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)]">
+            <Icon name="wallet" size={15} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
+          </span>
+          <span>现金流</span>
         </div>
         <nav className="flex items-center gap-1">
           <NavTab to="/">总览</NavTab>
@@ -89,17 +96,27 @@ function App() {
         </nav>
       </header>
 
-      {/* 顶栏（移动端：Logo + 曲线/设置图标） */}
-      <header className="sm:hidden flex items-center justify-between px-4 h-12 border-b border-notion-border bg-notion-bg">
-        <div className="flex items-center gap-2 font-bold text-notion-text text-sm">
-          <Icon name="wallet" size={16} className="text-notion-text" />
-          <span>Cash Flow Pulse</span>
+      {/* 顶栏（移动端：Logo + 曲线/设置图标） — 玻璃模糊 + safe-area 适配 */}
+      <header
+        className="sm:hidden flex items-center justify-between px-4 border-b border-notion-border glass sticky top-0 z-30"
+        style={{
+          paddingTop: 'env(safe-area-inset-top)',
+          height: 'calc(3rem + env(safe-area-inset-top))',
+        }}
+      >
+        <div className="flex items-center gap-2 font-semibold text-notion-text text-[14px] tracking-tight-section">
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-[var(--radius-sm)] bg-[var(--c-accent-soft)]">
+            <Icon name="wallet" size={13} className="text-[var(--c-accent-text)]" strokeWidth={1.75} />
+          </span>
+          <span>现金流</span>
         </div>
         <div className="flex items-center gap-1">
           <NavLink
             to="/trends"
             className={({ isActive }) =>
-              `p-2 rounded-micro transition-colors ${isActive ? 'text-notion-blue' : 'text-notion-text-secondary hover:text-notion-text'}`
+              `p-2 rounded-[var(--radius-sm)] transition-colors duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+                isActive ? 'text-[var(--c-accent-text)] bg-[var(--c-accent-soft)]' : 'text-notion-text-secondary hover:text-notion-text'
+              }`
             }
             aria-label="曲线"
           >
@@ -108,7 +125,9 @@ function App() {
           <NavLink
             to="/settings"
             className={({ isActive }) =>
-              `p-2 rounded-micro transition-colors ${isActive ? 'text-notion-blue' : 'text-notion-text-secondary hover:text-notion-text'}`
+              `p-2 rounded-[var(--radius-sm)] transition-colors duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+                isActive ? 'text-[var(--c-accent-text)] bg-[var(--c-accent-soft)]' : 'text-notion-text-secondary hover:text-notion-text'
+              }`
             }
             aria-label="设置"
           >
@@ -117,8 +136,15 @@ function App() {
         </div>
       </header>
 
-      {/* 内容 */}
-      <main className={`flex-1 ${loading ? 'opacity-60' : ''} transition-opacity`}>
+      {/* 内容 — 路由切换时 fade-in */}
+      <main
+        key={useLocation().pathname}
+        className={`
+          flex-1 ${loading ? 'opacity-60' : ''}
+          transition-opacity duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+          ${reduced ? '' : 'anim-fade-up'}
+        `}
+      >
         <Routes>
           <Route path="/" element={<Overview />} />
           <Route path="/incomes" element={<IncomesPage />} />
@@ -130,10 +156,9 @@ function App() {
         </Routes>
       </main>
 
-      {/* 底部 Tab（移动端：4 个主要页面） */}
-      {/* paddingBottom + 高度自动加上 iOS home indicator 的安全区高度（iPhone X 以上约 34px） */}
+      {/* 底部 Tab（移动端：4 个主要页面） — 玻璃模糊 + 顶边阴影 */}
       <nav
-        className="sm:hidden flex items-center justify-around border-t border-notion-border bg-notion-bg sticky bottom-0"
+        className="sm:hidden flex items-center justify-around glass border-t border-[var(--c-border)] sticky bottom-0 z-30 shadow-[var(--shadow-md)]"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom)',
           height: 'calc(3.5rem + env(safe-area-inset-bottom))',
@@ -151,38 +176,66 @@ function App() {
   );
 }
 
+/**
+ * 桌面端导航 Tab（v2 升级）
+ * 升级点：
+ *   1) 选中态加底部 2px 墨色 indicator，从左/右滑入（基于 layout-id 思路的纯 CSS 实现）
+ *   2) hover 时文字颜色和 indicator 渐变
+ *   3) 焦点环使用 design-system 颜色
+ */
 function NavTab({ to, children }: { to: string; children: React.ReactNode }) {
   return (
-    <NavLink
-      to={to}
-      end
-      className={({ isActive }) =>
-        `px-3 py-1.5 rounded-micro text-[15px] font-semibold transition-colors ${
-          isActive ? 'bg-black/[0.05] text-notion-text' : 'text-notion-text-secondary hover:text-notion-text'
-        }`
-      }
-    >
-      {children}
+    <NavLink to={to} end className="relative">
+      {({ isActive }) => (
+        <span
+          className={`
+            nav-tab block
+            ${isActive ? 'nav-tab-active' : ''}
+          `}
+        >
+          {children}
+          {/* 底部 indicator — 选中时显示，hover 时半透明显示 */}
+          <span
+            aria-hidden="true"
+            className={`
+              absolute left-3 right-3 -bottom-[15px] h-[2px] rounded-t
+              bg-[var(--c-accent)] origin-center
+              transition-transform duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+              ${isActive ? 'scale-x-100' : 'scale-x-0'}
+            `}
+          />
+        </span>
+      )}
     </NavLink>
   );
 }
 
+/**
+ * 移动端 Tab（v2 升级）
+ * 升级点：icon 选中时不仅 stroke 变粗，还加 scale 1.05（与 active 状态协同）
+ */
 function NavTabMobile({ to, icon, label }: { to: string; icon: IconName; label: string }) {
   return (
-    <NavLink
-      to={to}
-      end
-      className={({ isActive }) =>
-        `flex flex-col items-center justify-center gap-0.5 flex-1 h-full text-[11px] transition-colors ${
-          isActive ? 'text-notion-blue' : 'text-notion-text-secondary'
-        }`
-      }
-    >
+    <NavLink to={to} end>
       {({ isActive }) => (
-        <>
-          <Icon name={icon} size={22} strokeWidth={isActive ? 2 : 1.75} />
-          <span>{label}</span>
-        </>
+        <span
+          className={`
+            nav-tab-mobile
+            ${isActive ? 'nav-tab-mobile-active' : ''}
+          `}
+        >
+          <span className="nav-pill-icon">
+            <Icon
+              name={icon}
+              size={21}
+              strokeWidth={isActive ? 2 : 1.75}
+              className={`transition-transform duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+                isActive ? 'scale-105' : 'scale-100'
+              }`}
+            />
+          </span>
+          <span className="font-medium">{label}</span>
+        </span>
       )}
     </NavLink>
   );

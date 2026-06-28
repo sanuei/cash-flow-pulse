@@ -31,6 +31,10 @@ export const CreditCardInputSchema = z.object({
   name: z.string().min(1, '名称不能为空').max(50),
   statement_amount: z.number().nonnegative('账单金额不能为负'),
   due_day: z.number().int().min(1).max(31),
+  // 按月账单金额覆盖表：键 YYYY-MM，值为该月账单金额（≥0）
+  monthly_statements: z
+    .record(z.string().regex(/^\d{4}-\d{2}$/, '月份格式应为 YYYY-MM'), z.number().nonnegative())
+    .optional(),
 });
 
 export const CreditCardUpdateSchema = CreditCardInputSchema.partial();
@@ -74,6 +78,7 @@ export const ImportPayloadSchema = z.object({
     name: z.string(),
     statement_amount: z.number(),
     due_day: z.number(),
+    monthly_statements: z.record(z.string(), z.number()).optional(),
   })),
   // v0.3 新增字段（可选，老 JSON 没这些也能导入）
   investments: z.array(z.object({
