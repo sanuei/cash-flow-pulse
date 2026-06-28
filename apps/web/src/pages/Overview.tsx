@@ -137,7 +137,8 @@ export function Overview() {
 
   return (
     // stagger — 每个 section 依次入场（60ms 间隔）
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-5 stagger">
+    // 桌面端: max-w-6xl + sm:py-8 留更多垂直空间,信息密度更高
+    <div className="max-w-3xl sm:max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-5 stagger">
 
       {/* Hero — 磨砂玻璃面板（深色字 + 单一强调色点缀，无大色块） */}
       <section className="hero-glass px-5 pt-4 pb-5">
@@ -227,6 +228,11 @@ export function Overview() {
         </div>
       </section>
 
+      {/* 桌面端 2 列网格: 左 PaceCard(现金走势) + 右 收支图
+          移动端: 单列堆叠 (默认 space-y-5)
+          v1.4 桌面端布局升级 */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0 space-y-5">
+
       {/* 花费节奏卡 */}
       {isCurrentCycle && !isNewUser && (
         <PaceCard
@@ -266,6 +272,9 @@ export function Overview() {
           </div>
         </Card>
       )}
+
+      </div>
+      {/* 桌面端 2 列网格 结束 */}
 
       {/* 新用户引导卡（首次使用，所有数据为空时显示） */}
       {isNewUser && (
@@ -332,6 +341,10 @@ export function Overview() {
         </div>
       )}
 
+
+      {/* 桌面端 2 列网格: 左 本期支出明细 + 右 本期收入明细
+          移动端: 单列堆叠 (默认 space-y-5) */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0 space-y-5">
 
       {/* 本期支出汇总卡 */}
       {upcomingExpenses && (
@@ -481,6 +494,9 @@ export function Overview() {
           </div>
         </Card>
       )}
+
+      </div>
+      {/* 桌面端 2 列网格结束 */}
 
       {/* 现金来源已并入「收入」页（收入 = 现金余额 + 本期到账） */}
     </div>

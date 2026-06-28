@@ -9,6 +9,7 @@ import { useStore } from './lib/store';
 import { useEffect, lazy, Suspense } from 'react';
 import { Icon, type IconName } from './components/Icon';
 import { Logo } from './components/Logo';
+import { Sidebar } from './components/Sidebar';
 import { LoadingState } from './components/States';
 import { Toaster } from './components/Toaster';
 import { useReducedMotion } from './lib/motion';
@@ -80,21 +81,10 @@ function App() {
   return (
     // 100dvh 钉死外层 + overflow-hidden: iOS 橡皮筋只发生在最外层,内层 main 独立滚动就不会露出 body 背景
     // bg 放在 main 上: 容器透明,body 背景的 radial-gradient 色晕可以透出,让整体视觉更通透
-    <div className="h-[100dvh] flex flex-col overflow-hidden">
-      {/* 顶栏（桌面端：6 项文字 Tab） — 玻璃模糊背景 */}
-      <header className="hidden sm:flex items-center justify-between px-6 h-14 border-b border-notion-border glass fixed top-0 inset-x-0 z-30">
-        <div className="flex items-center">
-          <Logo size={14} />
-        </div>
-        <nav className="flex items-center gap-1">
-          <NavTab to="/">总览</NavTab>
-          <NavTab to="/incomes">收入</NavTab>
-          <NavTab to="/investments">投资</NavTab>
-          <NavTab to="/expenses">消费</NavTab>
-          <NavTab to="/trends">曲线</NavTab>
-          <NavTab to="/settings">设置</NavTab>
-        </nav>
-      </header>
+    // 桌面端 sm:flex-row 让 sidebar 240px 在左 + main 在右
+    <div className="h-[100dvh] flex flex-col sm:flex-row overflow-hidden">
+      {/* 桌面端:左侧 Sidebar 240px (含 logo/nav/user) — 替代原来的顶部 6-tab header */}
+      <Sidebar />
 
       {/* 顶栏（移动端：Logo + 曲线/设置图标） — 玻璃模糊 + safe-area 适配
           尺寸:v1.4 加大,Logo 28px / 文字 17px / 头部 56px,与桌面端 h-14 对齐 */}
@@ -141,7 +131,7 @@ function App() {
         className={`
           flex-1 overflow-y-auto overscroll-contain
           bg-notion-bg
-          pt-[calc(3.5rem+env(safe-area-inset-top))] sm:pt-14
+          pt-[calc(3.5rem+env(safe-area-inset-top))] sm:pt-0
           pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-0
           ${loading ? 'opacity-60' : ''}
           transition-opacity duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
