@@ -230,6 +230,61 @@ describe('卡片活跃判断', () => {
   });
 });
 
+describe('v1.4.4 已扣款卡片分离 (paid_this_cycle)', () => {
+  it('扣款日早于 today → 进 paid_this_cycle，不进 active_cards', () => {
+    // 周期 [6/10, 7/10)，卡 due_day=15, today=6/20 → 6/15 已过
+    const card: CreditCard = { ...sampleCards[0]!, due_day: 15, statement_amount: 30000 };
+    const result = computeDashboard(new Date(2026, 5, 20), baseConfig, sampleCash, [card]);
+    expect(result.active_cards.length).toBe(0);
+    expect(result.paid_this_cycle.length).toBe(1);
+    expect(result.paid_this_cycle[0]!.card.id).toBe('card1');
+    expect(result.paid_this_cycle[0]!.amount).toBe(30000);
+    // total_due = 0, net_available = total_net_cash(30000) - 0 = 30000
+    expect(result.total_due).toBe(0);
+    expect(result.net_available).toBe(30000);
+  });
+
+  it('扣款日 == today → 仍算 active（用户当天应主动更新现金余额）', () => {
+    // today=6/25, 卡 due_day=25 → effectiveDue == today → 边界属"未扣"
+    const card: CreditCard = { ...sampleCards[0]!, due_day: 25, statement_amount: 30000 };
+    const result = computeDashboard(new Date(2026, 5, 25), baseConfig, sampleCash, [card]);
+    expect(result.active_cards.length).toBe(1);
+    expect(result.paid_this_cycle.length).toBe(0);
+    expect(result.total_due).toBe(30000);
+  });
+
+  it('扣款日 > today → 进 active_cards（正常待扣）', () => {
+    // today=6/21, 卡 due_day=25 → 未来
+    const card: CreditCard = { ...sampleCards[0]!, due_day: 25, statement_amount: 30000 };
+    const result = computeDashboard(new Date(2026, 5, 21), baseConfig, sampleCash, [card]);
+    expect(result.active_cards.length).toBe(1);
+    expect(result.paid_this_cycle.length).toBe(0);
+    expect(result.total_due).toBe(30000);
+  });
+
+  it('pay_day=10 + today=6/29 + 卡 due_day=29 → 6/29 落在 [6/10, 7/10) 期内, today==effectiveDue → active(days_until_due=0)', () => {
+    // 用户报告的真实场景:pay_day=10, today=6/29, 卡 due_day=29
+    // 6/29 既是周期 [6/10, 7/10) 的活跃扣款日,也是今天(today)
+    // → 应在 active_cards(days_until_due=0)
+    const card: CreditCard = { ...sampleCards[0]!, due_day: 29, statement_amount: 30000 };
+    const result = computeDashboard(new Date(2026, 5, 29), baseConfig, sampleCash, [card]);
+    expect(result.active_cards.length).toBe(1);
+    expect(result.active_cards[0]!.days_until_due).toBe(0);
+    expect(result.paid_this_cycle.length).toBe(0);
+  });
+
+  it('pay_day=10 + today=6/30 + 卡 due_day=29 → 6/29 < 6/30 → paid_this_cycle,不再扣 net_available', () => {
+    // 用户报告的另一场景:今天已 6/30,6/29 昨天扣过了 → 不再算 active
+    const card: CreditCard = { ...sampleCards[0]!, due_day: 29, statement_amount: 30000 };
+    const result = computeDashboard(new Date(2026, 5, 30), baseConfig, sampleCash, [card]);
+    expect(result.active_cards.length).toBe(0);
+    expect(result.paid_this_cycle.length).toBe(1);
+    expect(result.paid_this_cycle[0]!.amount).toBe(30000);
+    // 关键:net_available 不再扣这 30000
+    expect(result.net_available).toBe(30000);
+  });
+});
+
 describe('仪表盘核心计算', () => {
   it('正常情况：净可用 = 总净现金 - 活跃应还', () => {
     const today = new Date(2026, 5, 21);

@@ -79,6 +79,7 @@ export interface DashboardCalc {
   total_locked: number;           // 所有锁定金额之和
   total_net_cash: number;         // 总净现金 = total_balance - total_locked
   active_cards: ActiveCard[];     // 当前周期活跃的卡（含计算明细）
+  paid_this_cycle: ActiveCard[];  // v1.4.4: 本周期已扣款(扣款日 < today)的卡(不参与 net_available)
   inactive_cards: CreditCard[];   // 非活跃卡（仅展示）
   total_due: number;              // 活跃卡应还之和
   net_available: number;          // total_net_cash - total_due

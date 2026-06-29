@@ -273,27 +273,51 @@ export function computeDashboard(
   const total_net_cash = total_balance - total_locked;
 
   // 3. 卡片活跃判断
+  // v1.4.4: 拆分"未扣 (active)"与"已扣 (paid_this_cycle)"。
+  //   - 本期内活跃 = isCardActiveInCycle（保持不变）
+  //   - 若 effectiveDue < today → 扣款已过 → 计入 paid_this_cycle（不参与 net_available）
+  //   - 若 effectiveDue >= today → 计入 active_cards（计入 net_available）
+  //   - 边界: effectiveDue == today → 算"今天扣款",纳入 active(用户当天主动更新现金余额时,
+  //           daily_budget 会按"今天还要扣"扣减;若已扣,用户应改"今日已付"开关——v1.4.4 不自动判断,
+  //           保持"今天 = 待扣"的语义,等用户在余额中体现)
+  //   注意:isCardActiveInCycle 内部 getPaydayInMonth 用本地午夜构造 Date,
+  //   "已过"判断也应基于本地午夜对齐,避免 6/29 23:59 vs 6/30 00:00 跨天误判
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const activeCards: ActiveCard[] = [];
+  const paidThisCycle: ActiveCard[] = [];
   const inactiveCards: CreditCard[] = [];
 
   for (const card of creditCards) {
     const { active, dueDate } = isCardActiveInCycle(card, cycle.start_date, cycle.end_date);
     if (active && dueDate) {
-      // 周末顺延：金额仍按原扣款日所在月取（顺延不跨月，月份归属不变）
+      // 周末顺延:金额仍按原扣款日所在月取(顺延不跨月,月份归属不变)
       const effectiveDue = config.weekend_shift ? shiftToWorkday(dueDate) : dueDate;
-      activeCards.push({
+      const effectiveDueMidnight = new Date(
+        effectiveDue.getFullYear(), effectiveDue.getMonth(), effectiveDue.getDate()
+      );
+      const amount = getCardAmountForDate(card, dueDate);
+      const daysUntil = Math.max(0, diffDays(today, effectiveDue));
+      const entry: ActiveCard = {
         card,
         due_date: formatDate(effectiveDue),
-        days_until_due: Math.max(0, diffDays(today, effectiveDue)),
-        amount: getCardAmountForDate(card, dueDate),
-      });
+        days_until_due: daysUntil,
+        amount,
+      };
+      if (effectiveDueMidnight < todayMidnight) {
+        // 已过:扣款日严格早于今天
+        paidThisCycle.push(entry);
+      } else {
+        // 今天或未来
+        activeCards.push(entry);
+      }
     } else {
       inactiveCards.push(card);
     }
   }
 
-  // 按扣款日排序（最近的在前）
+  // 按扣款日排序(最近的在前)
   activeCards.sort((a, b) => a.days_until_due - b.days_until_due);
+  paidThisCycle.sort((a, b) => a.days_until_due - b.days_until_due);
 
   // 4. 应还总额（按月覆盖后的生效金额）
   const total_due = activeCards.reduce((sum, ac) => sum + ac.amount, 0);
@@ -317,6 +341,7 @@ export function computeDashboard(
     total_locked,
     total_net_cash,
     active_cards: activeCards,
+    paid_this_cycle: paidThisCycle,        // v1.4.4 新增:本周期已扣款的卡(不参与 net_available)
     inactive_cards: inactiveCards,
     total_due,
     net_available,
@@ -908,7 +933,10 @@ export function computeDashboardV2(
   const safeDays = Math.max(1, v1.days_to_payday);
 
   // 计算"未来应付"(today ~ cycleEnd)
-  // 信用卡:用 v1.active_cards(本期所有应还)
+  // 信用卡:用 v1.active_cards(本期内尚未扣款,扣款日 >= today)
+  //   v1.4.4 之后:paid_this_cycle 里的卡(扣款日 < today)已经被踢出 active_cards,
+  //   所以这条 reduce 天然就只算"未来还要扣的"——这就是用户报告的"今天 29 号已扣了
+  //   不该再扣一次"问题的根本修复
   const futureCreditCards = v1.active_cards.reduce((s, ac) => s + ac.amount, 0);
   // 账单:nextOccurrence >= today 且在 cycleEnd 前
   let futureBills = 0;

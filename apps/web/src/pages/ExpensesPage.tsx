@@ -31,10 +31,12 @@ export function ExpensesPage() {
   const creditCards = creditCardsAll.filter(notPending).filter((c) => match(c.name));
   const bills = billsAll.filter(notPending).filter((b) => match(b.name));
 
-  // 信用卡：活跃卡（本期要还）排前，非活跃卡排后（与原首页一致）
+  // 信用卡:活跃卡(本期要还)排前,已扣(本周期内扣款日已过)排中间,非活跃排后
+  // v1.4.4:已扣的卡虽然不再算入 net_available,但仍展示(用"已扣"badge 标注,灰色 tone)
   const cardRows = [
-    ...calc.active_cards.map((ac) => ({ card: ac.card, active: true, days_until_due: ac.days_until_due, amount: ac.amount })),
-    ...calc.inactive_cards.map((c) => ({ card: c, active: false, days_until_due: -1, amount: c.statement_amount })),
+    ...calc.active_cards.map((ac) => ({ card: ac.card, status: 'active' as const, days_until_due: ac.days_until_due, amount: ac.amount })),
+    ...calc.paid_this_cycle.map((ac) => ({ card: ac.card, status: 'paid' as const, days_until_due: ac.days_until_due, amount: ac.amount })),
+    ...calc.inactive_cards.map((c) => ({ card: c, status: 'inactive' as const, days_until_due: -1, amount: c.statement_amount })),
   ].filter((r) => notPending(r.card));
 
   return (
@@ -77,19 +79,25 @@ export function ExpensesPage() {
         )}
       >
         {(openEdit) =>
-          cardRows.map(({ card, active, days_until_due, amount }) => {
+          cardRows.map(({ card, status, days_until_due, amount }) => {
             const hasMonthly = card.monthly_statements && Object.keys(card.monthly_statements).length > 0;
+            const tone = status === 'paid' ? 'neutral' : 'warning';
+            const moneySign = status === 'active' ? 'negative' : 'neutral';
             return (
             <EntityRow
               key={card.id}
               icon="card"
-              tone="warning"
+              tone={tone}
               title={
                 <>
                   {card.name}{' '}
-                  {active ? (
+                  {status === 'active' ? (
                     <span className="badge-warning badge text-[10px] px-1.5 py-0.5">
                       {days_until_due === 0 ? '今天扣款' : `${days_until_due} 天后扣款`}
+                    </span>
+                  ) : status === 'paid' ? (
+                    <span className="badge-success badge text-[10px] px-1.5 py-0.5">
+                      {days_until_due === 0 ? '今天已扣' : `${Math.abs(days_until_due)} 天前已扣`}
                     </span>
                   ) : (
                     <span className="badge-muted badge text-[10px] px-1.5 py-0.5">非本期</span>
@@ -97,7 +105,7 @@ export function ExpensesPage() {
                 </>
               }
               subtitle={`每月 ${card.due_day} 号扣款 · 账单 ${formatYen(amount)}${hasMonthly ? ' · 按月账单' : ''}`}
-              money={<Money amount={amount} size="md" sign={active ? 'negative' : 'neutral'} />}
+              money={<Money amount={amount} size="md" sign={moneySign} />}
               onEdit={() => openEdit(card)}
               onDelete={() =>
                 softDelete({
