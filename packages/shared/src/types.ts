@@ -81,7 +81,8 @@ export interface DashboardCalc {
   active_cards: ActiveCard[];     // 当前周期活跃的卡（含计算明细）
   paid_this_cycle: ActiveCard[];  // v1.4.4: 本周期已扣款(扣款日 < today)的卡(不参与 net_available)
   inactive_cards: CreditCard[];   // 非活跃卡（仅展示）
-  total_due: number;              // 活跃卡应还之和
+  total_due: number;              // 活跃卡应还之和（含今天/未来的，归 totalExpense 显示用）
+  future_due: number;             // v1.4.6: 严格未来应还(扣款日 > today),用于 net_available 避免双扣
   net_available: number;          // total_net_cash - total_due
   days_to_payday: number;
   daily_budget: number;           // net_available / days_to_payday

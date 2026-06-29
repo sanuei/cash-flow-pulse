@@ -20,6 +20,7 @@ export function ManagedListCard<T>({
   empty,
   formTitle,
   renderForm,
+  footer,           // v1.4.6:可选的 footer 区域(用于显示合计等)
   children,
 }: {
   icon: IconName;
@@ -28,6 +29,7 @@ export function ManagedListCard<T>({
   empty: { icon: IconName; title: string; description: string; addLabel: string };
   formTitle: (editing: T | null) => string;
   renderForm: (editing: T | null, close: () => void) => ReactNode;
+  footer?: ReactNode;  // v1.4.6:底部合计行(可选,默认 undefined = 不显示)
   children: (openEdit: (item: T) => void) => ReactNode;
 }) {
   const [showAdd, setShowAdd] = useState(false);
@@ -89,6 +91,13 @@ export function ManagedListCard<T>({
         <ul className="stagger divide-y divide-[var(--c-border)] -mx-5 -mb-5 overflow-hidden rounded-b-[var(--radius-xl)]">
           {children(setEditing)}
         </ul>
+      )}
+
+      {/* v1.4.6:底部合计/汇总行(可选) */}
+      {footer && (
+        <div className="mt-3 pt-3 border-t border-[var(--c-border)]">
+          {footer}
+        </div>
       )}
 
       <Modal open={showAdd || editing !== null} onClose={close} title={formTitle(editing)} icon={icon}>

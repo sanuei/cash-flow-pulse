@@ -274,14 +274,14 @@ export function computeDashboard(
 
   // 3. 卡片活跃判断
   // v1.4.4: 拆分"未扣 (active)"与"已扣 (paid_this_cycle)"。
-  //   - 本期内活跃 = isCardActiveInCycle（保持不变）
-  //   - 若 effectiveDue < today → 扣款已过 → 计入 paid_this_cycle（不参与 net_available）
-  //   - 若 effectiveDue >= today → 计入 active_cards（计入 net_available）
-  //   - 边界: effectiveDue == today → 算"今天扣款",纳入 active(用户当天主动更新现金余额时,
-  //           daily_budget 会按"今天还要扣"扣减;若已扣,用户应改"今日已付"开关——v1.4.4 不自动判断,
-  //           保持"今天 = 待扣"的语义,等用户在余额中体现)
+  //   - 本期内活跃 = isCardActiveInCycle(保持不变)
+  //   - active_cards:扣款日 > today 的卡(算 futureCreditCards 计入 net_available)
+  //   - paid_this_cycle:扣款日 <= today 的卡(用户/银行已处理,显示但不算未来应付)
   //   注意:isCardActiveInCycle 内部 getPaydayInMonth 用本地午夜构造 Date,
-  //   "已过"判断也应基于本地午夜对齐,避免 6/29 23:59 vs 6/30 00:00 跨天误判
+  //   "已扣"判断也应基于本地午夜对齐,避免 6/29 23:59 vs 6/30 00:00 跨天误判
+  //   业务语义:用户报告 pay_day=10 + due_day=29 + today=6/29 时,如果用户主动改了现金,
+  //   6/29 仍 active 会导致余额已扣 + futureCreditCards 再扣 = 双重扣除。
+  //   → 解决方案:扣款日 <= today 归 paid,UI 上仍能看见"今天已扣"badge,但不参与 budget 计算。
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const activeCards: ActiveCard[] = [];
   const paidThisCycle: ActiveCard[] = [];
@@ -307,7 +307,11 @@ export function computeDashboard(
         // 已过:扣款日严格早于今天
         paidThisCycle.push(entry);
       } else {
-        // 今天或未来
+        // 今天或未来(都算 active,等用户行为)
+        // v1.4.5 解释:之前测试期望 today==effectiveDue 算 active。
+        // 现在 v1.4.6 改为统一不区分:都进 activeCards,UI 仍显示,但
+        // net_available 用新的 future_due 字段(只算 effectiveDue > today)
+        // → 避免双扣,但保持 total_due 语义稳定(活跃卡总额 = 6/29+未来)
         activeCards.push(entry);
       }
     } else {
@@ -320,10 +324,22 @@ export function computeDashboard(
   paidThisCycle.sort((a, b) => a.days_until_due - b.days_until_due);
 
   // 4. 应还总额（按月覆盖后的生效金额）
+  //   total_due = active_cards 总和(本期要还,含今天/未来)→ 用于 totalExpense 展示
+  //   future_due = active_cards 中 effectiveDue > today 的总和 → 用于 net_available/daily_budget
+  //     (扣除款日 <= today 的:用户在余额中已体现或今天就要扣,不算"未来应付")
+  //   这样 pay_day=10 + due_day=29 + today=6/29 场景:
+  //     active_cards = [乐天30k, paypay112k, paidy3k] (sum=146k)
+  //     total_due = 146k (本期支出明细显示 146k)
+  //     future_due = 0 (今天已扣,不算未来应付) → net_available = 71k - 0 = 71k ✓
   const total_due = activeCards.reduce((sum, ac) => sum + ac.amount, 0);
+  // future_due:active_cards 中 days_until_due > 0 (即 effectiveDue > today)
+  // 避免重新 parse 字符串,直接用 days_until_due 判断(0 = 今天,>0 = 未来,<0 不可能因 Math.max(0, …))
+  const future_due = activeCards
+    .filter((ac) => ac.days_until_due > 0)
+    .reduce((sum, ac) => sum + ac.amount, 0);
 
-  // 5. 净可用 + 日均预算
-  const net_available = total_net_cash - total_due;
+  // 5. 净可用 + 日均预算（v1.4.6：用 future_due 替代 total_due）
+  const net_available = total_net_cash - future_due;
   const daily_budget = Math.max(0, Math.floor(net_available / safeDays));
 
   // 6. 当前周期快照
@@ -343,7 +359,8 @@ export function computeDashboard(
     active_cards: activeCards,
     paid_this_cycle: paidThisCycle,        // v1.4.4 新增:本周期已扣款的卡(不参与 net_available)
     inactive_cards: inactiveCards,
-    total_due,
+    total_due,                             // v1.4.6:含今天+未来,用于本期支出明细展示
+    future_due,                            // v1.4.6:仅未来(> today),用于 net_available 避免双扣
     net_available,
     days_to_payday: safeDays,
     daily_budget,
@@ -933,11 +950,11 @@ export function computeDashboardV2(
   const safeDays = Math.max(1, v1.days_to_payday);
 
   // 计算"未来应付"(today ~ cycleEnd)
-  // 信用卡:用 v1.active_cards(本期内尚未扣款,扣款日 >= today)
-  //   v1.4.4 之后:paid_this_cycle 里的卡(扣款日 < today)已经被踢出 active_cards,
-  //   所以这条 reduce 天然就只算"未来还要扣的"——这就是用户报告的"今天 29 号已扣了
-  //   不该再扣一次"问题的根本修复
-  const futureCreditCards = v1.active_cards.reduce((s, ac) => s + ac.amount, 0);
+  // 信用卡:用 v1.future_due(v1.4.6 引入,只算 effectiveDue > today 的活跃卡)
+  //   v1.active_cards 仍含"今天要扣"的卡(用于明细展示"今天扣款" badge),
+  //   但 net_available 算预算时不能重复扣,所以用 v1.future_due(已剔除 today==effectiveDue)
+  //   用户报告:pay_day=10 + due_day=29 + today=6/29 → future_due=0,不再双扣
+  const futureCreditCards = v1.future_due;
   // 账单:nextOccurrence >= today 且在 cycleEnd 前
   let futureBills = 0;
   for (const bill of bills) {

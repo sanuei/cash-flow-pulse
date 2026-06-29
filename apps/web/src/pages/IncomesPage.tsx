@@ -132,6 +132,47 @@ export function IncomesPage() {
             onCancel={close}
           />
         )}
+        footer={
+          // v1.4.6:合计 = 余额 - 锁定(净可用) + 锁定(总占用)
+          //   用户能一眼看到"我总共有多少钱 / 锁定的 / 净可用"
+          cashSources.length > 0 ? (
+            <div className="flex items-center justify-between gap-3 text-[12px]">
+              <div className="flex items-center gap-2 text-notion-text-secondary">
+                <Icon name="cash" size={14} strokeWidth={1.75} className="text-notion-text-muted" />
+                <span className="font-semibold">合计</span>
+                <span className="text-notion-text-muted">·</span>
+                <span className="text-notion-text-muted">
+                  总余额{' '}
+                  <span className="font-numeric font-semibold text-notion-text">
+                    {formatYen(cashSources.reduce((s, c) => s + c.balance, 0))}
+                  </span>
+                </span>
+                {cashSources.some((c) => c.locked_amount > 0) && (
+                  <>
+                    <span className="text-notion-text-muted">·</span>
+                    <span className="inline-flex items-center gap-0.5 text-notion-text-muted">
+                      <Icon name="lock" size={10} />
+                      锁定{' '}
+                      <span className="font-numeric">
+                        {formatYen(cashSources.reduce((s, c) => s + c.locked_amount, 0))}
+                      </span>
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[10px] uppercase tracking-caps text-notion-text-muted font-semibold">
+                  净可用
+                </span>
+                <span className="font-display font-semibold text-[18px] font-numeric text-notion-text">
+                  {formatYen(
+                    cashSources.reduce((s, c) => s + c.balance - c.locked_amount, 0)
+                  )}
+                </span>
+              </div>
+            </div>
+          ) : null
+        }
       >
         {(openEdit) =>
           cashSources.map((cs) => (

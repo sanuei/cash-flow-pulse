@@ -244,13 +244,20 @@ describe('v1.4.4 已扣款卡片分离 (paid_this_cycle)', () => {
     expect(result.net_available).toBe(30000);
   });
 
-  it('扣款日 == today → 仍算 active（用户当天应主动更新现金余额）', () => {
-    // today=6/25, 卡 due_day=25 → effectiveDue == today → 边界属"未扣"
+  it('扣款日 == today → 仍算 active (v1.4.6:明细展示,future_due 已剔除避免双扣)', () => {
+    // v1.4.6 设计:active_cards 仍含"今天要扣"的卡(明细展示"今天扣款" badge)
+    // 但 future_due 已剔除它(避免与用户余额中已扣部分双重计算)
+    // total_due = 30000(明细总), future_due = 0(不算未来应付)
     const card: CreditCard = { ...sampleCards[0]!, due_day: 25, statement_amount: 30000 };
     const result = computeDashboard(new Date(2026, 5, 25), baseConfig, sampleCash, [card]);
     expect(result.active_cards.length).toBe(1);
+    expect(result.active_cards[0]!.days_until_due).toBe(0);
     expect(result.paid_this_cycle.length).toBe(0);
+    // v1.4.6:total_due 仍含今天,但 future_due 剔除
     expect(result.total_due).toBe(30000);
+    expect(result.future_due).toBe(0);
+    // 关键:net_available = total_net_cash(30000) - future_due(0) = 30000
+    expect(result.net_available).toBe(30000);
   });
 
   it('扣款日 > today → 进 active_cards（正常待扣）', () => {
@@ -262,15 +269,20 @@ describe('v1.4.4 已扣款卡片分离 (paid_this_cycle)', () => {
     expect(result.total_due).toBe(30000);
   });
 
-  it('pay_day=10 + today=6/29 + 卡 due_day=29 → 6/29 落在 [6/10, 7/10) 期内, today==effectiveDue → active(days_until_due=0)', () => {
-    // 用户报告的真实场景:pay_day=10, today=6/29, 卡 due_day=29
-    // 6/29 既是周期 [6/10, 7/10) 的活跃扣款日,也是今天(today)
-    // → 应在 active_cards(days_until_due=0)
+  it('pay_day=10 + today=6/29 + 卡 due_day=29 → active(days_until_due=0),future_due=0 避免双扣', () => {
+    // 用户报告的真实场景 v1.4.6:pay_day=10, today=6/29, 卡 due_day=29
+    // 6/29 == today → 仍在 active_cards(days_until_due=0, UI 显示"今天扣款")
+    // 但 future_due = 0(已剔除 today==effectiveDue)→ net_available 不双扣
     const card: CreditCard = { ...sampleCards[0]!, due_day: 29, statement_amount: 30000 };
     const result = computeDashboard(new Date(2026, 5, 29), baseConfig, sampleCash, [card]);
     expect(result.active_cards.length).toBe(1);
     expect(result.active_cards[0]!.days_until_due).toBe(0);
     expect(result.paid_this_cycle.length).toBe(0);
+    // v1.4.6:total_due 含今天卡(明细展示),future_due 不含(预算计算避免双扣)
+    expect(result.total_due).toBe(30000);
+    expect(result.future_due).toBe(0);
+    // 关键:net_available = total_net_cash(30000) - future_due(0) = 30000
+    expect(result.net_available).toBe(30000);
   });
 
   it('pay_day=10 + today=6/30 + 卡 due_day=29 → 6/29 < 6/30 → paid_this_cycle,不再扣 net_available', () => {
