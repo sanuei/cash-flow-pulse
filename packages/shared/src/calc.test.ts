@@ -739,10 +739,14 @@ describe('computeDashboardV2 向后兼容', () => {
     expect(v2.upcoming_expenses.subscriptions[0]!.in_current_cycle).toBe(true);
   });
 
-  it('账单 due_day=14 在本周期区间外也能显示（健身房场景）', () => {
-    // 今天 6/21，账单 due_day=14
-    // 旧逻辑：6/14 < 6/21 不活跃，7/14 > 7/10 也不活跃 → 不显示 ❌
-    // 新逻辑：用 nextOccurrence 找下次扣款日 = 7/14，距离 23 天 ≤ 60 → 显示
+  it('账单 due_day=14 本周期内已过（健身房场景）—— 仍算本期支出，且下次扣款日前瞻显示 7/14', () => {
+    // 今天 6/21，周期 [6/10, 7/10)，账单 due_day=14
+    // v1.5 修复前的 bug：判断"是否本期"用前瞻 nextOccurrence(今天 6/21 之后最近一次)=7/14，
+    //   7/14 不在 [6/10,7/10) 内 → 误判 in_current_cycle=false、totalBills=0，
+    //   本期实际已发生的 6/14 扣款从"本期支出明细"/"本期收入去向"饼图里凭空消失。
+    // 修复后：本期归属改用 isBillActiveInCycle（跟信用卡同一实现）—— 6/14 落在
+    //   [6/10,7/10) 内 → in_current_cycle=true，本期照算；
+    //   展示用的 due_date/days_until 仍是前瞻的下一次扣款日(7/14)，两者互不影响。
     const today = new Date(2026, 5, 21); // 6/21
     const bills = [
       {
@@ -758,15 +762,36 @@ describe('computeDashboardV2 向后兼容', () => {
       },
     ];
     const v2 = computeDashboardV2(today, baseConfig, sampleCash, sampleCards, [], [], bills);
-    // 显示健身房（找到下次扣款日 7/14）
     expect(v2.upcoming_expenses.bills.length).toBe(1);
     expect(v2.upcoming_expenses.bills[0]!.name).toBe('健身房');
+    // 展示用:下一次扣款日(前瞻)仍是 7/14，不受本期归属修复影响
     expect(v2.upcoming_expenses.bills[0]!.due_date).toBe('2026-07-14');
-    // 但 in_current_cycle=false（不在 [6/21, 7/10) 内）
-    expect(v2.upcoming_expenses.bills[0]!.in_current_cycle).toBe(false);
-    // totalBills = 0（不计入日均预算）
-    expect(v2.upcoming_expenses.total_bills).toBe(0);
-    expect(v2.total_expense).toBe(30000); // 只有信用卡算入
+    // 本期归属:6/14 在 [6/10,7/10) 内 → true（修复前是 false）
+    expect(v2.upcoming_expenses.bills[0]!.in_current_cycle).toBe(true);
+    // 本周期扣款状态:6/14 已过 today(6/21) → 已扣，距今 7 天
+    expect(v2.upcoming_expenses.bills[0]!.cycle_paid).toBe(true);
+    expect(v2.upcoming_expenses.bills[0]!.cycle_days_until).toBe(7);
+    // totalBills 计入本期支出（修复前是 0）
+    expect(v2.upcoming_expenses.total_bills).toBe(7370);
+    expect(v2.total_expense).toBe(30000 + 7370); // 信用卡 + 健身房
+  });
+
+  it('账单 due_day 本周期扣款日已过 today（房租场景，v1.5 用户报告的 bug）—— 计入 total_bills 与 cycle_paid badge', () => {
+    // 用户报告:pay_day=10, today=6/30, 房租 due_day=27 → 本周期扣款日 6/27 已过,
+    // 但饼图/本期支出明细里"消费"总计凭空少了这笔钱。
+    const today = new Date(2026, 5, 30); // 6/30
+    const bills = [
+      {
+        id: 'b1', user_id: 'default', name: '房租', amount: 83990, due_day: 27,
+        note: null, sort_order: 0, created_at: 0, updated_at: 0,
+      },
+    ];
+    const v2 = computeDashboardV2(today, baseConfig, sampleCash, [], [], [], bills);
+    expect(v2.upcoming_expenses.bills[0]!.in_current_cycle).toBe(true);
+    expect(v2.upcoming_expenses.bills[0]!.cycle_paid).toBe(true);
+    expect(v2.upcoming_expenses.bills[0]!.cycle_days_until).toBe(3); // 6/27 → 6/30 = 3 天前
+    expect(v2.upcoming_expenses.total_bills).toBe(83990);
+    expect(v2.total_expense).toBe(83990);
   });
 
   it('有收入时大幅提升日均预算', () => {

@@ -215,10 +215,12 @@ export interface UpcomingExpenseItem {
   frequency?: InvestmentFrequency;
   // v0.3.2: 标记是否在本期内（用于前端视觉标记"下期扣款"）
   in_current_cycle?: boolean;
-  // v1.5: 本周期内的扣款状态（仅 bill 使用，ExpensesPage "今天已扣"/"N 天后扣款" badge）
+  // v1.5: 本周期内的扣款状态（仅 bill 使用，ExpensesPage "今天已扣"/"N 天后扣款" badge，
+  // Overview 展开明细里已扣项显示"N 天前已扣"而非会跟下期日期矛盾的前瞻 due_date）
   // cycle_paid: true = 本周期扣款日已过（已扣）; false = 未过（待扣）; undefined = 无法判定
   cycle_paid?: boolean;
   cycle_days_until?: number;       // 距本周期扣款日天数（已扣/待扣都是非负数）
+  cycle_due_date?: string;         // YYYY-MM-DD，本周期内的扣款日（与 due_date 的"下次扣款日"不同）
 }
 
 export interface UpcomingIncomeItem {

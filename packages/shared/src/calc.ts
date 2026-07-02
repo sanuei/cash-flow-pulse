@@ -207,42 +207,17 @@ export function daysToNextPayday(today: Date, payDay: number): number {
 // ============================================================
 
 /**
- * 通用：某个扣款日（1-31）在指定周期内的实际扣款日期（若存在）
- *
- * 业务规则：扣款日**只可能落在周期起点所在月**，或**只可能落在周期终点所在月**。
- * - 周期 [6/10, 7/10) 起点在 6 月 → due_day 在 6 月 → 命中（如 6/25）
- * - 如果 due_day 比 6/10 还早（如 6/5），则属于上一周期（[5/10, 6/10)）的扣款 → 不命中
- * - 如果 due_day 比 6/10 晚但在 7/10 之前（如 7/5），同样属于下一周期 → 不命中
- *
- * 实现：分别尝试在周期起点所在月和终点所在月找扣款日，落在区间内才返回
- * 复用于信用卡（isCardActiveInCycle）和账单（computeDashboardV2 本周期扣款状态判断）
- */
-function dueDateInCycle(dueDay: number, cycleStart: Date, cycleEnd: Date): Date | null {
-  // 在周期起点所在月找扣款日（处理月末溢出）
-  const monthStart = getPaydayInMonth(cycleStart.getFullYear(), cycleStart.getMonth(), dueDay);
-  if (monthStart >= cycleStart && monthStart < cycleEnd) {
-    return monthStart;
-  }
-
-  // 在周期终点所在月找扣款日（处理跨月：周期终点是 7/10，due_day=5 → 7/5）
-  const monthEnd = getPaydayInMonth(cycleEnd.getFullYear(), cycleEnd.getMonth(), dueDay);
-  if (monthEnd >= cycleStart && monthEnd < cycleEnd) {
-    return monthEnd;
-  }
-
-  return null;
-}
-
-/**
  * 判断信用卡在指定周期内是否"活跃"（即需要本期还）
+ *
+ * 复用通用的 isDayActiveInCycle（下方定义，账单/订阅的 isBillActiveInCycle /
+ * isSubscriptionActiveInCycle 也是同一个实现）——避免三份几乎一样的周期匹配逻辑分别维护。
  */
 export function isCardActiveInCycle(
   card: CreditCard,
   cycleStart: Date,
   cycleEnd: Date
 ): { active: boolean; dueDate: Date | null } {
-  const dueDate = dueDateInCycle(card.due_day, cycleStart, cycleEnd);
-  return dueDate ? { active: true, dueDate } : { active: false, dueDate: null };
+  return isDayActiveInCycle(card.due_day, cycleStart, cycleEnd);
 }
 
 /**
@@ -860,26 +835,27 @@ export function computeDashboardV2(
   const paidCreditCards: ActiveCard[] = v1.paid_this_cycle;
 
   // 3b. 账单
-  // V2.1: 改为"下一次扣款日"视角 —— 不限在本期内，展示所有账单的最近一次扣款
-  // 这样健身房 (due_day=14, 今天 6/21) 也能显示为"7/14 扣款"
+  // 展示用的 due_date/days_until 仍是"下一次扣款日"(前瞻,见下方 nextOccurrence)——
+  // 这样健身房 (due_day=14, 今天 6/21) 也能显示为"7/14 扣款"。
+  // 但"是否算本期支出"(inCycle/totalBills) v1.5 改用 isBillActiveInCycle(跟信用卡
+  // isCardActiveInCycle 同一实现):旧版用前瞻 nextOccurrence 判断本期归属,导致扣款日
+  // 已过的账单(如房租 due_day=27,今天 30 号)nextOccurrence 滚到下个月、落进下一个发薪
+  // 周期,这笔本期已扣的账单就从 totalBills/饼图/支出明细里彻底消失了。
   const billItems: UpcomingExpenseItem[] = [];
   let totalBills = 0;
   for (const bill of bills) {
-    // 找下一次扣款日（顺延在 nextOccurrence 内部、过期判断之前处理）
-    const dueDate = nextOccurrence(today, bill.due_day, config.weekend_shift);
-    // 判断是否在本期内（用于 net_flow 计算）
-    const inCycle = dueDate >= cycleStart && dueDate < cycleEnd;
+    const { active: inCycle, dueDate: cycleDue } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
     if (inCycle) {
       totalBills += bill.amount;
     }
-    // 显示：总是展示（即使不在本期，但能"即将发生"就显示）
-    // 限制：日期距今天不超过 60 天（避免显示太远的）
+
+    // 下一次扣款日（前瞻，用于"距今 X 天"展示，即使不在本期也显示"即将发生"）
+    const dueDate = nextOccurrence(today, bill.due_day, config.weekend_shift);
     const days = diffDays(today, dueDate);
 
-    // v1.5: 本周期扣款状态（仿信用卡 active/paid_this_cycle 判断，用于 ExpensesPage "今天已扣" badge）
-    // 与上面的 dueDate（"下一次扣款日"，永远 >= today）不同：这里找的是本周期内的扣款日，
-    // 可能已经过去（如房租 due_day=27，今天 29 号 → 本周期扣款日=27，已过 → 已扣）
-    const cycleDue = dueDateInCycle(bill.due_day, cycleStart, cycleEnd);
+    // 本周期扣款状态（仿信用卡 active/paid_this_cycle 判断，用于 ExpensesPage "今天已扣" badge）
+    // 与上面的 dueDate（前瞻，永远 >= today）不同：这里是本周期内的扣款日，
+    // 可能已经过去（如房租 due_day=27，今天 30 号 → 本周期扣款日=27，已过 → 已扣）
     const effectiveCycleDue = cycleDue && config.weekend_shift ? shiftToWorkday(cycleDue) : cycleDue;
     const cycleDuePaid = effectiveCycleDue
       ? new Date(effectiveCycleDue.getFullYear(), effectiveCycleDue.getMonth(), effectiveCycleDue.getDate()) < todayMidnight
@@ -899,19 +875,20 @@ export function computeDashboardV2(
         in_current_cycle: inCycle,
         cycle_paid: cycleDuePaid,
         cycle_days_until: cycleDaysUntil,
+        cycle_due_date: effectiveCycleDue ? formatDate(effectiveCycleDue) : undefined,
       });
     }
   }
 
-  // 3c. 订阅（同样改用"下一次扣款日"）
+  // 3c. 订阅（同 v1.5 修复：本期归属用 isSubscriptionActiveInCycle，不用前瞻 nextOccurrence）
   const subscriptionItems: UpcomingExpenseItem[] = [];
   let totalSubs = 0;
   for (const sub of subscriptions) {
-    const dueDate = nextOccurrence(today, sub.billing_day, config.weekend_shift);
-    const inCycle = dueDate >= cycleStart && dueDate < cycleEnd;
+    const { active: inCycle } = isSubscriptionActiveInCycle(sub, cycleStart, cycleEnd);
     if (inCycle) {
       totalSubs += sub.amount;
     }
+    const dueDate = nextOccurrence(today, sub.billing_day, config.weekend_shift);
     const days = diffDays(today, dueDate);
     if (days <= 60) {
       const item: UpcomingExpenseItem = {

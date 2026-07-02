@@ -439,7 +439,8 @@ export function Overview() {
                   ))}
                 </SubCategory>
               )}
-              {/* 账单 */}
+              {/* 账单:本期已扣(cycle_paid)用本周期扣款日 + "N 天前已扣"，
+                  避免跟前瞻的下次扣款日(可能已经是下期)同时出现造成"日期矛盾" */}
               {upcomingExpenses.bills.length > 0 && (
                 <SubCategory title="固定账单" icon="bill" total={upcomingExpenses.total_bills}>
                   {upcomingExpenses.bills.map((b) => (
@@ -447,9 +448,10 @@ export function Overview() {
                       key={b.id}
                       name={b.name}
                       amount={b.total}
-                      date={b.due_date}
-                      daysUntil={b.days_until}
+                      date={b.cycle_paid ? (b.cycle_due_date ?? b.due_date) : b.due_date}
+                      daysUntil={b.cycle_paid ? (b.cycle_days_until ?? b.days_until) : b.days_until}
                       inCurrentCycle={b.in_current_cycle ?? true}
+                      paid={b.cycle_paid}
                     />
                   ))}
                 </SubCategory>
