@@ -937,8 +937,11 @@ function FlowChartRow({
   const overspend = hasIncome && netFlow < 0;
 
   const segments: DonutSeg[] = [
-    { value: consume, color: 'var(--c-accent)',     label: '消费' },
-    { value: invest,  color: 'var(--c-text-muted)', label: '投资' },
+    // 消费=warning(橙)/投资=success(绿):跟同页"本期支出明细"横向条形图的
+    // 固定投资(success)配色一致,消费对应支出语义色。结余保持不变(仍是
+    // success)——它的图例文字用 text-notion-success 硬编码,颜色不能脱节
+    { value: consume, color: 'var(--c-warning)', label: '消费' },
+    { value: invest,  color: 'var(--c-success)', label: '投资' },
     ...(netFlow > 0 ? [{ value: netFlow, color: 'var(--c-success)', label: '结余' }] : []),
   ].filter(s => s.value > 0);
 
