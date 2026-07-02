@@ -382,7 +382,7 @@ export function Overview() {
                 items={[
                   { name: '信用卡', amount: upcomingExpenses.total_credit_card, color: 'var(--c-warning)', icon: 'card' },
                   { name: '固定账单', amount: upcomingExpenses.total_bills, color: 'var(--c-accent)', icon: 'bill' },
-                  { name: '固定投资', amount: upcomingExpenses.total_investments, color: 'var(--c-success)', icon: 'investment' },
+                  { name: '固定投资', amount: upcomingExpenses.total_investments, color: 'var(--c-invest)', icon: 'investment' },
                   { name: '订阅', amount: upcomingExpenses.total_subscriptions, color: 'var(--c-text-muted)', icon: 'subscription' },
                 ]}
                 total={totalExpense}
@@ -937,11 +937,11 @@ function FlowChartRow({
   const overspend = hasIncome && netFlow < 0;
 
   const segments: DonutSeg[] = [
-    // 消费=warning(橙)/投资=success(绿):跟同页"本期支出明细"横向条形图的
-    // 固定投资(success)配色一致,消费对应支出语义色。结余保持不变(仍是
-    // success)——它的图例文字用 text-notion-success 硬编码,颜色不能脱节
+    // 消费=warning(橙)/投资=invest(青绿)/结余=success(绿):投资和结余都是"绿色系"
+    // 但用不同色相区分开,不会在饼图里叠成一坨。结余保持 success 不变——它的
+    // 图例文字用 text-notion-success 硬编码,颜色不能脱节
     { value: consume, color: 'var(--c-warning)', label: '消费' },
-    { value: invest,  color: 'var(--c-success)', label: '投资' },
+    { value: invest,  color: 'var(--c-invest)',  label: '投资' },
     ...(netFlow > 0 ? [{ value: netFlow, color: 'var(--c-success)', label: '结余' }] : []),
   ].filter(s => s.value > 0);
 

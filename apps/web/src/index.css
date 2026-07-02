@@ -45,6 +45,7 @@
   --c-success-soft:  oklch(95% 0.038 152);
   --c-warning:       oklch(55% 0.18 32);      /* 支出 / 超支 #D8542A（偏红警示） */
   --c-warning-soft:  oklch(95% 0.045 38);
+  --c-invest:        oklch(50% 0.12 175);     /* 投资：偏青绿，跟 success(结余)拉开色相区分 */
 
   /* === 字体栈 === */
   --font-display: 'Fraunces', 'Iowan Old Style', 'Charter', Georgia, 'Songti SC', 'PingFang SC', serif;
@@ -142,6 +143,7 @@
     --c-success-soft:  oklch(27% 0.05 152);
     --c-warning:       oklch(70% 0.16 38);
     --c-warning-soft:  oklch(30% 0.06 38);
+    --c-invest:        oklch(65% 0.12 175);
 
     --shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.3);
     --shadow-sm: 0 2px 6px oklch(0% 0 0 / 0.35), 0 1px 2px oklch(0% 0 0 / 0.25);
@@ -557,6 +559,7 @@ html[data-theme="warm"] {
   --c-success-soft:   oklch(93.5% 0.038 150);
   --c-warning:        oklch(54% 0.155 32);
   --c-warning-soft:   oklch(93.5% 0.045 36);
+  --c-invest:         oklch(48% 0.11 172);
   --shadow-xs: 0 1px 2px oklch(45% 0.08 45 / 0.06);
   --shadow-sm: 0 2px 8px oklch(45% 0.08 45 / 0.07), 0 1px 2px oklch(45% 0.08 45 / 0.05);
   --shadow-md: 0 6px 16px oklch(45% 0.08 45 / 0.09), 0 2px 4px oklch(45% 0.08 45 / 0.05);
@@ -591,6 +594,7 @@ html[data-theme="white"] {
   --c-success-soft:   oklch(93.5% 0.038 150);
   --c-warning:        oklch(54% 0.155 32);
   --c-warning-soft:   oklch(93.5% 0.045 36);
+  --c-invest:         oklch(48% 0.11 172);
   --shadow-xs: 0 1px 2px oklch(30% 0.05 264 / 0.06);
   --shadow-sm: 0 2px 8px oklch(30% 0.05 264 / 0.07), 0 1px 2px oklch(30% 0.05 264 / 0.05);
   --shadow-md: 0 6px 16px oklch(30% 0.05 264 / 0.09), 0 2px 4px oklch(30% 0.05 264 / 0.05);
@@ -625,6 +629,7 @@ html[data-theme="green"] {
   --c-success-soft:   oklch(93.5% 0.038 150);
   --c-warning:        oklch(54% 0.155 32);
   --c-warning-soft:   oklch(93.5% 0.045 36);
+  --c-invest:         oklch(46% 0.11 172);
   --shadow-xs: 0 1px 2px oklch(30% 0.04 155 / 0.06);
   --shadow-sm: 0 2px 8px oklch(30% 0.04 155 / 0.07), 0 1px 2px oklch(30% 0.04 155 / 0.05);
   --shadow-md: 0 6px 16px oklch(30% 0.04 155 / 0.09), 0 2px 4px oklch(30% 0.04 155 / 0.05);
@@ -659,6 +664,7 @@ html[data-theme="dark"] {
   --c-success-soft:   oklch(28% 0.045 150);
   --c-warning:        oklch(70% 0.135 38);
   --c-warning-soft:   oklch(30% 0.05 38);
+  --c-invest:         oklch(64% 0.11 172);
   --shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.3);
   --shadow-sm: 0 2px 6px oklch(0% 0 0 / 0.35), 0 1px 2px oklch(0% 0 0 / 0.25);
   --shadow-md: 0 4px 12px oklch(0% 0 0 / 0.4), 0 2px 4px oklch(0% 0 0 / 0.3);
@@ -693,6 +699,7 @@ html[data-theme="violet"] {
   --c-success-soft:   oklch(32% 0.05 160);
   --c-warning:        oklch(74% 0.13 45);
   --c-warning-soft:   oklch(33% 0.05 40);
+  --c-invest:         oklch(68% 0.12 175);
   --shadow-xs: 0 1px 2px oklch(10% 0.03 264 / 0.35);
   --shadow-sm: 0 2px 6px oklch(10% 0.03 264 / 0.4), 0 1px 2px oklch(10% 0.03 264 / 0.3);
   --shadow-md: 0 4px 12px oklch(10% 0.03 264 / 0.45), 0 2px 4px oklch(10% 0.03 264 / 0.35);
@@ -757,6 +764,7 @@ html[data-theme="neon"] {
   --c-success-soft:   oklch(20% 0.07 140);
   --c-warning:        oklch(75% 0.18 50);
   --c-warning-soft:   oklch(22% 0.07 45);
+  --c-invest:         oklch(78% 0.18 165);
   --shadow-xs: 0 1px 2px oklch(0% 0 0 / 0.5);
   --shadow-sm: 0 2px 6px oklch(0% 0 0 / 0.55), 0 1px 2px oklch(0% 0 0 / 0.45);
   --shadow-md: 0 4px 12px oklch(0% 0 0 / 0.6), 0 2px 4px oklch(0% 0 0 / 0.5);

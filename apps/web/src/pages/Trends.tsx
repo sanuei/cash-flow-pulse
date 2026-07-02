@@ -127,7 +127,7 @@ export function Trends() {
       { name: '信用卡', value: ccTotal,   color: 'var(--c-accent)' },
       { name: '固定账单', value: billTotal, color: 'var(--c-warning)' },
       { name: '订阅',   value: subTotal,  color: 'var(--c-success)' },
-      { name: '投资',   value: invTotal,  color: 'var(--c-text-muted)' },
+      { name: '投资',   value: invTotal,  color: 'var(--c-invest)' },
     ].filter((d) => d.value > 0);
   }, [creditCards, bills, investments, subscriptions]);
 
