@@ -400,8 +400,8 @@ export function Overview() {
             <div className="overflow-hidden">
               {expensesExpanded && (
                 <div className="space-y-3 text-[13px] anim-fade-up">
-              {/* 信用卡 */}
-              {upcomingExpenses.credit_cards.length > 0 && (
+              {/* 信用卡（未扣 + 本期已扣，总计已含两者） */}
+              {(upcomingExpenses.credit_cards.length > 0 || upcomingExpenses.credit_cards_paid.length > 0) && (
                 <SubCategory title="信用卡" icon="card" total={upcomingExpenses.total_credit_card}>
                   {upcomingExpenses.credit_cards.map((ac) => (
                     <ExpenseRow
@@ -410,6 +410,16 @@ export function Overview() {
                       amount={ac.amount}
                       date={ac.due_date}
                       daysUntil={ac.days_until_due}
+                    />
+                  ))}
+                  {upcomingExpenses.credit_cards_paid.map((ac) => (
+                    <ExpenseRow
+                      key={ac.card.id}
+                      name={ac.card.name}
+                      amount={ac.amount}
+                      date={ac.due_date}
+                      daysUntil={ac.days_until_due}
+                      paid
                     />
                   ))}
                 </SubCategory>
@@ -823,6 +833,7 @@ function ExpenseRow({
   date,
   daysUntil,
   inCurrentCycle = true,
+  paid = false,
   icon,
 }: {
   name: string;
@@ -830,8 +841,11 @@ function ExpenseRow({
   date: string;
   daysUntil: number;
   inCurrentCycle?: boolean;
+  /** v1.5: 本期已扣款(如已过期的信用卡账单)——日期标签显示"N 天前已扣",金额转中性色 */
+  paid?: boolean;
   icon?: 'card' | 'bill' | 'subscription' | 'investment';
 }) {
+  const muted = paid || !inCurrentCycle;
   return (
     <div className="flex items-center gap-3 text-[13px] py-2.5 px-2 -mx-2 rounded-[var(--radius-sm)] hover:bg-[var(--c-bg-alt)] transition-colors">
       {icon && (
@@ -840,19 +854,25 @@ function ExpenseRow({
         </span>
       )}
       <div className="flex-1 min-w-0">
-        <span className={inCurrentCycle ? 'text-notion-text' : 'text-notion-text-muted'}>
+        <span className={muted ? 'text-notion-text-muted' : 'text-notion-text'}>
           {name}
         </span>
         <span className="text-notion-text-muted ml-2 text-[11px]">
-          {date}
-          {daysUntil > 0 && <span> · {daysUntil} 天后</span>}
-          {daysUntil === 0 && <span> · 今天</span>}
-          {!inCurrentCycle && <span className="ml-1 text-notion-text-muted">· 下期扣款</span>}
+          {paid ? (
+            <span>{date} · {daysUntil === 0 ? '今天已扣' : `${daysUntil} 天前已扣`}</span>
+          ) : (
+            <>
+              {date}
+              {daysUntil > 0 && <span> · {daysUntil} 天后</span>}
+              {daysUntil === 0 && <span> · 今天</span>}
+              {!inCurrentCycle && <span className="ml-1 text-notion-text-muted">· 下期扣款</span>}
+            </>
+          )}
         </span>
       </div>
       <span
         className={`font-numeric font-semibold tabular-nums ${
-          inCurrentCycle ? 'text-notion-warning' : 'text-notion-text-muted'
+          muted ? 'text-notion-text-muted' : 'text-notion-warning'
         }`}
       >
         {formatYen(amount)}

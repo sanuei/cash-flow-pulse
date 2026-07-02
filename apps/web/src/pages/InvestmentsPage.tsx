@@ -18,6 +18,7 @@ const FREQ_LABEL: Record<InvestmentFrequency, string> = {
 };
 
 export function InvestmentsPage() {
+  const calc = useStore((s) => s.calc);
   const investmentsAll = useStore((s) => s.investments);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const deleteInvestment = useStore((s) => s.deleteInvestment);
@@ -30,7 +31,12 @@ export function InvestmentsPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
-      <PageTitle icon="investment" title="投资" subtitle="基金定投、黄金积存等自动扣款" />
+      <PageTitle
+        icon="investment"
+        title="投资"
+        subtitle="基金定投、黄金积存等自动扣款"
+        total={calc ? { label: '本期投资总计', value: formatYen(calc.upcoming_expenses.total_investments) } : undefined}
+      />
       <SearchBar value={query} onChange={setQuery} placeholder="搜索投资项目..." />
 
       <ManagedListCard<RecurringInvestment>

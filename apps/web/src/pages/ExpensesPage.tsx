@@ -38,10 +38,27 @@ export function ExpensesPage() {
     ...calc.paid_this_cycle.map((ac) => ({ card: ac.card, status: 'paid' as const, days_until_due: ac.days_until_due, amount: ac.amount })),
     ...calc.inactive_cards.map((c) => ({ card: c, status: 'inactive' as const, days_until_due: -1, amount: c.statement_amount })),
   ].filter((r) => notPending(r.card));
+  const cardTotal = cardRows.reduce((s, r) => s + r.amount, 0);
+
+  // 固定账单:同信用卡逻辑,按本周期扣款日是否已过区分"待扣/已扣"(calc.upcoming_expenses.bills 提供)
+  // 未扣排前,已扣排后;非本期(cycle_paid undefined,理论上极少见)排最后
+  const billStatusMap = new Map(calc.upcoming_expenses.bills.map((b) => [b.id, b]));
+  const billRows = bills
+    .map((bill) => {
+      const status = billStatusMap.get(bill.id);
+      return { bill, cyclePaid: status?.cycle_paid, cycleDaysUntil: status?.cycle_days_until };
+    })
+    .sort((a, b) => Number(a.cyclePaid ?? false) - Number(b.cyclePaid ?? false));
+  const billTotal = bills.reduce((s, b) => s + b.amount, 0);
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
-      <PageTitle icon="bill" title="消费" subtitle="信用卡、固定账单、订阅" />
+      <PageTitle
+        icon="bill"
+        title="消费"
+        subtitle="信用卡、固定账单、订阅"
+        total={{ label: '本期消费总计', value: formatYen(cardTotal + billTotal) }}
+      />
       <SearchBar value={query} onChange={setQuery} placeholder="搜索消费项目..." />
 
       {/* 信用卡 */}
@@ -77,6 +94,14 @@ export function ExpensesPage() {
             onCancel={close}
           />
         )}
+        footer={
+          creditCards.length > 0 ? (
+            <div className="flex items-center justify-between text-[12px]">
+              <span className="font-semibold text-notion-text-secondary">合计</span>
+              <span className="font-numeric font-semibold text-[15px] text-notion-text">{formatYen(cardTotal)}</span>
+            </div>
+          ) : null
+        }
       >
         {(openEdit) =>
           cardRows.map(({ card, status, days_until_due, amount }) => {
@@ -151,16 +176,37 @@ export function ExpensesPage() {
             onCancel={close}
           />
         )}
+        footer={
+          bills.length > 0 ? (
+            <div className="flex items-center justify-between text-[12px]">
+              <span className="font-semibold text-notion-text-secondary">合计</span>
+              <span className="font-numeric font-semibold text-[15px] text-notion-text">{formatYen(billTotal)}</span>
+            </div>
+          ) : null
+        }
       >
         {(openEdit) =>
-          bills.map((b) => (
+          billRows.map(({ bill: b, cyclePaid, cycleDaysUntil }) => (
             <EntityRow
               key={b.id}
               icon="bill"
-              tone="warning"
-              title={b.name}
+              tone={cyclePaid ? 'neutral' : 'warning'}
+              title={
+                <>
+                  {b.name}{' '}
+                  {cyclePaid === true ? (
+                    <span className="badge-success badge text-[10px] px-1.5 py-0.5">
+                      {cycleDaysUntil === 0 ? '今天已扣' : `${cycleDaysUntil} 天前已扣`}
+                    </span>
+                  ) : cyclePaid === false ? (
+                    <span className="badge-warning badge text-[10px] px-1.5 py-0.5">
+                      {cycleDaysUntil === 0 ? '今天扣款' : `${cycleDaysUntil} 天后扣款`}
+                    </span>
+                  ) : null}
+                </>
+              }
               subtitle={`每月 ${b.due_day} 号扣款`}
-              money={<Money amount={b.amount} size="md" sign="negative" />}
+              money={<Money amount={b.amount} size="md" sign={cyclePaid ? 'neutral' : 'negative'} />}
               onEdit={() => openEdit(b)}
               onDelete={() =>
                 softDelete({

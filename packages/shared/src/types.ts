@@ -215,6 +215,10 @@ export interface UpcomingExpenseItem {
   frequency?: InvestmentFrequency;
   // v0.3.2: 标记是否在本期内（用于前端视觉标记"下期扣款"）
   in_current_cycle?: boolean;
+  // v1.5: 本周期内的扣款状态（仅 bill 使用，ExpensesPage "今天已扣"/"N 天后扣款" badge）
+  // cycle_paid: true = 本周期扣款日已过（已扣）; false = 未过（待扣）; undefined = 无法判定
+  cycle_paid?: boolean;
+  cycle_days_until?: number;       // 距本周期扣款日天数（已扣/待扣都是非负数）
 }
 
 export interface UpcomingIncomeItem {
@@ -228,7 +232,8 @@ export interface UpcomingIncomeItem {
 // === v0.3 新增：升级版 DashboardCalc（在原基础上加字段） ===
 
 export interface UpcomingExpenses {
-  credit_cards: ActiveCard[];      // 复用 V1 类型
+  credit_cards: ActiveCard[];      // 复用 V1 类型（本期未扣）
+  credit_cards_paid: ActiveCard[]; // v1.5: 本期已扣的卡（total_credit_card 含这部分，展示用）
   bills: UpcomingExpenseItem[];
   subscriptions: UpcomingExpenseItem[];
   investments: UpcomingExpenseItem[];

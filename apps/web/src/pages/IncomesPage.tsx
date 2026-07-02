@@ -15,6 +15,7 @@ import type { RecurringIncome, CashSource } from '@cfp/shared';
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 export function IncomesPage() {
+  const calc = useStore((s) => s.calc);
   const incomesAll = useStore((s) => s.incomes);
   const cashSourcesAll = useStore((s) => s.cashSources);
   const loadDashboard = useStore((s) => s.loadDashboard);
@@ -34,7 +35,12 @@ export function IncomesPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
-      <PageTitle icon="income" title="收入" subtitle="固定到账收入 · 现金账户余额" />
+      <PageTitle
+        icon="income"
+        title="收入"
+        subtitle="固定到账收入 · 现金账户余额"
+        total={calc ? { label: '本期收入总计', value: formatYen(calc.upcoming_incomes.total) } : undefined}
+      />
       <SearchBar value={query} onChange={setQuery} placeholder="搜索收入 / 现金账户..." />
 
       {/* 固定收入 */}

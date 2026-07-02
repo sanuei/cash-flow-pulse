@@ -207,33 +207,42 @@ export function daysToNextPayday(today: Date, payDay: number): number {
 // ============================================================
 
 /**
+ * 通用：某个扣款日（1-31）在指定周期内的实际扣款日期（若存在）
+ *
+ * 业务规则：扣款日**只可能落在周期起点所在月**，或**只可能落在周期终点所在月**。
+ * - 周期 [6/10, 7/10) 起点在 6 月 → due_day 在 6 月 → 命中（如 6/25）
+ * - 如果 due_day 比 6/10 还早（如 6/5），则属于上一周期（[5/10, 6/10)）的扣款 → 不命中
+ * - 如果 due_day 比 6/10 晚但在 7/10 之前（如 7/5），同样属于下一周期 → 不命中
+ *
+ * 实现：分别尝试在周期起点所在月和终点所在月找扣款日，落在区间内才返回
+ * 复用于信用卡（isCardActiveInCycle）和账单（computeDashboardV2 本周期扣款状态判断）
+ */
+function dueDateInCycle(dueDay: number, cycleStart: Date, cycleEnd: Date): Date | null {
+  // 在周期起点所在月找扣款日（处理月末溢出）
+  const monthStart = getPaydayInMonth(cycleStart.getFullYear(), cycleStart.getMonth(), dueDay);
+  if (monthStart >= cycleStart && monthStart < cycleEnd) {
+    return monthStart;
+  }
+
+  // 在周期终点所在月找扣款日（处理跨月：周期终点是 7/10，due_day=5 → 7/5）
+  const monthEnd = getPaydayInMonth(cycleEnd.getFullYear(), cycleEnd.getMonth(), dueDay);
+  if (monthEnd >= cycleStart && monthEnd < cycleEnd) {
+    return monthEnd;
+  }
+
+  return null;
+}
+
+/**
  * 判断信用卡在指定周期内是否"活跃"（即需要本期还）
- *
- * 业务规则：卡片的扣款日**只可能落在周期起点所在月**，或**只可能落在周期终点所在月**。
- * - 周期 [6/10, 7/10) 起点在 6 月 → 卡片 due_day 在 6 月 → 活跃（如 6/25）
- * - 如果 due_day 比 6/10 还早（如 6/5），则属于上一周期（[5/10, 6/10)）的扣款 → 不活跃
- * - 如果 due_day 比 6/10 晚但在 7/10 之前（如 7/5），同样属于下一周期 → 不活跃
- *
- * 实现：分别尝试在周期起点所在月和终点所在月找扣款日，落在区间内才返回活跃
  */
 export function isCardActiveInCycle(
   card: CreditCard,
   cycleStart: Date,
   cycleEnd: Date
 ): { active: boolean; dueDate: Date | null } {
-  // 在周期起点所在月找扣款日（处理月末溢出）
-  const monthStart = getPaydayInMonth(cycleStart.getFullYear(), cycleStart.getMonth(), card.due_day);
-  if (monthStart >= cycleStart && monthStart < cycleEnd) {
-    return { active: true, dueDate: monthStart };
-  }
-
-  // 在周期终点所在月找扣款日（处理跨月：周期终点是 7/10，卡 due_day=5 → 7/5）
-  const monthEnd = getPaydayInMonth(cycleEnd.getFullYear(), cycleEnd.getMonth(), card.due_day);
-  if (monthEnd >= cycleStart && monthEnd < cycleEnd) {
-    return { active: true, dueDate: monthEnd };
-  }
-
-  return { active: false, dueDate: null };
+  const dueDate = dueDateInCycle(card.due_day, cycleStart, cycleEnd);
+  return dueDate ? { active: true, dueDate } : { active: false, dueDate: null };
 }
 
 /**
@@ -296,17 +305,25 @@ export function computeDashboard(
         effectiveDue.getFullYear(), effectiveDue.getMonth(), effectiveDue.getDate()
       );
       const amount = getCardAmountForDate(card, dueDate);
-      const daysUntil = Math.max(0, diffDays(today, effectiveDue));
-      const entry: ActiveCard = {
-        card,
-        due_date: formatDate(effectiveDue),
-        days_until_due: daysUntil,
-        amount,
-      };
+      // 未夹取的原始差值:负数=已过,0=今天,正数=未来。夹取只在下面按分支各自做,
+      // 避免 paid_this_cycle 卡全部被 Math.max(0,...) 夹成 0,导致"N 天前已扣"永远显示不出来
+      const rawDiff = diffDays(today, effectiveDue);
       if (effectiveDueMidnight < todayMidnight) {
-        // 已过:扣款日严格早于今天
-        paidThisCycle.push(entry);
+        // 已过:扣款日严格早于今天 → days_until_due 记"距今多少天前"(正数,UI 用于 "N 天前已扣")
+        paidThisCycle.push({
+          card,
+          due_date: formatDate(effectiveDue),
+          days_until_due: Math.abs(rawDiff),
+          amount,
+        });
       } else {
+        const daysUntil = Math.max(0, rawDiff);
+        const entry: ActiveCard = {
+          card,
+          due_date: formatDate(effectiveDue),
+          days_until_due: daysUntil,
+          amount,
+        };
         // 今天或未来(都算 active,等用户行为)
         // v1.4.5 解释:之前测试期望 today==effectiveDue 算 active。
         // 现在 v1.4.6 改为统一不区分:都进 activeCards,UI 仍显示,但
@@ -835,10 +852,12 @@ export function computeDashboardV2(
   const currentCycle = getCurrentCycle(today, config.pay_day);
   const cycleStart = currentCycle.start_date;
   const cycleEnd = currentCycle.end_date;
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
   // 3. 计算本期支出明细
   // 3a. 信用卡（已在 V1 中算过，复用）
   const upcomingCreditCards: ActiveCard[] = v1.active_cards;
+  const paidCreditCards: ActiveCard[] = v1.paid_this_cycle;
 
   // 3b. 账单
   // V2.1: 改为"下一次扣款日"视角 —— 不限在本期内，展示所有账单的最近一次扣款
@@ -856,6 +875,17 @@ export function computeDashboardV2(
     // 显示：总是展示（即使不在本期，但能"即将发生"就显示）
     // 限制：日期距今天不超过 60 天（避免显示太远的）
     const days = diffDays(today, dueDate);
+
+    // v1.5: 本周期扣款状态（仿信用卡 active/paid_this_cycle 判断，用于 ExpensesPage "今天已扣" badge）
+    // 与上面的 dueDate（"下一次扣款日"，永远 >= today）不同：这里找的是本周期内的扣款日，
+    // 可能已经过去（如房租 due_day=27，今天 29 号 → 本周期扣款日=27，已过 → 已扣）
+    const cycleDue = dueDateInCycle(bill.due_day, cycleStart, cycleEnd);
+    const effectiveCycleDue = cycleDue && config.weekend_shift ? shiftToWorkday(cycleDue) : cycleDue;
+    const cycleDuePaid = effectiveCycleDue
+      ? new Date(effectiveCycleDue.getFullYear(), effectiveCycleDue.getMonth(), effectiveCycleDue.getDate()) < todayMidnight
+      : undefined;
+    const cycleDaysUntil = effectiveCycleDue ? Math.abs(diffDays(todayMidnight, effectiveCycleDue)) : undefined;
+
     if (days <= 60) {
       billItems.push({
         source_type: 'bill',
@@ -867,6 +897,8 @@ export function computeDashboardV2(
         due_date: formatDate(dueDate),
         days_until: Math.max(0, days),
         in_current_cycle: inCycle,
+        cycle_paid: cycleDuePaid,
+        cycle_days_until: cycleDaysUntil,
       });
     }
   }
@@ -931,7 +963,10 @@ export function computeDashboardV2(
   const { total: totalIncome, items: incomeItems } = sumIncomeInCycle(incomes, cycleStart, cycleEnd);
 
   // 5. 本期总支出(整个周期 [cycleStart, cycleEnd))— 用于 net_flow 展示
-  const totalCreditCards = v1.total_due;
+  // v1.5 修复: v1.total_due 只含"未扣"的活跃卡(v1.4.6 起特意排除 paid_this_cycle，
+  //   避免 net_available 双扣，见 future_due)。但这里是"本期支出明细"展示用途，
+  //   已扣的卡这笔钱本期确实花了，不该从总支出里消失 → 显式加回 paid_this_cycle。
+  const totalCreditCards = v1.total_due + paidCreditCards.reduce((s, ac) => s + ac.amount, 0);
   const totalExpense = totalCreditCards + totalBills + totalSubs + totalInvestments;
 
   // 6. 净可用 + 日均预算
@@ -984,6 +1019,7 @@ export function computeDashboardV2(
     ...v1,
     upcoming_expenses: {
       credit_cards: upcomingCreditCards,
+      credit_cards_paid: paidCreditCards,
       bills: billItems,
       subscriptions: subscriptionItems,
       investments: investmentItems,
