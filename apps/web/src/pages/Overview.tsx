@@ -7,7 +7,10 @@ import { LoadingState } from '../components/States';
 import { Icon } from '../components/Icon';
 import { formatYen } from '@cfp/shared';
 import { HorizontalBarChart, type BarItem } from '../components/HorizontalBarChart';
+import { AiDiagnosis } from '../components/AiDiagnosis';
+import { CashFlowChart } from '../components/CashFlowChart';
 import { apiGet } from '../lib/api';
+import type { CashflowResult } from '@cfp/shared';
 import type {
   UpcomingExpenseItem,
   UpcomingIncomeItem,
@@ -46,6 +49,7 @@ export function Overview() {
   const storeCalc = useStore((s) => s.calc);
   const cashSources = useStore((s) => s.cashSources);
   const config = useStore((s) => s.config);
+  const generatedAt = useStore((s) => s.generatedAt);
   const loading = useStore((s) => s.loading);
   const storeSnapshots = useStore((s) => s.snapshots);
 
@@ -54,6 +58,17 @@ export function Overview() {
   const [cycleCalc, setCycleCalc] = useState<DashboardCalcV2 | null>(null);
   const [cycleMeta, setCycleMeta] = useState<Omit<DashboardResponse, 'calc'> | null>(null);
   const [cycleLoading, setCycleLoading] = useState(false);
+
+  // 本期逐日可用现金曲线（现金走势卡用；只取本期）
+  const [cashflow, setCashflow] = useState<CashflowResult | null>(null);
+  useEffect(() => {
+    if (!config) return;
+    let cancelled = false;
+    apiGet<CashflowResult>('/dashboard/cashflow?periods=0')
+      .then((d) => { if (!cancelled) setCashflow(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [config, generatedAt]);
 
   // offset≠0 时单独拉取目标周期数据
   useEffect(() => {
@@ -91,11 +106,12 @@ export function Overview() {
   const totalExpense = upcomingExpenses?.grand_total ?? activeCalc.total_due;
   const totalIncome = upcomingIncomes?.total ?? 0;
 
-  // 投资 / 消费（消费 = 信用卡+账单+订阅，不含投资）
+  // 投资 / 消费（消费 = 信用卡+账单+订阅+临时账单，不含投资）
   const totalInvestment = upcomingExpenses?.total_investments ?? 0;
   const totalBills = upcomingExpenses?.total_bills ?? 0;
   const totalSubs  = upcomingExpenses?.total_subscriptions ?? 0;
-  const totalConsume = (upcomingExpenses?.total_credit_card ?? 0) + totalBills + totalSubs;
+  const totalOneOff = upcomingExpenses?.total_one_off ?? 0;
+  const totalConsume = (upcomingExpenses?.total_credit_card ?? 0) + totalBills + totalSubs + totalOneOff;
 
   // 本期净流入（有收入时）/ 账户真实结余（无收入时）
   // 无收入时：net_available 已扣信用卡，再扣账单+订阅+投资 = 现金真实剩余
@@ -213,7 +229,18 @@ export function Overview() {
 
         {/* 净可用现金 */}
         <div className="mt-4 pt-3 border-t border-[var(--c-border)] flex items-baseline justify-between">
-          <span className="text-[12px] text-notion-text-secondary">净可用现金</span>
+          <span className="flex items-baseline gap-2">
+            <span className="text-[12px] text-notion-text-secondary">{isPredicted ? '预计结余' : '净可用现金'}</span>
+            {!isPredicted && (
+              <Link
+                to="/assets"
+                className="group inline-flex items-center gap-0.5 text-[11px] font-medium text-[var(--c-accent-text)] hover:text-[var(--c-accent)] transition-colors"
+              >
+                <span>管理现金</span>
+                <Icon name="chevron-right" size={12} className="transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            )}
+          </span>
           <span
             className="font-display font-semibold text-[20px] tabular-nums"
             style={{
@@ -229,6 +256,9 @@ export function Overview() {
         </div>
       </section>
 
+      {/* AI 财务诊断（仅本期，有数据时）*/}
+      {isCurrentCycle && !isNewUser && <AiDiagnosis />}
+
       {/* 桌面端 2 列网格: 左 PaceCard(现金走势) + 右 收支图
           移动端: 单列堆叠 (默认 space-y-5)
           v1.4 桌面端布局升级 */}
@@ -241,10 +271,9 @@ export function Overview() {
           budgetPct={budgetProgress}
           balanceGrew={balanceGrew}
           daysLeft={activeCalc.days_to_payday}
-          cycleSnapshots={snapshots.filter(s => s.cycle_id === activeCalc.cycle_id)}
+          cashflow={cashflow}
           currentNetAvailable={activeCalc.net_available}
           cycleDay={activeCalc.current_cycle_day}
-          cycleLen={cycleLen}
         />
       )}
 
@@ -382,6 +411,7 @@ export function Overview() {
                 items={[
                   { name: '信用卡', amount: upcomingExpenses.total_credit_card, color: 'var(--c-warning)', icon: 'card' },
                   { name: '固定账单', amount: upcomingExpenses.total_bills, color: 'var(--c-accent)', icon: 'bill' },
+                  { name: '临时账单', amount: upcomingExpenses.total_one_off ?? 0, color: 'var(--c-accent-text)', icon: 'calendar' },
                   { name: '固定投资', amount: upcomingExpenses.total_investments, color: 'var(--c-invest)', icon: 'investment' },
                   { name: '订阅', amount: upcomingExpenses.total_subscriptions, color: 'var(--c-text-muted)', icon: 'subscription' },
                 ]}
@@ -456,6 +486,22 @@ export function Overview() {
                   ))}
                 </SubCategory>
               )}
+              {/* 临时账单（一次性支出） */}
+              {upcomingExpenses.one_offs.length > 0 && (
+                <SubCategory title="临时账单" icon="calendar" total={upcomingExpenses.total_one_off}>
+                  {upcomingExpenses.one_offs.map((o) => (
+                    <ExpenseRow
+                      key={o.id}
+                      name={o.name}
+                      amount={o.total}
+                      date={o.cycle_paid ? (o.cycle_due_date ?? o.due_date) : o.due_date}
+                      daysUntil={o.cycle_paid ? (o.cycle_days_until ?? o.days_until) : o.days_until}
+                      inCurrentCycle={o.in_current_cycle ?? true}
+                      paid={o.cycle_paid}
+                    />
+                  ))}
+                </SubCategory>
+              )}
               {/* 投资 */}
               {upcomingExpenses.investments.length > 0 && (
                 <SubCategory title="固定投资" icon="investment" total={upcomingExpenses.total_investments}>
@@ -467,6 +513,7 @@ export function Overview() {
               {upcomingExpenses.credit_cards.length === 0 &&
                 upcomingExpenses.subscriptions.length === 0 &&
                 upcomingExpenses.bills.length === 0 &&
+                upcomingExpenses.one_offs.length === 0 &&
                 upcomingExpenses.investments.length === 0 && (
                   <div className="text-center text-notion-text-muted text-[12px] py-4">
                     本期暂无支出明细
@@ -563,22 +610,21 @@ export function Overview() {
 // 内部子组件（仅总览页展示用）
 // ============================================================
 
-// ── 花费节奏卡：有快照时显示净可用现金走势折线图，无快照时显示进度条 ──
+// ── 花费节奏卡：有现金流数据时显示「逐日可用现金」曲线，无数据时显示进度条 ──
 function PaceCard({
   timePct, budgetPct, balanceGrew, daysLeft,
-  cycleSnapshots, currentNetAvailable, cycleDay, cycleLen,
+  cashflow, currentNetAvailable, cycleDay,
 }: {
   timePct: number;
   budgetPct: number | null;
   balanceGrew: boolean;
   daysLeft: number;
-  cycleSnapshots: Snapshot[];
+  cashflow: CashflowResult | null;
   currentNetAvailable: number;
   cycleDay: number;
-  cycleLen: number;
 }) {
-  // 判断是否有足够数据画折线（至少 1 个历史快照）
-  const hasSparkData = cycleSnapshots.length >= 1;
+  // 有逐日现金流数据就画曲线（不再依赖快照）
+  const hasSparkData = !!cashflow && cashflow.points.length > 0;
 
   const ahead = budgetPct !== null && budgetPct <= timePct;
   const synced = budgetPct !== null && !ahead && budgetPct <= timePct + 12;
@@ -605,23 +651,18 @@ function PaceCard({
       action={<span className={`badge text-[10px] px-2 py-0.5 ${verdictCls}`}>{verdictLabel}</span>}
     >
       {hasSparkData ? (
-        /* ── 折线图模式 ── */
+        /* ── 逐日可用现金曲线（过去实线 + 未来虚线，锚点=今天真实现金）── */
         <div>
-          <div className="flex items-baseline gap-1.5 mb-3">
+          <div className="flex items-baseline gap-1.5 mb-2">
             <span className="font-display font-semibold text-[22px] font-numeric text-notion-text">
               {formatYen(currentNetAvailable)}
             </span>
-            <span className="text-[12px] text-notion-text-muted">净可用现金</span>
+            <span className="text-[12px] text-notion-text-muted">今日可用现金</span>
           </div>
-          <NetSparkline
-            snapshots={cycleSnapshots}
-            currentValue={currentNetAvailable}
-            cycleDay={cycleDay}
-            cycleLen={cycleLen}
-          />
+          <CashFlowChart data={cashflow!} heightClass="h-40" compact />
           <div className="flex items-center justify-between mt-2 text-[11px] text-notion-text-muted">
-            <span>周期第 {cycleDay} 天</span>
-            <span>还剩 {daysLeft} 天</span>
+            <span>周期第 {cycleDay} 天 · 灰线为今天</span>
+            <Link to="/trends" className="text-[var(--c-accent-text)] hover:text-[var(--c-accent)] transition-colors">看完整曲线 ›</Link>
           </div>
         </div>
       ) : (
@@ -675,125 +716,6 @@ function ProgressBar({ label, pct, color }: { label: string; pct: number; color:
   );
 }
 
-// ── 净可用现金走势 SVG 折线图 ──────────────────────────────────────────────
-function NetSparkline({
-  snapshots, currentValue, cycleDay, cycleLen,
-}: {
-  snapshots: Snapshot[];
-  currentValue: number;
-  cycleDay: number;
-  cycleLen: number;
-}) {
-  const W = 300, H = 80, PAD = 4;
-
-  // 从 cycleDay 反推周期起始日（本地午夜）
-  // 不用 Date.now() - snapshotDate 的差值，避免 UTC/本地时区不一致
-  const todayMidnight = new Date();
-  todayMidnight.setHours(0, 0, 0, 0);
-  const cycleStartMs = todayMidnight.getTime() - cycleDay * 86400000;
-
-  // 同一天只保留最后一条（UPSERT 行为，已是最新），再加今天当前值
-  const dayMap = new Map<number, number>();
-  for (const s of snapshots) {
-    // 'YYYY-MM-DD' → 本地午夜，避免 UTC 偏移导致 off-by-1
-    const snapMs = new Date(s.snapshot_date + 'T00:00:00').getTime();
-    const dayInCycle = Math.max(0, Math.min(cycleLen,
-      Math.round((snapMs - cycleStartMs) / 86400000)
-    ));
-    dayMap.set(dayInCycle, s.net_available);
-  }
-  dayMap.set(cycleDay, currentValue);  // 当前值覆盖今天
-
-  let pts = [...dayMap.entries()]
-    .map(([day, val]) => ({ day, val }))
-    .sort((a, b) => a.day - b.day);
-
-  // 少于 2 点时在 day 0 补一个锚点
-  if (pts.length < 2) {
-    const first = pts[0];
-    if (first && first.day > 0) pts = [{ day: 0, val: first.val }, ...pts];
-  }
-
-  const vals = pts.map(p => p.val);
-  const maxVal = Math.max(...vals, 1);
-  const minVal = Math.min(...vals, 0);
-  const range = maxVal - minVal || 1;
-
-  // 关键:第一个点不一定在 day 0,要让折线从最左画满整个图表
-  // 真实 x 轴区间 = [pts[0].day, cycleLen],把它等比映射到 [PAD, W-PAD]
-  const firstDay = pts[0]?.day ?? 0;
-  const daySpan = Math.max(cycleLen - firstDay, 1);
-  const toX = (day: number) => PAD + (((day - firstDay) / daySpan) * (W - PAD * 2));
-  const toY = (val: number) => H - PAD - ((val - minVal) / range) * (H - PAD * 2);
-
-  // 平滑贝塞尔路径
-  const smoothPath = (points: {x:number;y:number}[]) => {
-    if (points.length < 2) return '';
-    const p0 = points[0];
-    if (!p0) return '';
-    let d = `M${p0.x},${p0.y}`;
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1];
-      const curr = points[i];
-      if (!prev || !curr) continue;
-      const cx = (prev.x + curr.x) / 2;
-      d += ` C${cx},${prev.y} ${cx},${curr.y} ${curr.x},${curr.y}`;
-    }
-    return d;
-  };
-
-  const xyPts = pts.map(p => ({ x: toX(p.day), y: toY(p.val) }));
-  const linePath = smoothPath(xyPts);
-  const lastPt = xyPts[xyPts.length - 1];
-  const firstPt = xyPts[0];
-  const areaPath = firstPt && lastPt
-    ? `${linePath} L${lastPt.x},${H} L${firstPt.x},${H} Z`
-    : '';
-
-  // 理想参考线（从首点线性降到 0）
-  const idealStartY = toY(pts[0]?.val ?? maxVal);
-  const idealEndY   = toY(0);
-  const idealPath   = `M${toX(pts[0]?.day ?? 0)},${idealStartY} L${toX(cycleLen)},${idealEndY}`;
-
-  return (
-    <svg
-      width="100%" viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      role="img" aria-label="净可用现金走势"
-      style={{ overflow: 'visible' }}
-    >
-      <defs>
-        <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--c-accent)" stopOpacity="0.25" />
-          <stop offset="100%" stopColor="var(--c-accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {/* 面积填充 */}
-      {areaPath && <path d={areaPath} fill="url(#sparkGrad)" />}
-      {/* 理想参考虚线 */}
-      <path d={idealPath} stroke="var(--c-text-muted)" strokeWidth="1.5"
-        strokeDasharray="5 4" fill="none" opacity="0.4" />
-      {/* 走势折线 */}
-      <path d={linePath} stroke="var(--c-accent)" strokeWidth="2.5"
-        fill="none" strokeLinejoin="round" strokeLinecap="round" />
-      {/* 各快照节点 */}
-      {xyPts.slice(0, -1).map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r="3"
-          fill="var(--c-bg-elev)" stroke="var(--c-accent)" strokeWidth="1.5" />
-      ))}
-      {/* 当前点（更大，带光晕感） */}
-      {lastPt && (
-        <>
-          <circle cx={lastPt.x} cy={lastPt.y} r="6"
-            fill="var(--c-accent)" opacity="0.2" />
-          <circle cx={lastPt.x} cy={lastPt.y} r="4"
-            fill="var(--c-accent)" stroke="var(--c-bg-elev)" strokeWidth="2" />
-        </>
-      )}
-    </svg>
-  );
-}
-
 function SubCategory({
   title,
   icon,
@@ -801,7 +723,7 @@ function SubCategory({
   children,
 }: {
   title: string;
-  icon: 'card' | 'bill' | 'subscription' | 'investment';
+  icon: 'card' | 'bill' | 'subscription' | 'investment' | 'calendar';
   total: number;
   children: ReactNode;
 }) {

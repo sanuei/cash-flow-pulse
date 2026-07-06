@@ -4,11 +4,16 @@ import { HeroAmount, Field, Collapsible, FormError, FormActions } from './FormKi
 type FormData = {
   name: string;
   amount: number;
-  due_day: number;
+  date: string;       // YYYY-MM-DD
   note: string | null;
 };
 
-export function BillForm({
+function today(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function OneOffForm({
   initial,
   onSubmit,
   onCancel,
@@ -19,7 +24,7 @@ export function BillForm({
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [amount, setAmount] = useState(initial?.amount ?? 0);
-  const [dueDay, setDueDay] = useState(initial?.due_day ?? 1);
+  const [date, setDate] = useState(initial?.date ?? today());
   const [note, setNote] = useState(initial?.note ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +33,7 @@ export function BillForm({
     if (initial) {
       setName(initial.name);
       setAmount(initial.amount);
-      setDueDay(initial.due_day);
+      setDate(initial.date);
       setNote(initial.note ?? '');
     }
   }, [initial]);
@@ -37,10 +42,10 @@ export function BillForm({
     e.preventDefault();
     setError(null);
     if (!name.trim()) { setError('名称不能为空'); return; }
-    if (dueDay < 1 || dueDay > 31) { setError('扣款日必须在 1-31 之间'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { setError('请选择日期'); return; }
     setSaving(true);
     try {
-      await onSubmit({ name: name.trim(), amount, due_day: dueDay, note: note.trim() || null });
+      await onSubmit({ name: name.trim(), amount, date, note: note.trim() || null });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -50,32 +55,30 @@ export function BillForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <HeroAmount label="账单金额" value={amount} onChange={setAmount} tone="warning" />
+      <HeroAmount label="支出金额" value={amount} onChange={setAmount} tone="warning" />
 
       <Field label="名称">
         <input
           className="input"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="如 房租 / 水电 / 网费"
+          placeholder="如 换轮胎 / 朋友聚餐 / 家电"
         />
       </Field>
 
-      <Field label="每月扣款日" hint="大于当月天数按月末扣款（如 31 → 2 月 28）">
-        <div className="relative max-w-[140px]">
-          <input
-            type="number" inputMode="numeric" className="input font-numeric pr-9"
-            value={dueDay || ''} onChange={(e) => setDueDay(Number(e.target.value) || 0)}
-            onFocus={(e) => e.currentTarget.select()}
-            min="1" max="31" step="1"
-          />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[14px] text-notion-text-muted">号</span>
-        </div>
+      <Field label="日期" hint="按此日期归入对应发薪周期，并落在现金流曲线上">
+        <input
+          type="date"
+          className="input font-numeric max-w-[200px]"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          aria-label="日期"
+        />
       </Field>
 
       <Collapsible>
         <Field label="备注（可选）">
-          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 押一付三" />
+          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 一次性" />
         </Field>
       </Collapsible>
 

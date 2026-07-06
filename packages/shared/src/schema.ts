@@ -87,6 +87,8 @@ export const ImportPayloadSchema = z.object({
     name: z.string(),
     amount: z.number(),
     frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+    pay_day: z.number().nullable().optional(),
+    day_of_week: z.number().nullable().optional(),
     start_date: z.string(),
     end_date: z.string().nullable().optional(),
     note: z.string().nullable().optional(),
@@ -113,6 +115,12 @@ export const ImportPayloadSchema = z.object({
     billing_day: z.number(),
     billing_cycle: z.enum(['monthly', 'yearly']).optional(),
     category: z.string().nullable().optional(),
+    note: z.string().nullable().optional(),
+  })).optional(),
+  one_offs: z.array(z.object({
+    name: z.string(),
+    amount: z.number(),
+    date: z.string(),
     note: z.string().nullable().optional(),
   })).optional(),
   snapshots: z.array(z.object({
@@ -143,6 +151,9 @@ export const InvestmentInputSchema = z.object({
   name: z.string().min(1, '名称不能为空').max(50),
   amount: z.number().nonnegative('金额不能为负'),
   frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+  // monthly 用 pay_day(1-31)，weekly 用 day_of_week(0-6)，其余为 null
+  pay_day: z.number().int().min(1).max(31).nullable().optional(),
+  day_of_week: z.number().int().min(0).max(6).nullable().optional(),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式错误（YYYY-MM-DD）'),
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式错误').nullable().optional(),
   note: z.string().max(200).nullable().optional(),
@@ -191,6 +202,15 @@ export const IncomeUpdateSchema = IncomeBaseSchema.partial().refine(
   { message: 'pay_day 和 day_of_week 必须与 frequency 匹配', path: ['frequency'] },
 );
 
+// 临时账单（一次性支出）
+export const OneOffExpenseInputSchema = z.object({
+  name: z.string().min(1, '名称不能为空').max(50),
+  amount: z.number().nonnegative('金额不能为负'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式错误（YYYY-MM-DD）'),
+  note: z.string().max(200).nullable().optional(),
+});
+export const OneOffExpenseUpdateSchema = OneOffExpenseInputSchema.partial();
+
 // 订阅
 export const SubscriptionInputSchema = z.object({
   name: z.string().min(1).max(50),
@@ -206,3 +226,4 @@ export type InvestmentInput = z.infer<typeof InvestmentInputSchema>;
 export type BillInput = z.infer<typeof BillInputSchema>;
 export type IncomeInput = z.infer<typeof IncomeInputSchema>;
 export type SubscriptionInput = z.infer<typeof SubscriptionInputSchema>;
+export type OneOffExpenseInput = z.infer<typeof OneOffExpenseInputSchema>;

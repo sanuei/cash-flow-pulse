@@ -10,7 +10,7 @@
  */
 
 import { Hono } from 'hono';
-import { computeDashboardV2, addMonths, getCurrentCycle } from '@cfp/shared';
+import { computeDashboardV2, computeDailyCashflow, addMonths, getCurrentCycle, diffDays } from '@cfp/shared';
 import type { Env } from '../index';
 
 export const dashboardRoute = new Hono<{ Bindings: Env }>();
@@ -29,6 +29,7 @@ dashboardRoute.get('/', async (c) => {
     billRows,
     incomeRows,
     subscriptionRows,
+    oneOffRows,
   ] = await Promise.all([
     db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>(),
     db.prepare('SELECT * FROM cash_sources WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC').bind(userId).all<any>(),
@@ -38,6 +39,7 @@ dashboardRoute.get('/', async (c) => {
     db.prepare('SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC').bind(userId).all<any>(),
     db.prepare('SELECT * FROM recurring_incomes WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC').bind(userId).all<any>(),
     db.prepare('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC').bind(userId).all<any>(),
+    db.prepare('SELECT * FROM one_off_expenses WHERE user_id = ? ORDER BY date DESC, created_at DESC').bind(userId).all<any>(),
   ]);
 
   // 配置不存在则初始化
@@ -93,6 +95,7 @@ dashboardRoute.get('/', async (c) => {
     billRows.results || [],
     incomeRows.results || [],
     subscriptionRows.results || [],
+    oneOffRows.results || [],
   );
 
   // 过去周期：用历史快照覆盖余额相关字段（快照记录了当时真实状态）
@@ -114,6 +117,20 @@ dashboardRoute.get('/', async (c) => {
     }
   }
 
+  // 未来周期：纯现金流预测（不知道未来的真实现金余额，所以不沿用今天的账户余额）
+  //   净可用现金 → 该期预计结余 = 该期预计收入 − 该期固定支出（卡+账单+订阅+投资）
+  //   日均预算   → 结余 ÷ 完整周期天数（整期都在未来，不能只除剩余的几天）
+  //   （原实现用 addMonths(today) 当作"今天"，导致净可用沿用今天现金、天数退化成 ~6 天，
+  //     算出来跟本期一模一样，看着像没切换）
+  if (isFuture) {
+    const cycleDays = Math.max(1, diffDays(targetCycle.start_date, targetCycle.end_date));
+    const projectedNet = calc.total_income - calc.total_expense;
+    calc.net_available = projectedNet;
+    calc.days_to_payday = cycleDays;
+    calc.daily_budget = Math.max(0, Math.floor(projectedNet / cycleDays));
+    calc.current_cycle_day = 0; // 该期尚未开始
+  }
+
   return c.json({
     config: userConfig,
     cash_sources: cashRows.results || [],
@@ -122,6 +139,7 @@ dashboardRoute.get('/', async (c) => {
     bills: billRows.results || [],
     incomes: incomeRows.results || [],
     subscriptions: subscriptionRows.results || [],
+    one_offs: oneOffRows.results || [],
     calc,
     snapshots: snapshotRows.results || [],
     generated_at: Date.now(),
@@ -134,4 +152,62 @@ dashboardRoute.get('/', async (c) => {
     snapshot_based: snapshotBased,
     has_history: isPast ? snapshotBased : true,
   });
+});
+
+// ── 本期逐日现金流（按每笔扣款/到账实际发生日推演）──
+dashboardRoute.get('/cashflow', async (c) => {
+  const userId = c.get('user')!.id;
+  const db = c.env.DB;
+
+  const [configRow, cashRows, cardRows, investmentRows, billRows, incomeRows, subscriptionRows, oneOffRows] =
+    await Promise.all([
+      db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>(),
+      db.prepare('SELECT * FROM cash_sources WHERE user_id = ?').bind(userId).all<any>(),
+      db.prepare('SELECT * FROM credit_cards WHERE user_id = ?').bind(userId).all<any>(),
+      db.prepare('SELECT * FROM recurring_investments WHERE user_id = ?').bind(userId).all<any>(),
+      db.prepare('SELECT * FROM recurring_bills WHERE user_id = ?').bind(userId).all<any>(),
+      db.prepare('SELECT * FROM recurring_incomes WHERE user_id = ?').bind(userId).all<any>(),
+      db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').bind(userId).all<any>(),
+      db.prepare('SELECT * FROM one_off_expenses WHERE user_id = ?').bind(userId).all<any>(),
+    ]);
+
+  if (!configRow) return c.json({ error: '尚无配置数据' }, 400);
+
+  const userConfig = {
+    user_id: configRow.user_id,
+    pay_day: configRow.pay_day,
+    snapshot_offsets: JSON.parse(configRow.snapshot_offsets),
+    weekend_shift: !!configRow.weekend_shift,
+    created_at: configRow.created_at,
+    updated_at: configRow.updated_at,
+  };
+
+  const cards = (cardRows.results || []).map((row: any) => {
+    let monthly_statements: Record<string, number> = {};
+    if (row?.monthly_statements) {
+      try {
+        const parsed = JSON.parse(row.monthly_statements);
+        if (parsed && typeof parsed === 'object') monthly_statements = parsed;
+      } catch { /* 损坏 JSON 当空表 */ }
+    }
+    return { ...row, monthly_statements };
+  });
+
+  // 向未来延伸的周期数（0=只本期，最多 3）
+  const periods = Math.max(0, Math.min(3, parseInt(c.req.query('periods') || '0', 10) || 0));
+
+  const result = computeDailyCashflow(
+    new Date(),
+    userConfig,
+    cashRows.results || [],
+    cards,
+    investmentRows.results || [],
+    billRows.results || [],
+    incomeRows.results || [],
+    subscriptionRows.results || [],
+    periods,
+    oneOffRows.results || [],
+  );
+
+  return c.json(result);
 });

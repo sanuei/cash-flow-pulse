@@ -81,7 +81,7 @@ const STATE_TTL_MIN = 10; // state 必须 10 分钟内用完，防 CSRF
 const STATE_SEP = '~'; // HMAC state 分隔符（nonce/exp/sig 均为 hex/数字，不含此字符）
 
 // 创始用户邮箱（迁移 + 永久 pro + 绕过限流）。后续如要真正开放注册，把这行删掉。
-const FOUNDER_EMAIL = 'sonic980828@gmail.com';
+export const FOUNDER_EMAIL = 'sonic980828@gmail.com';
 
 // ========================================================================
 // JWT 验证（Google id_token）

@@ -37,11 +37,12 @@ investmentRoutes.post('/', async (c) => {
 
   await c.env.DB
     .prepare(`INSERT INTO recurring_investments
-      (id, user_id, name, amount, frequency, start_date, end_date, note, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      (id, user_id, name, amount, frequency, pay_day, day_of_week, start_date, end_date, note, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(
       id, userId, parsed.data.name, parsed.data.amount,
-      parsed.data.frequency, parsed.data.start_date,
+      parsed.data.frequency, parsed.data.pay_day ?? null, parsed.data.day_of_week ?? null,
+      parsed.data.start_date,
       parsed.data.end_date ?? null, parsed.data.note ?? null,
       (maxOrder?.max_order ?? -1) + 1, ts, ts
     )
@@ -71,6 +72,8 @@ investmentRoutes.put('/:id', async (c) => {
   if (parsed.data.name !== undefined) { updates.push('name = ?'); values.push(parsed.data.name); }
   if (parsed.data.amount !== undefined) { updates.push('amount = ?'); values.push(parsed.data.amount); }
   if (parsed.data.frequency !== undefined) { updates.push('frequency = ?'); values.push(parsed.data.frequency); }
+  if (parsed.data.pay_day !== undefined) { updates.push('pay_day = ?'); values.push(parsed.data.pay_day ?? null); }
+  if (parsed.data.day_of_week !== undefined) { updates.push('day_of_week = ?'); values.push(parsed.data.day_of_week ?? null); }
   if (parsed.data.start_date !== undefined) { updates.push('start_date = ?'); values.push(parsed.data.start_date); }
   if (parsed.data.end_date !== undefined) { updates.push('end_date = ?'); values.push(parsed.data.end_date); }
   if (parsed.data.note !== undefined) { updates.push('note = ?'); values.push(parsed.data.note); }

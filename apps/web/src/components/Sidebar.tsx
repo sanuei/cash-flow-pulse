@@ -17,8 +17,10 @@ type NavItem = { to: string; label: string; icon: IconName };
 const NAV_ITEMS: NavItem[] = [
   { to: '/',            label: '总览', icon: 'home' },
   { to: '/incomes',     label: '收入', icon: 'income' },
+  { to: '/assets',      label: '资产', icon: 'cash' },
   { to: '/investments', label: '投资', icon: 'investment' },
   { to: '/expenses',    label: '消费', icon: 'bill' },
+  { to: '/diagnosis',   label: '诊断', icon: 'gauge' },
   { to: '/trends',      label: '曲线', icon: 'chart' },
   { to: '/settings',    label: '设置', icon: 'settings' },
 ];

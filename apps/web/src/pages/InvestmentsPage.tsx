@@ -17,6 +17,15 @@ const FREQ_LABEL: Record<InvestmentFrequency, string> = {
   yearly: '每年',
 };
 
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+// 频率 + 具体扣款日：「每月15号」「每周一」，daily/yearly 保持原样
+function freqDesc(inv: RecurringInvestment): string {
+  if (inv.frequency === 'monthly' && inv.pay_day != null) return `每月 ${inv.pay_day} 号`;
+  if (inv.frequency === 'weekly' && inv.day_of_week != null) return WEEKDAYS[inv.day_of_week] ?? '每周';
+  return FREQ_LABEL[inv.frequency];
+}
+
 export function InvestmentsPage() {
   const calc = useStore((s) => s.calc);
   const investmentsAll = useStore((s) => s.investments);
@@ -58,6 +67,8 @@ export function InvestmentsPage() {
                     name: editing.name,
                     amount: editing.amount,
                     frequency: editing.frequency,
+                    pay_day: editing.pay_day,
+                    day_of_week: editing.day_of_week,
                     start_date: editing.start_date,
                     end_date: editing.end_date,
                     note: editing.note,
@@ -81,7 +92,7 @@ export function InvestmentsPage() {
               icon="investment"
               tone="accent"
               title={inv.name}
-              subtitle={`${FREQ_LABEL[inv.frequency]}扣款 ${formatYen(inv.amount)} · 始于 ${inv.start_date}`}
+              subtitle={`${freqDesc(inv)}扣款 ${formatYen(inv.amount)} · 始于 ${inv.start_date}`}
               money={<Money amount={inv.amount} size="md" sign="negative" />}
               onEdit={() => openEdit(inv)}
               onDelete={() =>

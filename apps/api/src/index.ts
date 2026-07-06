@@ -20,9 +20,11 @@ import { investmentRoutes } from './routes/investments';
 import { billRoutes } from './routes/bills';
 import { incomeRoutes } from './routes/incomes';
 import { subscriptionRoutes } from './routes/subscriptions';
+import { oneOffRoutes } from './routes/one_off';
 import { adminRoutes } from './routes/admin';
 // v1.0 新增
 import { authRoutes } from './routes/auth';
+import { aiRoutes } from './routes/ai';
 import { requireAuth } from './lib/auth';
 
 export interface Env {
@@ -32,6 +34,9 @@ export interface Env {
   // Google OAuth (v1.0+)
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  // 智谱 GLM（AI 财务诊断）——secret，前端不可见
+  GLM_API_KEY: string;
+  GLM_MODEL?: string;  // 可选，覆盖默认模型名
   // Stripe (v1.0+ 第二阶段)
   // STRIPE_SECRET_KEY: string;
   // STRIPE_WEBHOOK_SECRET: string;
@@ -72,7 +77,9 @@ app.route('/api/investments', investmentRoutes);
 app.route('/api/bills', billRoutes);
 app.route('/api/incomes', incomeRoutes);
 app.route('/api/subscriptions', subscriptionRoutes);
+app.route('/api/one-off', oneOffRoutes);
 app.route('/api/admin', adminRoutes);
+app.route('/api/ai', aiRoutes);
 
 // 404
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));
@@ -99,13 +106,14 @@ async function runDailySnapshot(env: Env): Promise<void> {
   for (const user of (users.results || [])) {
     const userId = user.id;
     try {
-      const [cashRows, cardRows, investmentRows, billRows, incomeRows, subscriptionRows, config] = await Promise.all([
+      const [cashRows, cardRows, investmentRows, billRows, incomeRows, subscriptionRows, oneOffRows, config] = await Promise.all([
         env.DB.prepare('SELECT * FROM cash_sources WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
         env.DB.prepare('SELECT * FROM credit_cards WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
         env.DB.prepare('SELECT * FROM recurring_investments WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
         env.DB.prepare('SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
         env.DB.prepare('SELECT * FROM recurring_incomes WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
         env.DB.prepare('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
+        env.DB.prepare('SELECT * FROM one_off_expenses WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
         env.DB.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>(),
       ]);
       if (!config) continue;
@@ -123,6 +131,7 @@ async function runDailySnapshot(env: Env): Promise<void> {
         cashRows.results || [], cardRows.results || [], [],
         investmentRows.results || [], billRows.results || [],
         incomeRows.results || [], subscriptionRows.results || [],
+        oneOffRows.results || [],
       );
       const cycle = getCurrentCycle(today, userConfig.pay_day);
       const totalInvestment = calc.upcoming_expenses

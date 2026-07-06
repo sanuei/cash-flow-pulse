@@ -26,6 +26,7 @@ exportImportRoutes.get('/export', async (c) => {
     bills,
     incomes,
     subscriptions,
+    oneOffs,
   ] = await Promise.all([
     db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>(),
     db.prepare('SELECT * FROM cash_sources WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
@@ -35,6 +36,7 @@ exportImportRoutes.get('/export', async (c) => {
     db.prepare('SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
     db.prepare('SELECT * FROM recurring_incomes WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
     db.prepare('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
+    db.prepare('SELECT * FROM one_off_expenses WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
   ]);
 
   const payload = {
@@ -65,6 +67,8 @@ exportImportRoutes.get('/export', async (c) => {
       name: r.name,
       amount: r.amount,
       frequency: r.frequency,
+      pay_day: r.pay_day,
+      day_of_week: r.day_of_week,
       start_date: r.start_date,
       end_date: r.end_date,
       note: r.note,
@@ -91,6 +95,12 @@ exportImportRoutes.get('/export', async (c) => {
       billing_day: r.billing_day,
       billing_cycle: r.billing_cycle,
       category: r.category,
+      note: r.note,
+    })),
+    one_offs: (oneOffs.results || []).map((r: any) => ({
+      name: r.name,
+      amount: r.amount,
+      date: r.date,
       note: r.note,
     })),
     snapshots: (snapshots.results || []).map((r: any) => ({
@@ -151,12 +161,14 @@ exportImportRoutes.post('/import', async (c) => {
   const bills = (parsed.data as any).bills ?? [];
   const incomes = (parsed.data as any).incomes ?? [];
   const subscriptions = (parsed.data as any).subscriptions ?? [];
+  const oneOffs = (parsed.data as any).one_offs ?? [];
 
   try {
     if (mode === 'overwrite') {
       // 清空所有数据（包括 4 个新表）
       await db.batch([
         db.prepare('DELETE FROM snapshots WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM one_off_expenses WHERE user_id = ?').bind(userId),
         db.prepare('DELETE FROM subscriptions WHERE user_id = ?').bind(userId),
         db.prepare('DELETE FROM recurring_incomes WHERE user_id = ?').bind(userId),
         db.prepare('DELETE FROM recurring_bills WHERE user_id = ?').bind(userId),
@@ -186,8 +198,8 @@ exportImportRoutes.post('/import', async (c) => {
 
     // 4. 投资
     const investmentStmts = investments.map((inv: any, i: number) =>
-      db.prepare('INSERT OR REPLACE INTO recurring_investments (id, user_id, name, amount, frequency, start_date, end_date, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), userId, inv.name, inv.amount, inv.frequency, inv.start_date, inv.end_date ?? null, inv.note ?? null, i, ts, ts)
+      db.prepare('INSERT OR REPLACE INTO recurring_investments (id, user_id, name, amount, frequency, pay_day, day_of_week, start_date, end_date, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(generateId(), userId, inv.name, inv.amount, inv.frequency, inv.pay_day ?? null, inv.day_of_week ?? null, inv.start_date, inv.end_date ?? null, inv.note ?? null, i, ts, ts)
     );
 
     // 5. 账单
@@ -208,6 +220,12 @@ exportImportRoutes.post('/import', async (c) => {
         .bind(generateId(), userId, s.name, s.amount, s.billing_day, s.billing_cycle ?? 'monthly', s.category ?? null, s.note ?? null, i, ts, ts)
     );
 
+    // 7b. 临时账单
+    const oneOffStmts = oneOffs.map((o: any, i: number) =>
+      db.prepare('INSERT OR REPLACE INTO one_off_expenses (id, user_id, name, amount, date, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(generateId(), userId, o.name, o.amount, o.date, o.note ?? null, i, ts, ts)
+    );
+
     // 8. 快照
     const snapStmts = (snapshots ?? []).map((s) =>
       db.prepare('INSERT OR REPLACE INTO snapshots (id, user_id, cycle_id, offset_index, snapshot_date, total_balance, total_locked, total_due, net_available, daily_budget, days_to_payday, note, data_unchanged, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
@@ -216,7 +234,7 @@ exportImportRoutes.post('/import', async (c) => {
 
     await db.batch([
       ...cashStmts, ...cardStmts,
-      ...investmentStmts, ...billStmts, ...incomeStmts, ...subscriptionStmts,
+      ...investmentStmts, ...billStmts, ...incomeStmts, ...subscriptionStmts, ...oneOffStmts,
       ...snapStmts,
     ]);
 
@@ -229,6 +247,7 @@ exportImportRoutes.post('/import', async (c) => {
         bills: bills.length,
         incomes: incomes.length,
         subscriptions: subscriptions.length,
+        one_offs: oneOffs.length,
         snapshots: snapshots?.length ?? 0,
       },
     });

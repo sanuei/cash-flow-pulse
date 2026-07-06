@@ -7,20 +7,18 @@ import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
 import { Icon } from '../components/Icon';
 import { IncomeForm } from '../components/IncomeForm';
-import { CashForm } from '../components/CashForm';
 import { PageTitle } from '../components/PageTitle';
 import { formatYen } from '@cfp/shared';
-import type { RecurringIncome, CashSource } from '@cfp/shared';
+import { Link } from 'react-router-dom';
+import type { RecurringIncome } from '@cfp/shared';
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 export function IncomesPage() {
   const calc = useStore((s) => s.calc);
   const incomesAll = useStore((s) => s.incomes);
-  const cashSourcesAll = useStore((s) => s.cashSources);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const deleteIncome = useStore((s) => s.deleteIncome);
-  const deleteCash = useStore((s) => s.deleteCash);
   const pendingDeletes = useToast((s) => s.pendingDeletes);
   const softDelete = useToast((s) => s.softDelete);
   const [query, setQuery] = useState('');
@@ -29,19 +27,16 @@ export function IncomesPage() {
   const incomes = incomesAll
     .filter((i) => !pendingDeletes.includes(i.id))
     .filter((i) => match(i.name));
-  const cashSources = cashSourcesAll
-    .filter((cs) => !pendingDeletes.includes(cs.id))
-    .filter((cs) => match(cs.name));
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <PageTitle
         icon="income"
         title="收入"
-        subtitle="固定到账收入 · 现金账户余额"
+        subtitle="固定到账收入（工资、副业等）"
         total={calc ? { label: '本期收入总计', value: formatYen(calc.upcoming_incomes.total) } : undefined}
       />
-      <SearchBar value={query} onChange={setQuery} placeholder="搜索收入 / 现金账户..." />
+      <SearchBar value={query} onChange={setQuery} placeholder="搜索收入..." />
 
       {/* 固定收入 */}
       <ManagedListCard<RecurringIncome>
@@ -114,106 +109,22 @@ export function IncomesPage() {
         }
       </ManagedListCard>
 
-      {/* 现金来源（从总览迁移至此：收入 = 现金余额 + 本期到账） */}
-      <ManagedListCard<CashSource>
-        icon="cash"
-        label="现金来源"
-        count={cashSources.length}
-        empty={{
-          icon: 'cash',
-          title: '还没有现金来源',
-          description: '添加 PayPay、钱包现金、银行活期等',
-          addLabel: '添加现金账户',
-        }}
-        formTitle={(e) => (e ? '编辑现金来源' : '新增现金来源')}
-        renderForm={(editing, close) => (
-          <CashForm
-            initial={editing ?? undefined}
-            onSubmit={async (data) => {
-              if (editing) await useStore.getState().updateCash(editing.id, data);
-              else await useStore.getState().addCash(data);
-              await loadDashboard();
-              close();
-            }}
-            onCancel={close}
-          />
-        )}
-        footer={
-          // v1.4.6:合计 = 余额 - 锁定(净可用) + 锁定(总占用)
-          //   用户能一眼看到"我总共有多少钱 / 锁定的 / 净可用"
-          cashSources.length > 0 ? (
-            <div className="flex items-center justify-between gap-3 text-[12px]">
-              <div className="flex items-center gap-2 text-notion-text-secondary">
-                <Icon name="cash" size={14} strokeWidth={1.75} className="text-notion-text-muted" />
-                <span className="font-semibold">合计</span>
-                <span className="text-notion-text-muted">·</span>
-                <span className="text-notion-text-muted">
-                  总余额{' '}
-                  <span className="font-numeric font-semibold text-notion-text">
-                    {formatYen(cashSources.reduce((s, c) => s + c.balance, 0))}
-                  </span>
-                </span>
-                {cashSources.some((c) => c.locked_amount > 0) && (
-                  <>
-                    <span className="text-notion-text-muted">·</span>
-                    <span className="inline-flex items-center gap-0.5 text-notion-text-muted">
-                      <Icon name="lock" size={10} />
-                      锁定{' '}
-                      <span className="font-numeric">
-                        {formatYen(cashSources.reduce((s, c) => s + c.locked_amount, 0))}
-                      </span>
-                    </span>
-                  </>
-                )}
-              </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-[10px] uppercase tracking-caps text-notion-text-muted font-semibold">
-                  净可用
-                </span>
-                <span className="font-display font-semibold text-[18px] font-numeric text-notion-text">
-                  {formatYen(
-                    cashSources.reduce((s, c) => s + c.balance - c.locked_amount, 0)
-                  )}
-                </span>
-              </div>
-            </div>
-          ) : null
-        }
+      {/* 现金账户已迁至独立「资产」页；此处保留入口（移动端无侧栏，靠它进入） */}
+      <Link
+        to="/assets"
+        className="card p-4 flex items-center justify-between gap-3 hover:-translate-y-0.5 transition-transform"
       >
-        {(openEdit) =>
-          cashSources.map((cs) => (
-            <EntityRow
-              key={cs.id}
-              icon="cash"
-              tone="neutral"
-              title={cs.name}
-              subtitle={
-                <span className="font-numeric flex items-center gap-2">
-                  <span>余额 {formatYen(cs.balance)}</span>
-                  {cs.locked_amount > 0 && (
-                    <span className="inline-flex items-center gap-0.5">
-                      <Icon name="lock" size={10} />
-                      <span>锁定 {formatYen(cs.locked_amount)}</span>
-                    </span>
-                  )}
-                </span>
-              }
-              money={<Money amount={cs.balance - cs.locked_amount} size="md" />}
-              onEdit={() => openEdit(cs)}
-              onDelete={() =>
-                softDelete({
-                  entityId: cs.id,
-                  message: `已删除「${cs.name}」`,
-                  perform: async () => {
-                    await deleteCash(cs.id);
-                    await loadDashboard();
-                  },
-                })
-              }
-            />
-          ))
-        }
-      </ManagedListCard>
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="flex-shrink-0 w-9 h-9 rounded-[var(--radius-md)] bg-[var(--c-bg-alt)] flex items-center justify-center">
+            <Icon name="cash" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold text-notion-text">现金账户 · 资产</div>
+            <div className="text-[11px] text-notion-text-muted">管理 PayPay、钱包、银行活期等余额</div>
+          </div>
+        </div>
+        <Icon name="chevron-right" size={16} className="text-notion-text-muted flex-shrink-0" />
+      </Link>
     </div>
   );
 }

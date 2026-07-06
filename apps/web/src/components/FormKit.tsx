@@ -26,9 +26,13 @@ export function HeroAmount({
   tone?: Tone;
   autoFocus?: boolean;
 }) {
-  const display = value ? value.toLocaleString('en-US') : '';
-  const color =
-    tone === 'success' ? 'var(--c-success)'
+  // 值为 0 时显示淡色真实「0」（非 placeholder），聚焦即全选：
+  // 光标落在 0 之后而非与占位符重叠，输入任意数字直接替换、不留前导 0
+  const isZero = !value;
+  const display = value ? value.toLocaleString('en-US') : '0';
+  const color = isZero
+    ? 'var(--c-text-muted)'
+    : tone === 'success' ? 'var(--c-success)'
     : tone === 'warning' ? 'var(--c-warning)'
     : tone === 'accent' ? 'var(--c-accent-text)'
     : 'var(--c-text)';
@@ -42,10 +46,9 @@ export function HeroAmount({
           inputMode="numeric"
           autoFocus={autoFocus}
           aria-label={label}
-          className="font-display font-semibold text-[40px] leading-none bg-transparent border-0 p-0 w-full text-center focus:outline-none tabular-nums placeholder:text-[var(--c-text-muted)]"
+          className="font-display font-semibold text-[40px] leading-none bg-transparent border-0 p-0 w-full text-center focus:outline-none tabular-nums"
           style={{ color }}
           value={display}
-          placeholder="0"
           onChange={(e) => onChange(Number(e.target.value.replace(/[^\d]/g, '')) || 0)}
           onFocus={(e) => e.currentTarget.select()}
         />

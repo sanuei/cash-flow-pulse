@@ -1,6 +1,8 @@
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { Overview } from './pages/Overview';
 import { IncomesPage } from './pages/IncomesPage';
+import { AssetsPage } from './pages/AssetsPage';
+import { DiagnosisPage } from './pages/DiagnosisPage';
 import { InvestmentsPage } from './pages/InvestmentsPage';
 import { ExpensesPage } from './pages/ExpensesPage';
 import { Settings } from './pages/Settings';
@@ -160,8 +162,10 @@ function App() {
         <Routes>
           <Route path="/" element={<Overview />} />
           <Route path="/incomes" element={<IncomesPage />} />
+          <Route path="/assets" element={<AssetsPage />} />
           <Route path="/investments" element={<InvestmentsPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
+          <Route path="/diagnosis" element={<DiagnosisPage />} />
           <Route path="/trends" element={<Suspense fallback={<LoadingState />}><Trends /></Suspense>} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />

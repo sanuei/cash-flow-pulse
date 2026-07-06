@@ -64,13 +64,14 @@ snapshotRoutes.post('/', async (c) => {
   }
 
   // 并行拉取所有需要的数据
-  const [cashRows, cardRows, investmentRows, billRows, incomeRows, subscriptionRows, config] = await Promise.all([
+  const [cashRows, cardRows, investmentRows, billRows, incomeRows, subscriptionRows, oneOffRows, config] = await Promise.all([
     c.env.DB.prepare('SELECT * FROM cash_sources WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
     c.env.DB.prepare('SELECT * FROM credit_cards WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
     c.env.DB.prepare('SELECT * FROM recurring_investments WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
     c.env.DB.prepare('SELECT * FROM recurring_bills WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
     c.env.DB.prepare('SELECT * FROM recurring_incomes WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
     c.env.DB.prepare('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
+    c.env.DB.prepare('SELECT * FROM one_off_expenses WHERE user_id = ? ORDER BY sort_order').bind(userId).all<any>(),
     c.env.DB.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>(),
   ]);
 
@@ -92,6 +93,7 @@ snapshotRoutes.post('/', async (c) => {
     cashRows.results || [], cardRows.results || [], [],
     investmentRows.results || [], billRows.results || [],
     incomeRows.results || [], subscriptionRows.results || [],
+    oneOffRows.results || [],
   );
 
   // 上一条同日或同周期快照（用于 unchanged 检测）

@@ -18,7 +18,9 @@ import { useStore } from '../lib/store';
 import { Card } from '../components/Card';
 import { PageTitle } from '../components/PageTitle';
 import { LoadingState, EmptyState } from '../components/States';
+import { CashFlowChart } from '../components/CashFlowChart';
 import { formatYen } from '@cfp/shared';
+import type { CashflowResult } from '@cfp/shared';
 import { apiGet } from '../lib/api';
 
 const RANGES = [
@@ -59,6 +61,21 @@ export function Trends() {
   const [range, setRange] = useState('90d');
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [loadingCharts, setLoadingCharts] = useState(false);
+  const [cashflow, setCashflow] = useState<CashflowResult | null>(null);
+  const [loadingCashflow, setLoadingCashflow] = useState(true);
+  const [cashflowPeriods, setCashflowPeriods] = useState(0); // 0=本期，1=+下期，2=+未来2期
+
+  // 逐日现金流预测（可延伸未来周期；不随上方 range 变）
+  useEffect(() => {
+    if (!config) return;
+    let cancelled = false;
+    setLoadingCashflow(true);
+    apiGet<CashflowResult>(`/dashboard/cashflow?periods=${cashflowPeriods}`)
+      .then((d) => { if (!cancelled) setCashflow(d); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingCashflow(false); });
+    return () => { cancelled = true; };
+  }, [config, cashflowPeriods]);
 
   useEffect(() => {
     if (!config) return;
@@ -177,6 +194,43 @@ export function Trends() {
           trend={trendPct === null ? undefined : trendPct >= 0 ? 'up' : 'down'}
         />
       </div>
+
+      {/* 图0：逐日可用现金（过去实线 + 未来虚线，按每笔扣款/到账实际日期推演；可延伸未来周期） */}
+      <Card
+        title="现金流 · 逐日可用现金"
+        action={
+          <div className="flex gap-1">
+            {[{ v: 0, l: '本期' }, { v: 1, l: '+下期' }, { v: 2, l: '+2期' }].map((o) => (
+              <button
+                key={o.v}
+                onClick={() => setCashflowPeriods(o.v)}
+                className={`px-2.5 py-1 rounded-[var(--radius-pill)] text-[12px] font-semibold transition-colors ${
+                  cashflowPeriods === o.v
+                    ? 'bg-[var(--c-accent-soft)] text-[var(--c-accent-text)]'
+                    : 'text-notion-text-secondary hover:bg-[var(--c-bg-alt)]'
+                }`}
+              >
+                {o.l}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        {loadingCashflow ? (
+          <LoadingState />
+        ) : !cashflow || cashflow.points.length === 0 ? (
+          <EmptyState icon="bar-chart" title="暂无现金流数据" description="添加现金账户与收支项目后即可查看" />
+        ) : (
+          <CashFlowChart data={cashflow} />
+        )}
+        <ChartLegend items={[
+          { name: '已过去（实际）', color: 'var(--c-accent)' },
+          { name: '未来（预测）', color: 'var(--c-accent)', dashed: true },
+        ]} />
+        <div className="mt-2 text-[11px] text-notion-text-muted leading-relaxed">
+          以今天真实可用现金为锚点，按每笔信用卡 / 账单 / 定投 / 收入的实际发生日逐日推演。灰竖线为今天，右侧为预测；橙色为透支线（0），跌破即入不敷出。未来月未填的信用卡按最近一期账单预估。
+        </div>
+      </Card>
 
       {/* 图1：净可用现金 & 日均预算（Area + 虚线） */}
       <Card title="净可用现金 & 日均预算">

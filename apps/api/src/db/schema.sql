@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS recurring_investments (
   name        TEXT NOT NULL,
   amount      REAL NOT NULL CHECK (amount >= 0),
   frequency   TEXT NOT NULL CHECK (frequency IN ('daily','weekly','monthly','yearly')),
+  pay_day     INTEGER CHECK (pay_day >= 1 AND pay_day <= 31),      -- monthly 用
+  day_of_week INTEGER CHECK (day_of_week >= 0 AND day_of_week <= 6), -- weekly 用
   start_date  TEXT NOT NULL,
   end_date    TEXT,
   note        TEXT,
@@ -150,6 +152,20 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   updated_at    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
+
+-- === 临时账单（一次性支出，绑定具体日期）===
+CREATE TABLE IF NOT EXISTS one_off_expenses (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL DEFAULT 'default',
+  name        TEXT NOT NULL,
+  amount      REAL NOT NULL CHECK (amount >= 0),
+  date        TEXT NOT NULL,               -- YYYY-MM-DD 发生日
+  note        TEXT,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_one_off_user ON one_off_expenses(user_id);
 
 -- ============================================================
 -- v1.0 新增表：多用户 + Auth（Google OAuth）

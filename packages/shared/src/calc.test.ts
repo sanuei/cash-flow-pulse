@@ -17,6 +17,7 @@ import {
   compareCycles,
   // v0.3 新增
   countInvestmentOccurrences,
+  investmentOccurrenceDates,
   isBillActiveInCycle,
   isSubscriptionActiveInCycle,
   sumIncomeInCycle,
@@ -830,6 +831,8 @@ describe('computeDashboardV2 向后兼容', () => {
         name: '基金定投',
         amount: 100,
         frequency: 'daily' as const,
+        pay_day: null,
+        day_of_week: null,
         start_date: '2026-01-01',
         end_date: null,
         note: null,
@@ -901,6 +904,8 @@ describe('computeDashboardV2 向后兼容', () => {
         name: '基金',
         amount: 100,
         frequency: 'daily' as const,
+        pay_day: null,
+        day_of_week: null,
         start_date: '2026-01-01',
         end_date: null,
         note: null,
@@ -921,5 +926,74 @@ describe('computeDashboardV2 向后兼容', () => {
     expect(v2.net_flow).toBe(208100);
     expect(v2.net_available).toBe(238100);
     expect(v2.daily_budget).toBe(Math.floor(238100 / 19));
+  });
+});
+
+describe('临时账单（一次性支出）', () => {
+  // pay_day=10 → today 6/21 的周期为 [6/10, 7/10)
+  const today = new Date(2026, 5, 21);
+  const cash: CashSource[] = [
+    { id: 'x', user_id: 'default', name: '现金', balance: 30000, locked_amount: 0, sort_order: 0, created_at: 0, updated_at: 0 },
+  ];
+  const mk = (id: string, date: string, amount: number) => ({
+    id, user_id: 'default', name: id, amount, date, note: null, sort_order: 0, created_at: 0, updated_at: 0,
+  });
+
+  it('本期内的临时账单计入总支出；未来的扣减净可用；过去的不扣净可用', () => {
+    const oneOffs = [
+      mk('past', '2026-06-15', 5000),   // 本期内、已过（<today）
+      mk('future', '2026-06-25', 8000), // 本期内、未来（>today）
+      mk('next', '2026-07-20', 9000),   // 下个周期，不算本期
+    ];
+    const v2 = computeDashboardV2(today, baseConfig, cash, [], [], [], [], [], [], oneOffs);
+    expect(v2.upcoming_expenses.total_one_off).toBe(13000);      // past + future
+    expect(v2.upcoming_expenses.one_offs.length).toBe(2);        // next 被排除
+    expect(v2.total_expense).toBe(13000);
+    // 净可用只扣未来应付（8000），已过的 5000 视为余额中已体现
+    expect(v2.net_available).toBe(30000 - 8000);
+  });
+
+  it('无临时账单时行为不变（向后兼容）', () => {
+    const withArg = computeDashboardV2(today, baseConfig, cash, [], [], [], [], [], [], []);
+    const withoutArg = computeDashboardV2(today, baseConfig, cash, [], [], [], [], [], []);
+    expect(withArg.total_expense).toBe(withoutArg.total_expense);
+    expect(withArg.upcoming_expenses.total_one_off).toBe(0);
+    expect(withArg.upcoming_expenses.one_offs).toEqual([]);
+  });
+});
+
+describe('定投扣款日锚点（每月/每周）', () => {
+  const cycleStart = new Date(2026, 5, 10); // 6/10
+  const cycleEnd = new Date(2026, 6, 10);   // 7/10（不含）
+  const base = { id: 'x', user_id: 'u', name: 't', amount: 100, start_date: '2026-01-01', end_date: null, note: null, sort_order: 0, created_at: 0, updated_at: 0 };
+
+  it('每月定投按 pay_day 落一次', () => {
+    const inv = { ...base, frequency: 'monthly' as const, pay_day: 15, day_of_week: null };
+    const dates = investmentOccurrenceDates(inv, cycleStart, cycleEnd);
+    expect(dates.map(formatDate)).toEqual(['2026-06-15']); // 只有 6/15 在 [6/10,7/10)
+  });
+
+  it('每月 pay_day 缺省回退到 start_date 的日', () => {
+    const inv = { ...base, start_date: '2026-01-27', frequency: 'monthly' as const, pay_day: null, day_of_week: null };
+    const dates = investmentOccurrenceDates(inv, cycleStart, cycleEnd);
+    expect(dates.map(formatDate)).toEqual(['2026-06-27']);
+  });
+
+  it('每周定投按 day_of_week 命中周期内每个匹配日', () => {
+    const inv = { ...base, frequency: 'weekly' as const, pay_day: null, day_of_week: 1 }; // 周一
+    const dates = investmentOccurrenceDates(inv, cycleStart, cycleEnd);
+    // 2026 年 6/10 是周三；[6/10,7/10) 内的周一：6/15,6/22,6/29,7/6
+    expect(dates.map(formatDate)).toEqual(['2026-06-15', '2026-06-22', '2026-06-29', '2026-07-06']);
+  });
+
+  it('每天定投 = 周期内每天', () => {
+    const inv = { ...base, frequency: 'daily' as const, pay_day: null, day_of_week: null };
+    expect(investmentOccurrenceDates(inv, cycleStart, cycleEnd).length).toBe(30); // 6/10..7/9
+  });
+
+  it('start_date 之前不发生', () => {
+    const inv = { ...base, start_date: '2026-06-20', frequency: 'monthly' as const, pay_day: 15, day_of_week: null };
+    // 6/15 早于 start 6/20 → 本周期无发生
+    expect(investmentOccurrenceDates(inv, cycleStart, cycleEnd)).toEqual([]);
   });
 });

@@ -133,7 +133,17 @@ export interface RecurringInvestment {
   name: string;
   amount: number;                  // ≥ 0
   frequency: InvestmentFrequency;
-  start_date: string;              // YYYY-MM-DD
+  /**
+   * monthly 用：每月扣款日 1-31（大于当月天数按月末）。daily/weekly/yearly 为 null。
+   * 为 null 时 monthly 回退到 start_date 的日。
+   */
+  pay_day: number | null;
+  /**
+   * weekly 用：每周扣款星期 0-6（0=周日）。daily/monthly/yearly 为 null。
+   * 为 null 时 weekly 回退到 start_date 的星期。
+   */
+  day_of_week: number | null;
+  start_date: string;              // YYYY-MM-DD（yearly 用它的月/日作为每年锚点）
   end_date: string | null;         // YYYY-MM-DD，null = 永久
   note: string | null;
   sort_order: number;
@@ -182,6 +192,25 @@ export interface RecurringIncome {
 }
 
 /**
+ * 临时账单（一次性支出）
+ * 绑定到具体日期（YYYY-MM-DD）：
+ *   - 月份归属由 date 落在哪个发薪周期决定（用于「本期消费」）
+ *   - date 也是逐日现金流曲线上的扣款点
+ * 与 RecurringBill 的区别：不循环，只在 date 当天发生一次
+ */
+export interface OneOffExpense {
+  id: string;
+  user_id: string;
+  name: string;
+  amount: number;
+  date: string;                    // YYYY-MM-DD，发生日
+  note: string | null;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
  * 订阅（Netflix/Spotify 等，每月或每年固定日期自动扣款）
  */
 export type SubscriptionCycle = 'monthly' | 'yearly';
@@ -203,7 +232,7 @@ export interface Subscription {
 // === v0.3 新增：本期支出/收入展开后的明细项 ===
 
 export interface UpcomingExpenseItem {
-  source_type: 'credit_card' | 'bill' | 'subscription' | 'investment';
+  source_type: 'credit_card' | 'bill' | 'subscription' | 'investment' | 'one_off';
   id: string;
   name: string;
   amount: number;                  // 单次金额（投资是单次扣款额）
@@ -239,11 +268,13 @@ export interface UpcomingExpenses {
   bills: UpcomingExpenseItem[];
   subscriptions: UpcomingExpenseItem[];
   investments: UpcomingExpenseItem[];
+  one_offs: UpcomingExpenseItem[]; // 临时账单（本期内）
   total_credit_card: number;
   total_bills: number;
   total_subscriptions: number;
   total_investments: number;
-  grand_total: number;             // = sum of all 4
+  total_one_off: number;
+  grand_total: number;             // = sum of all 5
 }
 
 export interface UpcomingIncomes {

@@ -3,10 +3,14 @@ import { HeroAmount, Field, Segmented, Collapsible, FormError, FormActions } fro
 
 type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
+const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
 type FormData = {
   name: string;
   amount: number;
   frequency: Frequency;
+  pay_day: number | null;
+  day_of_week: number | null;
   start_date: string;
   end_date: string | null;
   note: string | null;
@@ -24,6 +28,8 @@ export function InvestmentForm({
   const [name, setName] = useState(initial?.name ?? '');
   const [amount, setAmount] = useState(initial?.amount ?? 0);
   const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? 'daily');
+  const [payDay, setPayDay] = useState(initial?.pay_day ?? 1);
+  const [dayOfWeek, setDayOfWeek] = useState(initial?.day_of_week ?? 1);
   const [startDate, setStartDate] = useState(
     initial?.start_date ?? new Date().toISOString().split('T')[0]!
   );
@@ -37,6 +43,8 @@ export function InvestmentForm({
       setName(initial.name);
       setAmount(initial.amount);
       setFrequency(initial.frequency);
+      setPayDay(initial.pay_day ?? 1);
+      setDayOfWeek(initial.day_of_week ?? 1);
       setStartDate(initial.start_date);
       setEndDate(initial.end_date ?? '');
       setNote(initial.note ?? '');
@@ -49,12 +57,15 @@ export function InvestmentForm({
     if (!name.trim()) { setError('名称不能为空'); return; }
     if (amount <= 0) { setError('金额必须大于 0'); return; }
     if (!startDate) { setError('开始日期必填'); return; }
+    if (frequency === 'monthly' && (payDay < 1 || payDay > 31)) { setError('扣款日必须在 1-31 之间'); return; }
     setSaving(true);
     try {
       await onSubmit({
         name: name.trim(),
         amount,
         frequency,
+        pay_day: frequency === 'monthly' ? payDay : null,
+        day_of_week: frequency === 'weekly' ? dayOfWeek : null,
         start_date: startDate,
         end_date: endDate || null,
         note: note.trim() || null,
@@ -89,6 +100,27 @@ export function InvestmentForm({
       <Field label="频率" hint="按周期内发生次数自动计算总额">
         <Segmented options={freqOptions} value={frequency} onChange={setFrequency} />
       </Field>
+
+      {frequency === 'monthly' && (
+        <Field label="每月扣款日" hint="大于当月天数按月末扣款（如 31 → 2 月 28）">
+          <div className="relative max-w-[140px]">
+            <input
+              type="number" inputMode="numeric" className="input font-numeric pr-9"
+              value={payDay || ''} onChange={(e) => setPayDay(Number(e.target.value) || 0)}
+              onFocus={(e) => e.currentTarget.select()}
+              min="1" max="31" step="1"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[14px] text-notion-text-muted">号</span>
+          </div>
+        </Field>
+      )}
+      {frequency === 'weekly' && (
+        <Field label="每周扣款日">
+          <select className="input" value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>
+            {WEEKDAY_LABELS.map((label, i) => <option key={i} value={i}>{label}</option>)}
+          </select>
+        </Field>
+      )}
 
       <Collapsible>
         <div className="grid grid-cols-2 gap-3">

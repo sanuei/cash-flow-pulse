@@ -23,6 +23,7 @@ import type {
   RecurringBill,
   RecurringIncome,
   Subscription,
+  OneOffExpense,
   UpcomingExpenseItem,
   UpcomingIncomeItem,
   UpcomingExpenses,
@@ -222,12 +223,22 @@ export function isCardActiveInCycle(
 
 /**
  * 取信用卡在指定扣款日生效的账单金额：
- * 优先用 monthly_statements[YYYY-MM]（扣款日所在年月），否则回退到 statement_amount。
+ * 1) 优先用 monthly_statements[YYYY-MM]（扣款日所在年月，已填的精确金额）
+ * 2) 未填（如未来月）→ 回退到"早于该月的最近一期已填账单"（按最近消费预测）
+ * 3) 都没有 → statement_amount（默认账单金额）
  */
 export function getCardAmountForDate(card: CreditCard, dueDate: Date): number {
   const ym = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`;
-  const override = card.monthly_statements?.[ym];
-  return override !== undefined ? override : card.statement_amount;
+  const stmts = card.monthly_statements;
+  const override = stmts?.[ym];
+  if (override !== undefined) return override;
+  if (stmts) {
+    // 早于目标月的最近一期（YYYY-MM 字符串可直接字典序比较）
+    const priorKeys = Object.keys(stmts).filter((k) => k < ym).sort();
+    const last = priorKeys[priorKeys.length - 1];
+    if (last !== undefined) return stmts[last]!;
+  }
+  return card.statement_amount;
 }
 
 // ============================================================
@@ -537,59 +548,79 @@ export function compareCycles(a: Snapshot, b: Snapshot): CycleComparison {
 // ============================================================
 
 /**
- * 频率 → 天数映射（粗略，用于估算本期内发生次数）
- * daily = 1, weekly = 7, monthly = 30, yearly = 365
+ * 列出定投在 [from, to) 内的所有发生日（按 frequency + 扣款日锚点）。
+ *   daily   : 区间内每天
+ *   weekly  : 匹配 day_of_week（缺省用 start_date 的星期）的每天
+ *   monthly : 每月 pay_day（缺省用 start_date 的日；超过当月天数按月末）
+ *   yearly  : 每年 start_date 的月/日
+ * 均受 start_date（含）与 end_date（含，null=永久）约束。
+ *
+ * v1.6：取代原「按 30/365 粗略间隔」的估算，改为按真实日历日枚举，
+ *       让每月/每周定投能锚定到具体扣款日（也用于逐日现金流曲线的正确落点）。
  */
-const FREQUENCY_INTERVAL_DAYS: Record<InvestmentFrequency, number> = {
-  daily: 1,
-  weekly: 7,
-  monthly: 30,
-  yearly: 365,
-};
+export function investmentOccurrenceDates(
+  inv: Pick<RecurringInvestment, 'start_date' | 'end_date' | 'frequency'> &
+    Partial<Pick<RecurringInvestment, 'pay_day' | 'day_of_week'>>,
+  from: Date,
+  to: Date,
+): Date[] {
+  if (!inv.start_date) return [];
+  const start = parseDate(inv.start_date);
+  // end_date 沿用原语义：作为区间上界（不含），保持既有数据的次数计算不变
+  const end = inv.end_date ? parseDate(inv.end_date) : null;
+  const lo = start > from ? start : from;
+  const hi = end && end < to ? end : to;
+  if (lo >= hi) return [];
+
+  const dates: Date[] = [];
+  switch (inv.frequency) {
+    case 'daily': {
+      for (let d = new Date(lo); d < hi; d = addDays(d, 1)) dates.push(new Date(d));
+      break;
+    }
+    case 'weekly': {
+      const dow = inv.pay_day == null && inv.day_of_week == null ? start.getDay() : (inv.day_of_week ?? start.getDay());
+      for (let d = new Date(lo); d < hi; d = addDays(d, 1)) {
+        if (d.getDay() === dow) dates.push(new Date(d));
+      }
+      break;
+    }
+    case 'monthly': {
+      const day = inv.pay_day ?? start.getDate();
+      for (
+        let cur = new Date(lo.getFullYear(), lo.getMonth(), 1);
+        cur < hi;
+        cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1)
+      ) {
+        const d = getPaydayInMonth(cur.getFullYear(), cur.getMonth(), day);
+        if (d >= lo && d < hi) dates.push(d);
+      }
+      break;
+    }
+    case 'yearly': {
+      const mm = start.getMonth();
+      const dd = start.getDate();
+      for (let y = lo.getFullYear(); ; y++) {
+        const d = getPaydayInMonth(y, mm, dd);
+        if (d >= hi) break;
+        if (d >= lo) dates.push(d);
+      }
+      break;
+    }
+  }
+  return dates;
+}
 
 /**
- * 计算投资在指定周期内的发生次数
- *
- * @param inv 投资记录（必须有 start_date + frequency）
- * @param cycleStart 周期起点（含）
- * @param cycleEnd 周期终点（不含）
- * @returns 发生次数（≥ 0）
- *
- * 算法：
- *   - 起点 = max(cycleStart, inv.start_date)
- *   - 终点 = min(cycleEnd, inv.end_date || cycleEnd)
- *   - 间隔天数 = FREQUENCY_INTERVAL_DAYS[inv.frequency]
- *   - 次数 = floor((终点 - 起点) / 间隔) + 1
- *
- * 注：这是一个简化估算（按 30/365 算月/年），精确算法需要按自然月/年迭代。
+ * 计算投资在指定周期内的发生次数（= investmentOccurrenceDates 的长度）
  */
 export function countInvestmentOccurrences(
-  inv: Pick<RecurringInvestment, 'start_date' | 'end_date' | 'frequency'>,
+  inv: Pick<RecurringInvestment, 'start_date' | 'end_date' | 'frequency'> &
+    Partial<Pick<RecurringInvestment, 'pay_day' | 'day_of_week'>>,
   cycleStart: Date,
   cycleEnd: Date,
 ): number {
-  if (!inv.start_date) return 0;
-
-  const startDate = parseDate(inv.start_date);
-  const endDate = inv.end_date ? parseDate(inv.end_date) : null;
-
-  // 起点和终点都收敛到周期内
-  const effectiveStart = startDate > cycleStart ? startDate : cycleStart;
-  const effectiveEnd = endDate && endDate < cycleEnd ? endDate : cycleEnd;
-
-  if (effectiveStart >= effectiveEnd) return 0;
-
-  const intervalDays = FREQUENCY_INTERVAL_DAYS[inv.frequency];
-  if (intervalDays <= 0) return 0;
-
-  // 区间内总天数（半开区间 [start, end) 不含 end）
-  // diffDays(start, end) 返回 end - start 的天数差（不含端点）
-  // 例：diffDays(6/21, 7/10) = 19，表示 19 天（6/21, 22, ..., 7/9）
-  const totalDays = diffDays(effectiveStart, effectiveEnd);
-
-  // 区间内每天/周/月/年一次
-  // 例：19 天 daily → 19 次；19 天 weekly → ceil(19/7) = 3 次
-  return Math.ceil(totalDays / intervalDays);
+  return investmentOccurrenceDates(inv, cycleStart, cycleEnd).length;
 }
 
 /**
@@ -810,6 +841,7 @@ export function computeDashboardV2(
   bills: RecurringBill[] = [],
   incomes: RecurringIncome[] = [],
   subscriptions: Subscription[] = [],
+  oneOffs: OneOffExpense[] = [],
 ): DashboardCalc & {
   prompt: SnapshotPrompt | null;
   currentSnapshots: Snapshot[];
@@ -911,12 +943,14 @@ export function computeDashboardV2(
   const investmentItems: UpcomingExpenseItem[] = [];
   let totalInvestments = 0;
   for (const inv of investments) {
-    const occurrences = countInvestmentOccurrences(inv, cycleStart, cycleEnd);
+    const occDates = investmentOccurrenceDates(inv, cycleStart, cycleEnd);
+    const occurrences = occDates.length;
     if (occurrences > 0) {
       const totalAmt = occurrences * inv.amount;
-      // due_date 取首日（start_date 在本周期内的最早一天）
-      const startDate = parseDate(inv.start_date);
-      const firstOccur = startDate > cycleStart ? startDate : cycleStart;
+      // due_date 取本周期内的首个发生日（按扣款日锚点）
+      const firstOccur = occDates[0]!;
+      // 每周/每月是离散扣款（有具体日子）→ 给出距今天数；每天/每年当作连续，days_until=0
+      const discrete = inv.frequency === 'weekly' || inv.frequency === 'monthly';
       investmentItems.push({
         source_type: 'investment',
         id: inv.id,
@@ -925,12 +959,43 @@ export function computeDashboardV2(
         occurrences,
         total: totalAmt,
         due_date: formatDate(firstOccur),
-        days_until: 0, // 投资是连续发生，没有具体某一天
+        days_until: discrete ? Math.max(0, diffDays(today, firstOccur)) : 0,
         frequency: inv.frequency,
       });
       totalInvestments += totalAmt;
     }
   }
+
+  // 3e. 临时账单（一次性支出，绑定具体日期）
+  //   本期归属：date 落在 [cycleStart, cycleEnd) → 计入本期支出
+  //   未来应付：date 在 [todayMidnight, cycleEnd) → 计入 net_available 扣减
+  const oneOffItems: UpcomingExpenseItem[] = [];
+  let totalOneOff = 0;
+  let futureOneOff = 0;
+  for (const o of oneOffs) {
+    const d = parseDate(o.date);
+    const inCycle = d >= cycleStart && d < cycleEnd;
+    if (!inCycle) continue;
+    totalOneOff += o.amount;
+    const dMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const paid = dMidnight < todayMidnight;
+    if (!paid) futureOneOff += o.amount; // date >= today → 尚未发生，算未来应付
+    oneOffItems.push({
+      source_type: 'one_off',
+      id: o.id,
+      name: o.name,
+      amount: o.amount,
+      occurrences: 1,
+      total: o.amount,
+      due_date: o.date,
+      days_until: Math.max(0, diffDays(todayMidnight, d)),
+      in_current_cycle: true,
+      cycle_paid: paid,
+      cycle_days_until: Math.abs(diffDays(todayMidnight, d)),
+      cycle_due_date: o.date,
+    });
+  }
+  oneOffItems.sort((a, b) => Number(a.cycle_paid ?? false) - Number(b.cycle_paid ?? false));
 
   // 按 days_until 升序排序
   billItems.sort((a, b) => a.days_until - b.days_until);
@@ -944,7 +1009,7 @@ export function computeDashboardV2(
   //   避免 net_available 双扣，见 future_due)。但这里是"本期支出明细"展示用途，
   //   已扣的卡这笔钱本期确实花了，不该从总支出里消失 → 显式加回 paid_this_cycle。
   const totalCreditCards = v1.total_due + paidCreditCards.reduce((s, ac) => s + ac.amount, 0);
-  const totalExpense = totalCreditCards + totalBills + totalSubs + totalInvestments;
+  const totalExpense = totalCreditCards + totalBills + totalSubs + totalInvestments + totalOneOff;
 
   // 6. 净可用 + 日均预算
   //   净可用 = 现金账户余额 - 未来应付(从今天到下次发薪日)
@@ -985,7 +1050,7 @@ export function computeDashboardV2(
     return s + occ * inv.amount;
   }, 0);
 
-  const futureExpense = futureCreditCards + futureBills + futureSubs + futureInv;
+  const futureExpense = futureCreditCards + futureBills + futureSubs + futureInv + futureOneOff;
   const netAvailable = v1.total_net_cash - futureExpense;
   const dailyBudget = Math.max(0, Math.floor(netAvailable / safeDays));
 
@@ -1000,10 +1065,12 @@ export function computeDashboardV2(
       bills: billItems,
       subscriptions: subscriptionItems,
       investments: investmentItems,
+      one_offs: oneOffItems,
       total_credit_card: totalCreditCards,
       total_bills: totalBills,
       total_subscriptions: totalSubs,
       total_investments: totalInvestments,
+      total_one_off: totalOneOff,
       grand_total: totalExpense,
     },
     upcoming_incomes: {
@@ -1016,5 +1083,154 @@ export function computeDashboardV2(
     // 覆盖 V1 的 net_available 和 daily_budget（用 V2 公式重算）
     net_available: netAvailable,
     daily_budget: dailyBudget,
+  };
+}
+
+// ============================================================
+// 本期逐日现金流：按每笔扣款/到账的实际发生日推演 running balance
+// 锚点 = 今天真实可用现金(未扣未来)；过去=实线、未来=虚线（由 is_past 标记）
+// ============================================================
+
+export type CashflowEventType = 'card' | 'bill' | 'subscription' | 'investment' | 'income' | 'one_off';
+export type CashflowEvent = { label: string; amount: number; type: CashflowEventType };
+export type CashflowPoint = { date: string; balance: number; is_past: boolean; events: CashflowEvent[] };
+export type CashflowResult = {
+  cycle_id: string;
+  cycle_start: string;
+  cycle_end: string;
+  today: string;
+  anchor: number;      // 今天锚点余额（真实可用现金）
+  points: CashflowPoint[];
+};
+
+const cashflowMidMs = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+// 收集某周期内每天的现金流变化 + 事件明细（信用卡金额走 getCardAmountForDate，未来月自动用最近一期）
+function collectCycleDeltas(
+  cycleStart: Date,
+  cycleEnd: Date,
+  config: UserConfig,
+  creditCards: CreditCard[],
+  investments: RecurringInvestment[],
+  bills: RecurringBill[],
+  incomes: RecurringIncome[],
+  subscriptions: Subscription[],
+  oneOffs: OneOffExpense[],
+): { deltaByDay: Map<number, number>; eventsByDay: Map<number, CashflowEvent[]> } {
+  const deltaByDay = new Map<number, number>();
+  const eventsByDay = new Map<number, CashflowEvent[]>();
+  const addEvent = (date: Date, delta: number, label: string, type: CashflowEventType) => {
+    const ms = cashflowMidMs(date);
+    deltaByDay.set(ms, (deltaByDay.get(ms) ?? 0) + delta);
+    const list = eventsByDay.get(ms) ?? [];
+    list.push({ label, amount: Math.round(delta), type });
+    eventsByDay.set(ms, list);
+  };
+
+  for (const card of creditCards) {
+    const { active, dueDate } = isCardActiveInCycle(card, cycleStart, cycleEnd);
+    if (active && dueDate) {
+      const eff = config.weekend_shift ? shiftToWorkday(dueDate) : dueDate;
+      const amt = getCardAmountForDate(card, dueDate);
+      if (amt > 0) addEvent(eff, -amt, card.name, 'card');
+    }
+  }
+  for (const bill of bills) {
+    const { active, dueDate } = isBillActiveInCycle(bill, cycleStart, cycleEnd);
+    if (active && dueDate) {
+      const eff = config.weekend_shift ? shiftToWorkday(dueDate) : dueDate;
+      if (bill.amount > 0) addEvent(eff, -bill.amount, bill.name, 'bill');
+    }
+  }
+  for (const sub of subscriptions) {
+    const { active, dueDate } = isSubscriptionActiveInCycle(sub, cycleStart, cycleEnd);
+    if (active && dueDate) {
+      const eff = config.weekend_shift ? shiftToWorkday(dueDate) : dueDate;
+      if (sub.amount > 0) addEvent(eff, -sub.amount, sub.name, 'subscription');
+    }
+  }
+  for (const inv of investments) {
+    for (const d of investmentOccurrenceDates(inv, cycleStart, cycleEnd)) {
+      if (inv.amount > 0) addEvent(d, -inv.amount, inv.name, 'investment');
+    }
+  }
+  for (const o of oneOffs) {
+    const d = parseDate(o.date);
+    if (d >= cycleStart && d < cycleEnd && o.amount > 0) addEvent(d, -o.amount, o.name, 'one_off');
+  }
+  const { items: incomeItems } = sumIncomeInCycle(incomes, cycleStart, cycleEnd);
+  for (const it of incomeItems) {
+    addEvent(parseDate(it.pay_date), it.amount, it.name, 'income');
+  }
+
+  return { deltaByDay, eventsByDay };
+}
+
+export function computeDailyCashflow(
+  today: Date,
+  config: UserConfig,
+  cashSources: CashSource[],
+  creditCards: CreditCard[],
+  investments: RecurringInvestment[] = [],
+  bills: RecurringBill[] = [],
+  incomes: RecurringIncome[] = [],
+  subscriptions: Subscription[] = [],
+  periodsAhead = 0,   // 额外向未来延伸的周期数（0=只本期）
+  oneOffs: OneOffExpense[] = [],
+): CashflowResult {
+  const todayMs = cashflowMidMs(today);
+  // 今天锚点：真实可用现金（未扣未来项）
+  const anchor = cashSources.reduce((s, c) => s + c.balance - c.locked_amount, 0);
+
+  const cycle0 = getCurrentCycle(today, config.pay_day);
+  const points: CashflowPoint[] = [];
+  let carry = 0;                       // 上一期末的预测余额（链式递推起点）
+  let lastEnd = cycle0.end_date_str;
+
+  for (let p = 0; p <= periodsAhead; p++) {
+    const cy = getCurrentCycle(addMonths(today, p), config.pay_day);
+    lastEnd = cy.end_date_str;
+    const { deltaByDay, eventsByDay } = collectCycleDeltas(
+      cy.start_date, cy.end_date, config, creditCards, investments, bills, incomes, subscriptions, oneOffs,
+    );
+    const dayDelta = (ms: number) => deltaByDay.get(ms) ?? 0;
+
+    const days: Date[] = [];
+    for (let d = new Date(cy.start_date); d < cy.end_date; d = addDays(d, 1)) days.push(new Date(d));
+    if (days.length === 0) continue;
+    const dayMs = days.map(cashflowMidMs);
+    const bal = new Array<number>(days.length);
+
+    if (p === 0) {
+      // 本期：以今天真实现金为锚点，向两边推演
+      let todayIdx = dayMs.findIndex((ms) => ms === todayMs);
+      if (todayIdx < 0) todayIdx = todayMs < dayMs[0]! ? 0 : days.length - 1;
+      bal[todayIdx] = anchor;
+      for (let i = todayIdx + 1; i < days.length; i++) bal[i] = bal[i - 1]! + dayDelta(dayMs[i]!);
+      for (let i = todayIdx - 1; i >= 0; i--) bal[i] = bal[i + 1]! - dayDelta(dayMs[i + 1]!);
+    } else {
+      // 未来期：以上一期末预测余额为起点，逐日累加（全预测；发薪日会跳升）
+      let prev = carry;
+      for (let i = 0; i < days.length; i++) { prev += dayDelta(dayMs[i]!); bal[i] = prev; }
+    }
+
+    for (let i = 0; i < days.length; i++) {
+      points.push({
+        date: formatDate(days[i]!),
+        balance: Math.round(bal[i]!),
+        is_past: p === 0 && dayMs[i]! <= todayMs,
+        events: eventsByDay.get(dayMs[i]!) ?? [],
+      });
+    }
+    carry = bal[days.length - 1]!;
+  }
+
+  return {
+    cycle_id: cycle0.cycle_id,
+    cycle_start: cycle0.start_date_str,
+    cycle_end: lastEnd,
+    today: formatDate(today),
+    anchor: Math.round(anchor),
+    points,
   };
 }
