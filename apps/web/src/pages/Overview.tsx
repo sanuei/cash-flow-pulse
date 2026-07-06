@@ -59,16 +59,18 @@ export function Overview() {
   const [cycleMeta, setCycleMeta] = useState<Omit<DashboardResponse, 'calc'> | null>(null);
   const [cycleLoading, setCycleLoading] = useState(false);
 
-  // 本期逐日可用现金曲线（现金走势卡用；只取本期）
+  // 逐日可用现金曲线（现金走势卡用）。看未来期时向后多拉几期，
+  // 好让预测的那一期也能画出曲线（endpoint 最多 3 期）。
+  const cashflowPeriods = Math.max(0, Math.min(3, cycleOffset));
   const [cashflow, setCashflow] = useState<CashflowResult | null>(null);
   useEffect(() => {
     if (!config) return;
     let cancelled = false;
-    apiGet<CashflowResult>('/dashboard/cashflow?periods=0')
+    apiGet<CashflowResult>(`/dashboard/cashflow?periods=${cashflowPeriods}`)
       .then((d) => { if (!cancelled) setCashflow(d); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [config, generatedAt]);
+  }, [config, generatedAt, cashflowPeriods]);
 
   // offset≠0 时单独拉取目标周期数据
   useEffect(() => {
@@ -101,6 +103,18 @@ export function Overview() {
   if (!storeCalc || !config) return <LoadingState message="初始化..." />;
 
   const activeCalc = calc ?? storeCalc;
+
+  // 现金走势卡要画的曲线：本期用完整结果；看未来期时截取该期窗口的点（全预测）
+  const viewCashflow = (() => {
+    if (!cashflow) return null;
+    if (isCurrentCycle) return cashflow;
+    const start = cycleMeta?.cycle_start;
+    const end = cycleMeta?.cycle_end;
+    if (!start || !end) return null;
+    const points = cashflow.points.filter((p) => p.date >= start && p.date < end);
+    return points.length ? { ...cashflow, points } : null;
+  })();
+
   const upcomingExpenses = activeCalc.upcoming_expenses;
   const upcomingIncomes = activeCalc.upcoming_incomes;
   const totalExpense = upcomingExpenses?.grand_total ?? activeCalc.total_due;
@@ -264,14 +278,15 @@ export function Overview() {
           v1.4 桌面端布局升级 */}
       <div className="lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0 space-y-5">
 
-      {/* 花费节奏卡 */}
-      {isCurrentCycle && !isNewUser && (
+      {/* 现金走势卡：本期照常；看未来「预测」期时也显示（画该期预测曲线）*/}
+      {!isNewUser && (isCurrentCycle || (isPredicted && viewCashflow)) && (
         <PaceCard
+          predicted={!isCurrentCycle}
           timePct={cycleProgress}
           budgetPct={budgetProgress}
           balanceGrew={balanceGrew}
           daysLeft={activeCalc.days_to_payday}
-          cashflow={cashflow}
+          cashflow={viewCashflow}
           currentNetAvailable={activeCalc.net_available}
           cycleDay={activeCalc.current_cycle_day}
         />
@@ -611,10 +626,13 @@ export function Overview() {
 // ============================================================
 
 // ── 花费节奏卡：有现金流数据时显示「逐日可用现金」曲线，无数据时显示进度条 ──
+//    predicted=true（看未来期）时：整期全预测，只画曲线、不显示"今天/进度"这些本期概念
 function PaceCard({
+  predicted = false,
   timePct, budgetPct, balanceGrew, daysLeft,
   cashflow, currentNetAvailable, cycleDay,
 }: {
+  predicted?: boolean;
   timePct: number;
   budgetPct: number | null;
   balanceGrew: boolean;
@@ -628,11 +646,13 @@ function PaceCard({
 
   const ahead = budgetPct !== null && budgetPct <= timePct;
   const synced = budgetPct !== null && !ahead && budgetPct <= timePct + 12;
-  const verdictLabel = balanceGrew ? '余额增长'
+  const verdictLabel = predicted ? '预测'
+    : balanceGrew ? '余额增长'
     : budgetPct === null ? '待记录'
     : ahead ? '进度健康'
     : synced ? '基本同步' : '花得偏快';
-  const verdictCls = balanceGrew ? 'text-notion-success bg-[var(--c-success-soft)]'
+  const verdictCls = predicted ? 'text-notion-text-secondary bg-[var(--c-bg-alt)]'
+    : balanceGrew ? 'text-notion-success bg-[var(--c-success-soft)]'
     : budgetPct === null ? 'text-notion-text-muted bg-[var(--c-bg-alt)]'
     : ahead ? 'text-notion-success bg-[var(--c-success-soft)]'
     : synced ? 'text-notion-text-secondary bg-[var(--c-bg-alt)]'
@@ -651,17 +671,17 @@ function PaceCard({
       action={<span className={`badge text-[10px] px-2 py-0.5 ${verdictCls}`}>{verdictLabel}</span>}
     >
       {hasSparkData ? (
-        /* ── 逐日可用现金曲线（过去实线 + 未来虚线，锚点=今天真实现金）── */
+        /* ── 逐日可用现金曲线（本期：过去实线+未来虚线；未来期：整期预测虚线）── */
         <div>
           <div className="flex items-baseline gap-1.5 mb-2">
             <span className="font-display font-semibold text-[22px] font-numeric text-notion-text">
               {formatYen(currentNetAvailable)}
             </span>
-            <span className="text-[12px] text-notion-text-muted">今日可用现金</span>
+            <span className="text-[12px] text-notion-text-muted">{predicted ? '预计期末结余' : '今日可用现金'}</span>
           </div>
           <CashFlowChart data={cashflow!} heightClass="h-40" compact />
           <div className="flex items-center justify-between mt-2 text-[11px] text-notion-text-muted">
-            <span>周期第 {cycleDay} 天 · 灰线为今天</span>
+            <span>{predicted ? '整期预测 · 均为预估' : `周期第 ${cycleDay} 天 · 灰线为今天`}</span>
             <Link to="/trends" className="text-[var(--c-accent-text)] hover:text-[var(--c-accent)] transition-colors">看完整曲线 ›</Link>
           </div>
         </div>
