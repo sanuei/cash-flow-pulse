@@ -92,30 +92,8 @@ export function CardForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Field label="名称">
-        <input
-          className="input"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="如 乐天卡 / 三井住友"
-          autoFocus
-        />
-      </Field>
-
-      <Field label="每月扣款日" hint="大于当月天数则按月末（如 31 → 2 月 28）">
-        <div className="relative max-w-[140px]">
-          <input
-            type="number" inputMode="numeric" className="input font-numeric pr-9"
-            value={dueDay || ''} onChange={(e) => setDueDay(Number(e.target.value) || 0)}
-            onFocus={(e) => e.currentTarget.select()}
-            min="1" max="31" step="1"
-          />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[14px] text-notion-text-muted">号</span>
-        </div>
-      </Field>
-
-      {/* 按月账单：主区，常驻展开（信用卡本质按月记账，这里是主角） */}
-      <div className="border-t border-[var(--c-border)] pt-4">
+      {/* 按月账单：主区，置顶（信用卡本质按月记账，最常改的就是这里）*/}
+      <div>
         <div className="flex items-center justify-between mb-1">
           <div>
             <span className="text-[13px] font-semibold text-notion-text">按月账单</span>
@@ -167,16 +145,36 @@ export function CardForm({
         )}
       </div>
 
-      {/* 默认账单金额：次要兜底，放在最后（未单独填写的月份沿用此值，也用于预测未来月） */}
-      <Field
-        label="默认账单金额"
-        hint="未在上方单独填写的月份，按此金额估算（可留空）"
-        className="border-t border-[var(--c-border)] pt-4"
-      >
-        <div className="max-w-[200px]">
-          <MoneyInput value={amount} onChange={setAmount} ariaLabel="默认账单金额" />
-        </div>
-      </Field>
+      {/* 卡片设置：名称/扣款日/默认金额 —— 一次性设定，不常改，收在下方 */}
+      <div className="border-t border-[var(--c-border)] pt-4 space-y-4">
+        <Field label="名称">
+          <input
+            className="input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="如 乐天卡 / 三井住友"
+          />
+        </Field>
+
+        <Field label="每月扣款日" hint="大于当月天数则按月末（如 31 → 2 月 28）">
+          <div className="relative max-w-[140px]">
+            <input
+              type="number" inputMode="numeric" className="input font-numeric pr-9"
+              value={dueDay || ''} onChange={(e) => setDueDay(Number(e.target.value) || 0)}
+              onFocus={(e) => e.currentTarget.select()}
+              min="1" max="31" step="1"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[14px] text-notion-text-muted">号</span>
+          </div>
+        </Field>
+
+        {/* 默认账单金额：未单独填写的月份沿用此值，也用于预测未来月 */}
+        <Field label="默认账单金额" hint="未在上方单独填写的月份，按此金额估算（可留空）">
+          <div className="max-w-[200px]">
+            <MoneyInput value={amount} onChange={setAmount} ariaLabel="默认账单金额" />
+          </div>
+        </Field>
+      </div>
 
       <FormError msg={error} />
       <FormActions onCancel={onCancel} saving={saving} disabled={!name.trim()} />
