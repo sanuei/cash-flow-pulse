@@ -13,16 +13,26 @@ import { useStore } from '../lib/store';
 import type { CurrentUser } from '../lib/store';
 
 type NavItem = { to: string; label: string; icon: IconName };
+type NavSection = { title?: string; items: NavItem[] };
 
-const NAV_ITEMS: NavItem[] = [
-  { to: '/',            label: '总览', icon: 'home' },
-  { to: '/incomes',     label: '收入', icon: 'income' },
-  { to: '/assets',      label: '资产', icon: 'cash' },
-  { to: '/investments', label: '投资', icon: 'investment' },
-  { to: '/expenses',    label: '消费', icon: 'bill' },
-  { to: '/diagnosis',   label: '诊断', icon: 'gauge' },
-  { to: '/trends',      label: '曲线', icon: 'chart' },
-  { to: '/settings',    label: '设置', icon: 'settings' },
+// 分组：总览（独立）/ 账目（收支资产）/ 分析（诊断曲线）/ 设置（独立）
+const NAV_SECTIONS: NavSection[] = [
+  { items: [
+    { to: '/', label: '总览', icon: 'home' },
+  ] },
+  { title: '账目', items: [
+    { to: '/incomes',     label: '收入', icon: 'income' },
+    { to: '/assets',      label: '资产', icon: 'cash' },
+    { to: '/investments', label: '投资', icon: 'investment' },
+    { to: '/expenses',    label: '消费', icon: 'bill' },
+  ] },
+  { title: '分析', items: [
+    { to: '/diagnosis',   label: '诊断', icon: 'gauge' },
+    { to: '/trends',      label: '曲线', icon: 'chart' },
+  ] },
+  { title: '系统', items: [
+    { to: '/settings',    label: '设置', icon: 'settings' },
+  ] },
 ];
 
 export function Sidebar() {
@@ -39,33 +49,44 @@ export function Sidebar() {
         <Logo size={18} />
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-2.5 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === '/'}
-            className={({ isActive }) =>
-              `flex items-center gap-2.5 px-3 py-2 rounded-[var(--radius-md)] text-[13.5px] font-medium transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
-                isActive
-                  ? 'bg-[var(--c-accent-soft)] text-[var(--c-accent-text)]'
-                  : 'text-notion-text-secondary hover:bg-[var(--c-bg-alt)] hover:text-notion-text'
-              }`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <Icon
-                  name={item.icon}
-                  size={17}
-                  strokeWidth={isActive ? 2 : 1.75}
-                  className="flex-shrink-0"
-                />
-                <span>{item.label}</span>
-              </>
+      {/* Nav（分组：总览 / 账目 / 分析 / 系统）*/}
+      <nav className="flex-1 px-2.5 py-3 overflow-y-auto">
+        {NAV_SECTIONS.map((section, si) => (
+          <div key={si} className={si > 0 ? 'mt-4' : ''}>
+            {section.title && (
+              <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-notion-text-muted">
+                {section.title}
+              </div>
             )}
-          </NavLink>
+            <div className="space-y-0.5">
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2.5 px-3 py-2 rounded-[var(--radius-md)] text-[13.5px] font-medium transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+                      isActive
+                        ? 'bg-[var(--c-accent-soft)] text-[var(--c-accent-text)]'
+                        : 'text-notion-text-secondary hover:bg-[var(--c-bg-alt)] hover:text-notion-text'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon
+                        name={item.icon}
+                        size={17}
+                        strokeWidth={isActive ? 2 : 1.75}
+                        className="flex-shrink-0"
+                      />
+                      <span>{item.label}</span>
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 

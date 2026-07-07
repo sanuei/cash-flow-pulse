@@ -11,6 +11,7 @@ import {
   getCurrentCycle,
   daysToNextPayday,
   isCardActiveInCycle,
+  getCardAmountForDate,
   computeDashboard,
   detectUnchanged,
   formatYen,
@@ -959,6 +960,29 @@ describe('临时账单（一次性支出）', () => {
     expect(withArg.total_expense).toBe(withoutArg.total_expense);
     expect(withArg.upcoming_expenses.total_one_off).toBe(0);
     expect(withArg.upcoming_expenses.one_offs).toEqual([]);
+  });
+});
+
+describe('getCardAmountForDate 防御脏 monthly_statements', () => {
+  const dueDate = new Date(2026, 6, 29); // 2026-07-29
+  it('正常对象：取该月覆盖值', () => {
+    const card = { ...sampleCards[0]!, statement_amount: 30000, monthly_statements: { '2026-07': 26844 } };
+    expect(getCardAmountForDate(card, dueDate)).toBe(26844);
+  });
+  it('monthly_statements 是未解析的 JSON 字符串 → 回退 statement_amount，且返回 number', () => {
+    const card = { ...sampleCards[0]!, statement_amount: 30000, monthly_statements: '{"2026-07":26844}' as any };
+    const amt = getCardAmountForDate(card, dueDate);
+    expect(amt).toBe(30000);
+    expect(typeof amt).toBe('number');
+  });
+  it('求和不会因脏数据变成字符串拼接', () => {
+    const cards = [
+      { ...sampleCards[0]!, statement_amount: 30000, monthly_statements: '{"2026-07":26844}' as any },
+      { ...sampleCards[0]!, id: 'c2', statement_amount: 3467, monthly_statements: '{"2026-07":3467}' as any },
+    ];
+    const sum = cards.reduce((s, c) => s + getCardAmountForDate(c, dueDate), 0);
+    expect(sum).toBe(33467);
+    expect(Number.isFinite(sum)).toBe(true);
   });
 });
 

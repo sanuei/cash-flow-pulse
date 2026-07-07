@@ -126,9 +126,16 @@ async function runDailySnapshot(env: Env): Promise<void> {
         created_at: config.created_at,
         updated_at: config.updated_at,
       };
+      // 信用卡 monthly_statements 是 TEXT JSON，必须解析成对象再传给 calc
+      // （否则 getCardAmountForDate 会把字符串当对象 → 账单金额错乱、总额爆表）
+      const cards = (cardRows.results || []).map((row: any) => {
+        let monthly_statements: Record<string, number> = {};
+        try { const p = JSON.parse(row?.monthly_statements || '{}'); if (p && typeof p === 'object') monthly_statements = p; } catch { /* 损坏当空表 */ }
+        return { ...row, monthly_statements };
+      });
       const calc = computeDashboardV2(
         today, userConfig,
-        cashRows.results || [], cardRows.results || [], [],
+        cashRows.results || [], cards, [],
         investmentRows.results || [], billRows.results || [],
         incomeRows.results || [], subscriptionRows.results || [],
         oneOffRows.results || [],

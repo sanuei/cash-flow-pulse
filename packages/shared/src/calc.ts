@@ -230,13 +230,18 @@ export function isCardActiveInCycle(
 export function getCardAmountForDate(card: CreditCard, dueDate: Date): number {
   const ym = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`;
   const stmts = card.monthly_statements;
-  const override = stmts?.[ym];
-  if (override !== undefined) return override;
-  if (stmts) {
+  // 防御：monthly_statements 必须是「纯对象 + 数值」。
+  // 若调用方忘了把 DB 里的 TEXT JSON 解析成对象（传进来是字符串），
+  // Object.keys(string) 会得到字符下标、stmts[idx] 会返回单个字符 → 之后
+  // sum + "字符" 变成字符串拼接，把 total_expense 撑成天文数字。这里一律回退。
+  if (stmts && typeof stmts === 'object' && !Array.isArray(stmts)) {
+    const override = stmts[ym];
+    if (typeof override === 'number' && Number.isFinite(override)) return override;
     // 早于目标月的最近一期（YYYY-MM 字符串可直接字典序比较）
-    const priorKeys = Object.keys(stmts).filter((k) => k < ym).sort();
+    const priorKeys = Object.keys(stmts).filter((k) => /^\d{4}-\d{2}$/.test(k) && k < ym).sort();
     const last = priorKeys[priorKeys.length - 1];
-    if (last !== undefined) return stmts[last]!;
+    const lastVal = last !== undefined ? stmts[last] : undefined;
+    if (typeof lastVal === 'number' && Number.isFinite(lastVal)) return lastVal;
   }
   return card.statement_amount;
 }
