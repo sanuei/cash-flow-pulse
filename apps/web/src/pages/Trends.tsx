@@ -165,37 +165,9 @@ export function Trends() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
-      <PageTitle icon="chart" title="趋势曲线" subtitle="净可用现金 · 周期收支 · 支出结构" />
+      <PageTitle icon="chart" title="趋势曲线" subtitle="逐日可用现金 · 快照趋势 · 支出结构" />
 
-      {/* 时间范围 */}
-      <div className="flex flex-wrap gap-1.5">
-        {RANGES.map((r) => (
-          <button
-            key={r.value}
-            onClick={() => setRange(r.value)}
-            className={`px-3.5 py-1.5 rounded-[var(--radius-pill)] text-[13px] font-semibold transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
-              range === r.value
-                ? 'bg-[var(--c-accent)] text-[var(--c-text-on-accent)] shadow-[var(--glow-accent)]'
-                : 'bg-[var(--c-bg-alt)] text-notion-text-secondary border border-[var(--c-border)] hover:border-[var(--c-border-strong)] hover:text-notion-text'
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 统计卡 */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard label="数据点" value={String(snapshots.length)} />
-        <StatCard label="平均净可用" value={formatYen(avgNet)} />
-        <StatCard
-          label="最新环比"
-          value={trendPct === null ? '—' : `${trendPct > 0 ? '+' : ''}${trendPct}%`}
-          trend={trendPct === null ? undefined : trendPct >= 0 ? 'up' : 'down'}
-        />
-      </div>
-
-      {/* 图0：逐日可用现金（过去实线 + 未来虚线，按每笔扣款/到账实际日期推演；可延伸未来周期） */}
+      {/* 图0：逐日可用现金（自成一体，用自己的「本期/+下期」切换，放最上作头图） */}
       <Card
         title="现金流 · 逐日可用现金"
         action={
@@ -231,6 +203,39 @@ export function Trends() {
           以今天真实可用现金为锚点，按每笔信用卡 / 账单 / 定投 / 收入的实际发生日逐日推演。灰竖线为今天，右侧为预测；橙色为透支线（0），跌破即入不敷出。未来月未填的信用卡按最近一期账单预估。
         </div>
       </Card>
+
+      {/* ── 快照趋势区：时间范围 + 统计卡 紧贴其统领的两张快照图 ── */}
+      <div className="pt-2 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[15px] font-semibold text-notion-text">快照趋势</h2>
+          <div className="flex flex-wrap gap-1.5">
+            {RANGES.map((r) => (
+              <button
+                key={r.value}
+                onClick={() => setRange(r.value)}
+                className={`px-3 py-1 rounded-[var(--radius-pill)] text-[12.5px] font-semibold transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)] ${
+                  range === r.value
+                    ? 'bg-[var(--c-accent)] text-[var(--c-text-on-accent)] shadow-[var(--glow-accent)]'
+                    : 'bg-[var(--c-bg-alt)] text-notion-text-secondary border border-[var(--c-border)] hover:border-[var(--c-border-strong)] hover:text-notion-text'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 统计卡（跟随时间范围）*/}
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard label="数据点" value={String(snapshots.length)} />
+          <StatCard label="平均净可用" value={formatYen(avgNet)} />
+          <StatCard
+            label="最新环比"
+            value={trendPct === null ? '—' : `${trendPct > 0 ? '+' : ''}${trendPct}%`}
+            trend={trendPct === null ? undefined : trendPct >= 0 ? 'up' : 'down'}
+          />
+        </div>
+      </div>
 
       {/* 图1：净可用现金 & 日均预算（Area + 虚线） */}
       <Card title="净可用现金 & 日均预算">
