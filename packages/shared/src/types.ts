@@ -125,7 +125,7 @@ export interface PayCycle {
  *   monthly → start_date 起每月同日扣一次
  *   yearly  → start_date 起每年同月同日扣一次
  */
-export type InvestmentFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type InvestmentFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'single';
 
 export interface RecurringInvestment {
   id: string;

@@ -92,12 +92,11 @@ export function IncomeForm({
         />
       </Field>
 
-      <Field label="频率" hint="单次收入用于不固定日期到账的副业/兼职">
+      <Field label="频率" hint="一次性/不固定日期的收入请用「临时收入」卡片">
         <Segmented
           options={[
             { value: 'monthly', label: '每月' },
             { value: 'weekly', label: '每周' },
-            { value: 'single', label: '单次' },
           ]}
           value={frequency}
           onChange={setFrequency}

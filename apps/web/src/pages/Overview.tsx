@@ -831,6 +831,7 @@ function InvestmentExpenseRow({ item, icon }: { item: UpcomingExpenseItem; icon?
     weekly: '每周',
     monthly: '每月',
     yearly: '每年',
+    single: '临时',
   };
   return (
     <div className="flex items-center gap-3 text-[13px] py-2.5 px-2 -mx-2 rounded-[var(--radius-sm)] hover:bg-[var(--c-bg-alt)] transition-colors">

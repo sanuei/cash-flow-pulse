@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS recurring_investments (
   user_id     TEXT NOT NULL DEFAULT 'default',
   name        TEXT NOT NULL,
   amount      REAL NOT NULL CHECK (amount >= 0),
-  frequency   TEXT NOT NULL CHECK (frequency IN ('daily','weekly','monthly','yearly')),
+  frequency   TEXT NOT NULL CHECK (frequency IN ('daily','weekly','monthly','yearly','single')),
   pay_day     INTEGER CHECK (pay_day >= 1 AND pay_day <= 31),      -- monthly 用
   day_of_week INTEGER CHECK (day_of_week >= 0 AND day_of_week <= 6), -- weekly 用
   start_date  TEXT NOT NULL,

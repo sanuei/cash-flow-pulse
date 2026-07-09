@@ -579,6 +579,11 @@ export function investmentOccurrenceDates(
 
   const dates: Date[] = [];
   switch (inv.frequency) {
+    case 'single': {
+      // 临时投资：只在 start_date 当天发生一次（落在窗口内才计）
+      if (start >= lo && start < hi) dates.push(new Date(start));
+      break;
+    }
     case 'daily': {
       for (let d = new Date(lo); d < hi; d = addDays(d, 1)) dates.push(new Date(d));
       break;
@@ -954,8 +959,8 @@ export function computeDashboardV2(
       const totalAmt = occurrences * inv.amount;
       // due_date 取本周期内的首个发生日（按扣款日锚点）
       const firstOccur = occDates[0]!;
-      // 每周/每月是离散扣款（有具体日子）→ 给出距今天数；每天/每年当作连续，days_until=0
-      const discrete = inv.frequency === 'weekly' || inv.frequency === 'monthly';
+      // 每周/每月/单次是离散扣款（有具体日子）→ 给出距今天数；每天/每年当作连续，days_until=0
+      const discrete = inv.frequency === 'weekly' || inv.frequency === 'monthly' || inv.frequency === 'single';
       investmentItems.push({
         source_type: 'investment',
         id: inv.id,

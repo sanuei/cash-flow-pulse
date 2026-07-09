@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { HeroAmount, Field, Segmented, Collapsible, FormError, FormActions } from './FormKit';
 
-type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+// single(临时投资)由独立「临时投资」卡片用 OneOffForm 处理，这里只做循环频率
+type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'single';
 
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 

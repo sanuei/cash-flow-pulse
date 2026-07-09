@@ -86,7 +86,7 @@ export const ImportPayloadSchema = z.object({
   investments: z.array(z.object({
     name: z.string(),
     amount: z.number(),
-    frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+    frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly', 'single']),
     pay_day: z.number().nullable().optional(),
     day_of_week: z.number().nullable().optional(),
     start_date: z.string(),
@@ -150,7 +150,7 @@ export type ImportPayload = z.infer<typeof ImportPayloadSchema>;
 export const InvestmentInputSchema = z.object({
   name: z.string().min(1, '名称不能为空').max(50),
   amount: z.number().nonnegative('金额不能为负'),
-  frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
+  frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly', 'single']),
   // monthly 用 pay_day(1-31)，weekly 用 day_of_week(0-6)，其余为 null
   pay_day: z.number().int().min(1).max(31).nullable().optional(),
   day_of_week: z.number().int().min(0).max(6).nullable().optional(),

@@ -8,19 +8,29 @@ type FormData = {
   note: string | null;
 };
 
+type Tone = 'neutral' | 'success' | 'warning' | 'accent';
+
 function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// 通用「一次性/临时」表单（金额 + 名称 + 日期 + 备注）
+// 临时账单/临时收入/临时投资三处复用，用 amountLabel/tone/namePlaceholder 区分语气
 export function OneOffForm({
   initial,
   onSubmit,
   onCancel,
+  amountLabel = '支出金额',
+  tone = 'warning',
+  namePlaceholder = '如 换轮胎 / 朋友聚餐 / 家电',
 }: {
   initial?: FormData;
   onSubmit: (data: FormData) => Promise<void>;
   onCancel?: () => void;
+  amountLabel?: string;
+  tone?: Tone;
+  namePlaceholder?: string;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [amount, setAmount] = useState(initial?.amount ?? 0);
@@ -55,14 +65,14 @@ export function OneOffForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <HeroAmount label="支出金额" value={amount} onChange={setAmount} tone="warning" />
+      <HeroAmount label={amountLabel} value={amount} onChange={setAmount} tone={tone} />
 
       <Field label="名称">
         <input
           className="input"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="如 换轮胎 / 朋友聚餐 / 家电"
+          placeholder={namePlaceholder}
         />
       </Field>
 

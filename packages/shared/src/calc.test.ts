@@ -1020,4 +1020,11 @@ describe('定投扣款日锚点（每月/每周）', () => {
     // 6/15 早于 start 6/20 → 本周期无发生
     expect(investmentOccurrenceDates(inv, cycleStart, cycleEnd)).toEqual([]);
   });
+
+  it('临时投资(single)只在 start_date 当天发生一次', () => {
+    const inRange = { ...base, start_date: '2026-06-20', frequency: 'single' as const, pay_day: null, day_of_week: null };
+    expect(investmentOccurrenceDates(inRange, cycleStart, cycleEnd).map(formatDate)).toEqual(['2026-06-20']);
+    const outRange = { ...base, start_date: '2026-08-01', frequency: 'single' as const, pay_day: null, day_of_week: null };
+    expect(investmentOccurrenceDates(outRange, cycleStart, cycleEnd)).toEqual([]);
+  });
 });
