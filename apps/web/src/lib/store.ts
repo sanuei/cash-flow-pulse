@@ -18,6 +18,7 @@ import type {
   RecurringIncome,
   Subscription,
   OneOffExpense,
+  OtherAsset,
   DashboardCalc,
   UpcomingExpenses,
   UpcomingIncomes,
@@ -57,6 +58,7 @@ interface AppState {
   incomes: RecurringIncome[];
   subscriptions: Subscription[];
   oneOffs: OneOffExpense[];
+  otherAssets: OtherAsset[];
 
   // ===== 计算结果 =====
   calc: DashboardCalcV2 | null;
@@ -103,6 +105,10 @@ interface AppState {
   updateOneOff: (id: string, data: Partial<OneOffExpense>) => Promise<void>;
   deleteOneOff: (id: string) => Promise<void>;
 
+  addOtherAsset: (data: Partial<OtherAsset>) => Promise<void>;
+  updateOtherAsset: (id: string, data: Partial<OtherAsset>) => Promise<void>;
+  deleteOtherAsset: (id: string) => Promise<void>;
+
   // ===== Auth Actions (v1.0+) =====
   checkSession: () => Promise<void>;
   logout: () => Promise<void>;
@@ -121,6 +127,7 @@ export const useStore = create<AppState>((set, get) => ({
   incomes: [],
   subscriptions: [],
   oneOffs: [],
+  otherAssets: [],
   // ===== 计算 =====
   calc: null,
   prompt: null,
@@ -145,6 +152,7 @@ export const useStore = create<AppState>((set, get) => ({
         incomes: RecurringIncome[];
         subscriptions: Subscription[];
         one_offs: OneOffExpense[];
+        other_assets: OtherAsset[];
         calc: DashboardCalcV2;
         snapshots: Snapshot[];
         prompt: DashboardCalcV2['prompt'] | null;
@@ -160,6 +168,7 @@ export const useStore = create<AppState>((set, get) => ({
         incomes: data.incomes ?? [],
         subscriptions: data.subscriptions ?? [],
         oneOffs: data.one_offs ?? [],
+        otherAssets: data.other_assets ?? [],
         snapshots: data.snapshots,
         calc: data.calc,
         prompt: data.prompt,
@@ -205,7 +214,7 @@ export const useStore = create<AppState>((set, get) => ({
       authStatus: 'unauthenticated',
       config: null,
       cashSources: [], creditCards: [], snapshots: [],
-      investments: [], bills: [], incomes: [], subscriptions: [], oneOffs: [],
+      investments: [], bills: [], incomes: [], subscriptions: [], oneOffs: [], otherAssets: [],
       calc: null, prompt: null, generatedAt: null,
       error: null,
     });
@@ -321,6 +330,17 @@ export const useStore = create<AppState>((set, get) => ({
   async deleteOneOff(id) {
     await apiDelete(`/one-off/${id}`);
     autoSnapshot(get());
+  },
+
+  // ===== Actions: Other assets (其他资产，不参与快照计算，无需 autoSnapshot) =====
+  async addOtherAsset(data) {
+    await apiPost('/other-assets', data);
+  },
+  async updateOtherAsset(id, data) {
+    await apiPut(`/other-assets/${id}`, data);
+  },
+  async deleteOtherAsset(id) {
+    await apiDelete(`/other-assets/${id}`);
   },
 }));
 

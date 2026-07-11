@@ -29,6 +29,23 @@ export interface CashSource {
   updated_at: number;
 }
 
+// === 其他资产（股票/基金、加密货币、房产等，手动估值）===
+// 只做净值追踪展示，不参与 net_available / daily_budget 计算
+// （现金以外的资产波动大、不能说取就取，不该影响"发薪日前能花多少"）
+export type AssetCategory = 'stock' | 'crypto' | 'real_estate' | 'other';
+
+export interface OtherAsset {
+  id: string;
+  user_id: string;
+  name: string;                // 如「纳斯达克ETF」「BTC」「自住房」
+  category: AssetCategory;
+  value: number;                // 当前价值 ≥ 0（手动填写，不自动估值）
+  note: string | null;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+}
+
 // === 信用卡 ===
 export interface CreditCard {
   id: string;

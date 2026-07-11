@@ -21,6 +21,7 @@ import { billRoutes } from './routes/bills';
 import { incomeRoutes } from './routes/incomes';
 import { subscriptionRoutes } from './routes/subscriptions';
 import { oneOffRoutes } from './routes/one_off';
+import { otherAssetRoutes } from './routes/other-assets';
 import { adminRoutes } from './routes/admin';
 // v1.0 新增
 import { authRoutes } from './routes/auth';
@@ -78,6 +79,7 @@ app.route('/api/bills', billRoutes);
 app.route('/api/incomes', incomeRoutes);
 app.route('/api/subscriptions', subscriptionRoutes);
 app.route('/api/one-off', oneOffRoutes);
+app.route('/api/other-assets', otherAssetRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/ai', aiRoutes);
 

@@ -33,6 +33,23 @@ CREATE TABLE IF NOT EXISTS cash_sources (
 
 CREATE INDEX IF NOT EXISTS idx_cash_user ON cash_sources(user_id);
 
+-- === 其他资产表（股票/基金、加密货币、房产等，手动估值，不参与现金流计算）===
+CREATE TABLE IF NOT EXISTS other_assets (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL DEFAULT 'default',
+  name          TEXT NOT NULL,
+  category      TEXT NOT NULL DEFAULT 'other'
+                  CHECK (category IN ('stock','crypto','real_estate','other')),
+  value         REAL NOT NULL DEFAULT 0
+                  CHECK (value >= 0),
+  note          TEXT,
+  sort_order    INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_other_assets_user ON other_assets(user_id);
+
 -- === 信用卡表 ===
 CREATE TABLE IF NOT EXISTS credit_cards (
   id               TEXT PRIMARY KEY,

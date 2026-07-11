@@ -26,6 +26,16 @@ export const CashSourceUpdateSchema = CashSourceBaseSchema.partial().refine(
   { message: '锁定金额不能超过余额', path: ['locked_amount'] }
 );
 
+// === 其他资产（股票/基金、加密货币、房产等）===
+export const OtherAssetInputSchema = z.object({
+  name: z.string().min(1, '名称不能为空').max(50),
+  category: z.enum(['stock', 'crypto', 'real_estate', 'other']),
+  value: z.number().nonnegative('价值不能为负'),
+  note: z.string().max(200).nullable().optional(),
+});
+export const OtherAssetUpdateSchema = OtherAssetInputSchema.partial();
+export type OtherAssetInput = z.infer<typeof OtherAssetInputSchema>;
+
 // === 信用卡 ===
 export const CreditCardInputSchema = z.object({
   name: z.string().min(1, '名称不能为空').max(50),
@@ -121,6 +131,12 @@ export const ImportPayloadSchema = z.object({
     name: z.string(),
     amount: z.number(),
     date: z.string(),
+    note: z.string().nullable().optional(),
+  })).optional(),
+  other_assets: z.array(z.object({
+    name: z.string(),
+    category: z.enum(['stock', 'crypto', 'real_estate', 'other']),
+    value: z.number(),
     note: z.string().nullable().optional(),
   })).optional(),
   snapshots: z.array(z.object({

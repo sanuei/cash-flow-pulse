@@ -38,6 +38,11 @@ import {
   // v1.3 新增
   ChartPie,        // 饼图（收支分布）
   Gauge,           // 仪表盘（花费节奏）
+  // v1.7 新增：其他资产分类
+  LineChart,       // 股票/基金
+  Bitcoin,         // 加密货币
+  Building2,       // 房产
+  Gem,             // 其他资产
   type LucideIcon,
 } from 'lucide-react';
 import { forwardRef, type CSSProperties } from 'react';
@@ -86,7 +91,12 @@ export type IconName =
   | 'search'     // 搜索
   // v1.3 新增
   | 'pie'        // 饼图（收支分布）
-  | 'gauge';     // 仪表盘（花费节奏）
+  | 'gauge'      // 仪表盘（花费节奏）
+  // v1.7 新增：其他资产分类
+  | 'stock'      // 股票/基金
+  | 'crypto'     // 加密货币
+  | 'realestate' // 房产
+  | 'asset-other'; // 其他资产
 
 const map: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -127,6 +137,11 @@ const map: Record<IconName, LucideIcon> = {
   // v1.3 新增
   pie: ChartPie,
   gauge: Gauge,
+  // v1.7 新增
+  stock: LineChart,
+  crypto: Bitcoin,
+  realestate: Building2,
+  'asset-other': Gem,
 };
 
 type Props = {

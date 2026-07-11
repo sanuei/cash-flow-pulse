@@ -30,6 +30,7 @@ dashboardRoute.get('/', async (c) => {
     incomeRows,
     subscriptionRows,
     oneOffRows,
+    otherAssetRows,
   ] = await Promise.all([
     db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>(),
     db.prepare('SELECT * FROM cash_sources WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC').bind(userId).all<any>(),
@@ -40,6 +41,7 @@ dashboardRoute.get('/', async (c) => {
     db.prepare('SELECT * FROM recurring_incomes WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC').bind(userId).all<any>(),
     db.prepare('SELECT * FROM subscriptions WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC').bind(userId).all<any>(),
     db.prepare('SELECT * FROM one_off_expenses WHERE user_id = ? ORDER BY date DESC, created_at DESC').bind(userId).all<any>(),
+    db.prepare('SELECT * FROM other_assets WHERE user_id = ? ORDER BY sort_order ASC, created_at ASC').bind(userId).all<any>(),
   ]);
 
   // 配置不存在则初始化
@@ -140,6 +142,7 @@ dashboardRoute.get('/', async (c) => {
     incomes: incomeRows.results || [],
     subscriptions: subscriptionRows.results || [],
     one_offs: oneOffRows.results || [],
+    other_assets: otherAssetRows.results || [],
     calc,
     snapshots: snapshotRows.results || [],
     generated_at: Date.now(),
