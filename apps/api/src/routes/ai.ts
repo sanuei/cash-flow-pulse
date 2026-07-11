@@ -56,7 +56,7 @@ aiRoutes.post('/diagnose', async (c) => {
   }
 
   // ── 拉数据（与 dashboard 一致）──
-  const [configRow, cashRows, cardRows, snapshotRows, investmentRows, billRows, incomeRows, subscriptionRows, oneOffRows] =
+  const [configRow, cashRows, cardRows, snapshotRows, investmentRows, billRows, incomeRows, subscriptionRows, oneOffRows, otherAssetRows] =
     await Promise.all([
       db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>(),
       db.prepare('SELECT * FROM cash_sources WHERE user_id = ?').bind(userId).all<any>(),
@@ -67,6 +67,7 @@ aiRoutes.post('/diagnose', async (c) => {
       db.prepare('SELECT * FROM recurring_incomes WHERE user_id = ?').bind(userId).all<any>(),
       db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').bind(userId).all<any>(),
       db.prepare('SELECT * FROM one_off_expenses WHERE user_id = ?').bind(userId).all<any>(),
+      db.prepare('SELECT * FROM other_assets WHERE user_id = ?').bind(userId).all<any>(),
     ]);
 
   if (!configRow) {
@@ -107,7 +108,7 @@ aiRoutes.post('/diagnose', async (c) => {
   );
 
   // ── 组装脱敏摘要（仅聚合数字，无任何名称）──
-  const summary = buildSummary(calc, snapshotRows.results || []);
+  const summary = buildSummary(calc, snapshotRows.results || [], otherAssetRows.results || []);
 
   // ── 调 GLM ──
   let analysis: string;
@@ -179,8 +180,16 @@ function parseScore(md: string): number | null {
   return n >= 0 && n <= 100 ? n : null;
 }
 
+// 类别汇总（只出总额，不带任何资产名称）
+const ASSET_CATEGORY_LABEL: Record<string, string> = {
+  stock: '股票基金',
+  crypto: '加密货币',
+  real_estate: '房产',
+  other: '其他',
+};
+
 // ── 脱敏摘要：把 calc 提炼成聚合指标 ─────────────────────────────────
-function buildSummary(calc: ReturnType<typeof computeDashboardV2>, snapshots: any[]) {
+function buildSummary(calc: ReturnType<typeof computeDashboardV2>, snapshots: any[], otherAssets: any[] = []) {
   const ue = calc.upcoming_expenses;
   const totalExpense = calc.total_expense || 0;
   const consume = (ue?.total_credit_card ?? 0) + (ue?.total_bills ?? 0) + (ue?.total_subscriptions ?? 0);
@@ -204,9 +213,19 @@ function buildSummary(calc: ReturnType<typeof computeDashboardV2>, snapshots: an
     }));
 
   // 应急金覆盖月数 = 净可用现金 ÷ 月支出（本期支出≈一个月）；理论基准 3-6 月
+  // 注意：分母/分子均只用净可用现金（流动资产），不含下方「其他资产」——
+  // 股票/加密货币/房产波动大、不能说取就取，不该虚增抗风险能力
   const emergencyMonths = totalExpense > 0
     ? Math.round((calc.net_available / totalExpense) * 10) / 10
     : null;
+
+  // 其他资产：按类别汇总市值（无任何具体资产名称），供 AI 做净值/多元化层面的参考
+  const otherAssetsByCategory: Record<string, number> = {};
+  for (const a of otherAssets) {
+    const label = ASSET_CATEGORY_LABEL[a.category] ?? '其他';
+    otherAssetsByCategory[label] = (otherAssetsByCategory[label] ?? 0) + yen(a.value ?? 0);
+  }
+  const otherAssetsTotal = Object.values(otherAssetsByCategory).reduce((s, v) => s + v, 0);
 
   return {
     本期周期: calc.cycle_id,
@@ -217,6 +236,9 @@ function buildSummary(calc: ReturnType<typeof computeDashboardV2>, snapshots: an
       锁定金额: yen(calc.total_locked),
       净可用现金: yen(calc.net_available),
     },
+    // 股票/基金、加密货币、房产等，仅类别汇总市值（不参与预算/应急金计算，供净值与配置层面参考）
+    其他资产: otherAssetsTotal > 0 ? { 按类别汇总: otherAssetsByCategory, 合计: otherAssetsTotal } : null,
+    总净值_现金加其他资产: yen(calc.net_available) + otherAssetsTotal,
     日均可用预算: yen(calc.daily_budget),
     本期收入总额: yen(calc.total_income),
     本期支出: {
@@ -347,6 +369,10 @@ async function callGLM(env: Env, summary: unknown): Promise<string> {
       '4) 财富增值：有持续投资(投资率>0)加分，但不应以牺牲应急金为代价。',
       '5) 趋势：近期净可用现金稳定或上升为佳，持续下滑扣分。',
     ].join('\n'),
+    '若摘要中含【其他资产】(股票基金/加密货币/房产等按类别汇总的市值)，这是补充参考信息：'
+      + '可用于评论整体净值规模、资产配置是否过度集中于单一类别(如全部加密货币)。'
+      + '但这些资产波动大、不能说取就取，【不算入】应急金覆盖月数或现金流健康评分——那两项只看净可用现金。'
+      + '若该字段为 null 表示用户未记录其他资产，不要因此评价"资产单一"。',
     '注意：每个维度的实际数值、标准、结论、目标缺口已由系统在图表中逐项展示，你【不要】再逐项复述数字，聚焦总体解读、跨维度的风险与综合建议。',
     '请用中文、Markdown 输出，结构如下：',
     '## 总体健康度\n首行必须是「评分：NN/100」(整数)，随后一到两句话结论（点明最拖后腿的 1-2 项）。',
