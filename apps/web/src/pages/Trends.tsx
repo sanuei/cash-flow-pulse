@@ -19,7 +19,7 @@ import { Card } from '../components/Card';
 import { PageTitle } from '../components/PageTitle';
 import { LoadingState, EmptyState } from '../components/States';
 import { CashFlowChart } from '../components/CashFlowChart';
-import { formatYen } from '@cfp/shared';
+import { formatYen, getCalendarMonthDueStatus, getCardAmountForDate } from '@cfp/shared';
 import type { CashflowResult } from '@cfp/shared';
 import { apiGet } from '../lib/api';
 
@@ -126,7 +126,14 @@ export function Trends() {
 
   // 图3：本期支出结构 —— 用 store 主数据估算月均各分类
   const expenseBreakdown = useMemo(() => {
-    const ccTotal = creditCards.reduce((s, c) => s + c.statement_amount, 0);
+    // 信用卡按自然月取实际生效金额(优先按月账单,而非早已停用的默认账单金额，
+    // 否则新卡永远是 0，凭空从饼图里消失)——与"消费"页同一套口径
+    const today = new Date();
+    const weekendShift = config?.weekend_shift ?? false;
+    const ccTotal = creditCards.reduce((s, c) => {
+      const { rawDueDate } = getCalendarMonthDueStatus(c.due_day, today, weekendShift);
+      return s + getCardAmountForDate(c, rawDueDate);
+    }, 0);
     const billTotal = bills.reduce((s, b) => s + b.amount, 0);
     const subTotal = subscriptions.reduce((s, sub) =>
       s + (sub.billing_cycle === 'monthly' ? sub.amount : sub.amount / 12), 0);
@@ -146,7 +153,7 @@ export function Trends() {
       { name: '订阅',   value: subTotal,  color: 'var(--c-success)' },
       { name: '投资',   value: invTotal,  color: 'var(--c-invest)' },
     ].filter((d) => d.value > 0);
-  }, [creditCards, bills, investments, subscriptions]);
+  }, [creditCards, bills, investments, subscriptions, config]);
 
   // 顶部统计卡
   const latest = chartData[chartData.length - 1];

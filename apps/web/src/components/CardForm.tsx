@@ -185,7 +185,7 @@ export function CardForm({
         )}
       </div>
 
-      {/* 卡片设置：名称/扣款日/默认金额 —— 一次性设定，不常改，收在下方 */}
+      {/* 卡片设置：名称/扣款日 —— 一次性设定，不常改，收在下方 */}
       <div className="border-t border-[var(--c-border)] pt-4 space-y-4">
         <Field label="名称">
           <input
@@ -205,13 +205,6 @@ export function CardForm({
               min="1" max="31" step="1"
             />
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[14px] text-notion-text-muted">号</span>
-          </div>
-        </Field>
-
-        {/* 默认账单金额：未单独填写的月份沿用此值，也用于预测未来月 */}
-        <Field label="默认账单金额" hint="未在上方单独填写的月份，按此金额估算（可留空）">
-          <div className="max-w-[200px]">
-            <MoneyInput value={amount} onChange={setAmount} ariaLabel="默认账单金额" />
           </div>
         </Field>
       </div>
