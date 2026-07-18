@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icon } from './Icon';
 import { MoneyInput } from './MoneyInput';
-import { Field, FormError, FormActions } from './FormKit';
+import { Field, Collapsible, FormError, FormActions } from './FormKit';
 
 type FormData = {
   name: string;
@@ -10,13 +10,16 @@ type FormData = {
   monthly_statements?: Record<string, number>;
 };
 
-type MonthRow = { month: string; amount: number };
+// _key 是纯前端本地稳定标识（不落库），避免用数组下标当 React key——
+// 一旦引入"近期/更早"分组显示，下标会随分组/排序变化，用下标当 key 会导致
+// 行内部状态（如输入焦点）错位到别的行上
+type MonthRow = { _key: number; month: string; amount: number };
 
 // Record<YYYY-MM, number> → 按月份排序的行数组
-function toRows(map?: Record<string, number>): MonthRow[] {
+function toRows(map: Record<string, number> | undefined, nextKey: () => number): MonthRow[] {
   if (!map) return [];
   return Object.entries(map)
-    .map(([month, amount]) => ({ month, amount }))
+    .map(([month, amount]) => ({ _key: nextKey(), month, amount }))
     .sort((a, b) => a.month.localeCompare(b.month));
 }
 
@@ -32,6 +35,11 @@ function currentMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// 按月份字符串取"最晚"的一行（不依赖数组顺序，避免手动改月份后顺序错乱）
+function latestRow(rows: MonthRow[]): MonthRow | undefined {
+  return rows.reduce<MonthRow | undefined>((max, r) => (!max || r.month > max.month ? r : max), undefined);
+}
+
 export function CardForm({
   initial,
   onSubmit,
@@ -41,10 +49,13 @@ export function CardForm({
   onSubmit: (data: FormData) => Promise<void>;
   onCancel?: () => void;
 }) {
+  const keyCounter = useRef(0);
+  const nextKey = () => ++keyCounter.current;
+
   const [name, setName] = useState(initial?.name ?? '');
   const [amount, setAmount] = useState(initial?.statement_amount ?? 0);
   const [dueDay, setDueDay] = useState(initial?.due_day ?? 25);
-  const [rows, setRows] = useState<MonthRow[]>(toRows(initial?.monthly_statements));
+  const [rows, setRows] = useState<MonthRow[]>(toRows(initial?.monthly_statements, nextKey));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,27 +64,44 @@ export function CardForm({
       setName(initial.name);
       setAmount(initial.statement_amount);
       setDueDay(initial.due_day);
-      setRows(toRows(initial.monthly_statements));
+      setRows(toRows(initial.monthly_statements, nextKey));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 
-  // 添加一行：空表→当月；否则→最后一行的下个月。金额沿用最近一行 / 默认值
+  // 添加一行：空表→当月；否则→"月份最晚"那一行的下个月（不依赖数组顺序）。
+  // 金额沿用该行 / 默认值
   const addRow = () => {
     setRows((r) => {
-      const month = r.length > 0 ? shiftMonth(r[r.length - 1]!.month, 1) : currentMonth();
-      const prefill = r.length > 0 ? r[r.length - 1]!.amount : amount;
-      return [...r, { month, amount: prefill }];
+      const latest = latestRow(r);
+      const month = latest ? shiftMonth(latest.month, 1) : currentMonth();
+      const prefill = latest ? latest.amount : amount;
+      return [...r, { _key: nextKey(), month, amount: prefill }];
     });
   };
-  const updateRow = (i: number, patch: Partial<MonthRow>) =>
-    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
-  const removeRow = (i: number) => setRows((r) => r.filter((_, idx) => idx !== i));
+  const updateRow = (key: number, patch: Partial<MonthRow>) =>
+    setRows((r) => r.map((row) => (row._key === key ? { ...row, ...patch } : row)));
+  const removeRow = (key: number) => setRows((r) => r.filter((row) => row._key !== key));
+
+  // 重复月份检测：同一月份出现 ≥2 次时，之前是静默丢弃、只留最后一条——
+  // 现在改为在行上高亮提示 + 阻止保存，避免辛苦填的金额无声消失
+  const monthCounts = new Map<string, number>();
+  for (const row of rows) monthCounts.set(row.month, (monthCounts.get(row.month) ?? 0) + 1);
+  const duplicateMonths = [...monthCounts.entries()].filter(([, n]) => n > 1).map(([m]) => m);
+
+  const cm = currentMonth();
+  const recentRows = rows.filter((r) => r.month >= cm).sort((a, b) => a.month.localeCompare(b.month));
+  const olderRows = rows.filter((r) => r.month < cm).sort((a, b) => a.month.localeCompare(b.month));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!name.trim()) { setError('名称不能为空'); return; }
     if (dueDay < 1 || dueDay > 31) { setError('扣款日必须在 1-31 之间'); return; }
+    if (duplicateMonths.length > 0) {
+      setError(`月份重复：${duplicateMonths.join('、')} 各出现了多次，请合并或删除多余的行`);
+      return;
+    }
     const map: Record<string, number> = {};
     for (const row of rows) {
       if (!row.month) continue;
@@ -88,6 +116,32 @@ export function CardForm({
     } finally {
       setSaving(false);
     }
+  };
+
+  const renderRow = (row: MonthRow) => {
+    const isDup = duplicateMonths.includes(row.month);
+    return (
+      <div key={row._key} className="flex items-center gap-2">
+        <input
+          type="month"
+          className={`input font-numeric flex-1 min-w-0 ${isDup ? 'border-[var(--c-warning)]' : ''}`}
+          value={row.month}
+          onChange={(e) => updateRow(row._key, { month: e.target.value })}
+          aria-label="月份"
+        />
+        <div className="flex-1 min-w-0">
+          <MoneyInput value={row.amount} onChange={(n) => updateRow(row._key, { amount: n })} ariaLabel="该月账单金额" />
+        </div>
+        <button
+          type="button"
+          onClick={() => removeRow(row._key)}
+          className="flex-shrink-0 p-2 rounded-[var(--radius-sm)] text-notion-text-muted hover:text-notion-warning hover:bg-[var(--c-warning-soft)] transition-colors"
+          aria-label="删除该月"
+        >
+          <Icon name="close" size={15} strokeWidth={1.75} />
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -110,29 +164,15 @@ export function CardForm({
         </div>
 
         {rows.length > 0 ? (
-          <div className="space-y-2 mt-3">
-            {rows.map((row, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <input
-                  type="month"
-                  className="input font-numeric flex-1 min-w-0"
-                  value={row.month}
-                  onChange={(e) => updateRow(i, { month: e.target.value })}
-                  aria-label="月份"
-                />
-                <div className="flex-1 min-w-0">
-                  <MoneyInput value={row.amount} onChange={(n) => updateRow(i, { amount: n })} ariaLabel="该月账单金额" />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeRow(i)}
-                  className="flex-shrink-0 p-2 rounded-[var(--radius-sm)] text-notion-text-muted hover:text-notion-warning hover:bg-[var(--c-warning-soft)] transition-colors"
-                  aria-label="删除该月"
-                >
-                  <Icon name="close" size={15} strokeWidth={1.75} />
-                </button>
-              </div>
-            ))}
+          <div className="mt-3 space-y-3">
+            {recentRows.length > 0 && (
+              <div className="space-y-2">{recentRows.map(renderRow)}</div>
+            )}
+            {olderRows.length > 0 && (
+              <Collapsible label={`更早的月份 (${olderRows.length})`} defaultOpen={recentRows.length === 0}>
+                <div className="space-y-2">{olderRows.map(renderRow)}</div>
+              </Collapsible>
+            )}
           </div>
         ) : (
           <button
