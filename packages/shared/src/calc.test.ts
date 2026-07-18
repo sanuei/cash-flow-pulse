@@ -12,6 +12,7 @@ import {
   daysToNextPayday,
   isCardActiveInCycle,
   getCardAmountForDate,
+  getCalendarMonthDueStatus,
   computeDashboard,
   detectUnchanged,
   formatYen,
@@ -1026,5 +1027,44 @@ describe('定投扣款日锚点（每月/每周）', () => {
     expect(investmentOccurrenceDates(inRange, cycleStart, cycleEnd).map(formatDate)).toEqual(['2026-06-20']);
     const outRange = { ...base, start_date: '2026-08-01', frequency: 'single' as const, pay_day: null, day_of_week: null };
     expect(investmentOccurrenceDates(outRange, cycleStart, cycleEnd)).toEqual([]);
+  });
+});
+
+describe('getCalendarMonthDueStatus（消费页按自然月展示，不受发薪周期影响）', () => {
+  it('今天18号，扣款日27号（同月未到）→ 未扣，9天后', () => {
+    const today = new Date(2026, 6, 18); // 7/18
+    const r = getCalendarMonthDueStatus(27, today);
+    expect(r.paid).toBe(false);
+    expect(r.daysDiff).toBe(9);
+    expect(formatDate(r.dueDate)).toBe('2026-07-27');
+  });
+
+  it('今天28号，扣款日27号（同月已过）→ 已扣，1天前', () => {
+    const today = new Date(2026, 6, 28); // 7/28
+    const r = getCalendarMonthDueStatus(27, today);
+    expect(r.paid).toBe(true);
+    expect(r.daysDiff).toBe(1);
+    expect(formatDate(r.dueDate)).toBe('2026-07-27');
+  });
+
+  it('跨自然月：8月1号，扣款日27号 → 参照点换成本月27号，未扣', () => {
+    const today = new Date(2026, 7, 1); // 8/1
+    const r = getCalendarMonthDueStatus(27, today);
+    expect(r.paid).toBe(false);
+    expect(r.daysDiff).toBe(26);
+    expect(formatDate(r.dueDate)).toBe('2026-08-27');
+  });
+
+  it('今天就是扣款日 → 未扣，0天', () => {
+    const today = new Date(2026, 6, 27);
+    const r = getCalendarMonthDueStatus(27, today);
+    expect(r.paid).toBe(false);
+    expect(r.daysDiff).toBe(0);
+  });
+
+  it('due_day 超过当月天数按月末（2月31→28）', () => {
+    const today = new Date(2026, 1, 10); // 2026-02-10（2026 非闰年，2月28天）
+    const r = getCalendarMonthDueStatus(31, today);
+    expect(formatDate(r.dueDate)).toBe('2026-02-28');
   });
 });

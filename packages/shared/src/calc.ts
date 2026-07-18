@@ -246,6 +246,32 @@ export function getCardAmountForDate(card: CreditCard, dueDate: Date): number {
   return card.statement_amount;
 }
 
+/**
+ * 按"自然月"（而非发薪周期）判断某个 due_day 本月的扣款状态——
+ * 用于"消费"页信用卡/固定账单的展示（"几天后扣款" / "N 天前已扣"），
+ * 与 net_available/daily_budget 用的发薪周期语义完全独立、互不影响：
+ * 预算计算依旧按发薪周期（回答"到发薪日前还能花多少"），这里只回答
+ * "这张卡/这笔账单本月的这一期扣了没"——避免跨月的发薪周期窗口把上个月
+ * 已经过去很久的扣款日当成"本期"来显示，让用户误以为"最近才扣"。
+ *
+ * 规则：取 today 所在自然月里 due_day 对应的那一天（大于当月天数按月末，
+ * weekend_shift 开启时顺延），today 在它之前/当天 → 未扣；之后 → 已扣。
+ * 一旦跨入新的自然月，参照点自动换成新月份的那一天。
+ */
+export function getCalendarMonthDueStatus(
+  dueDay: number,
+  today: Date,
+  weekendShift = false,
+): { paid: boolean; daysDiff: number; dueDate: Date; rawDueDate: Date } {
+  const rawDueDate = getPaydayInMonth(today.getFullYear(), today.getMonth(), dueDay);
+  const dueDate = weekendShift ? shiftToWorkday(rawDueDate) : rawDueDate;
+  const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const dueMid = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+  const paid = dueMid < todayMid;
+  const daysDiff = Math.abs(diffDays(todayMid, dueMid));
+  return { paid, daysDiff, dueDate, rawDueDate };
+}
+
 // ============================================================
 // 仪表盘核心计算
 // ============================================================

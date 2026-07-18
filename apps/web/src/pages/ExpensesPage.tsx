@@ -10,7 +10,7 @@ import { BillForm } from '../components/BillForm';
 import { CardForm } from '../components/CardForm';
 import { OneOffForm } from '../components/OneOffForm';
 import { PageTitle } from '../components/PageTitle';
-import { formatYen } from '@cfp/shared';
+import { formatYen, getCalendarMonthDueStatus, getCardAmountForDate } from '@cfp/shared';
 import type { RecurringBill, CreditCard, OneOffExpense } from '@cfp/shared';
 
 // YYYY-MM-DD → "7月15日"
@@ -21,6 +21,7 @@ function formatMonthDay(iso: string): string {
 
 export function ExpensesPage() {
   const calc = useStore((s) => s.calc);
+  const config = useStore((s) => s.config);
   const creditCardsAll = useStore((s) => s.creditCards);
   const billsAll = useStore((s) => s.bills);
   const oneOffsAll = useStore((s) => s.oneOffs);
@@ -47,24 +48,35 @@ export function ExpensesPage() {
   // 展示按日期倒序(新的在前)
   const oneOffRows = [...oneOffs].sort((a, b) => b.date.localeCompare(a.date));
 
-  // 信用卡:活跃卡(本期要还)排前,已扣(本周期内扣款日已过)排中间,非活跃排后
-  // v1.4.4:已扣的卡虽然不再算入 net_available,但仍展示(用"已扣"badge 标注,灰色 tone)
-  const cardRows = [
-    ...calc.active_cards.map((ac) => ({ card: ac.card, status: 'active' as const, days_until_due: ac.days_until_due, amount: ac.amount })),
-    ...calc.paid_this_cycle.map((ac) => ({ card: ac.card, status: 'paid' as const, days_until_due: ac.days_until_due, amount: ac.amount })),
-    ...calc.inactive_cards.map((c) => ({ card: c, status: 'inactive' as const, days_until_due: -1, amount: c.statement_amount })),
-  ].filter((r) => notPending(r.card));
+  // 信用卡/固定账单展示按"自然月"（而非发薪周期）判断状态——今天在这个月的扣款日
+  // 之前就是"待扣"，之后就是"已扣"，跨月自动换成新月份的扣款日，不会把上个月早就
+  // 过去的扣款日当成"最近"来显示。这与净可用现金/日均预算用的发薪周期计算完全独立，
+  // 互不影响（预算算法依旧按发薪周期，这里只回答"这个月扣了没"）
+  const today = new Date();
+  const weekendShift = config?.weekend_shift ?? false;
+
+  // 信用卡：没有账单(该月无覆盖值也无可用默认金额，amount=0) 排最后；
+  // 待扣(未扣、amount>0) 排前，已扣排中间
+  const cardRows = creditCards
+    .map((card) => {
+      const { paid, daysDiff, rawDueDate } = getCalendarMonthDueStatus(card.due_day, today, weekendShift);
+      const amount = getCardAmountForDate(card, rawDueDate);
+      const status: 'active' | 'paid' | 'none' = amount === 0 ? 'none' : paid ? 'paid' : 'active';
+      return { card, status, days_until_due: daysDiff, amount };
+    })
+    .sort((a, b) => {
+      const order = { active: 0, paid: 1, none: 2 } as const;
+      return order[a.status] - order[b.status] || a.days_until_due - b.days_until_due;
+    });
   const cardTotal = cardRows.reduce((s, r) => s + r.amount, 0);
 
-  // 固定账单:同信用卡逻辑,按本周期扣款日是否已过区分"待扣/已扣"(calc.upcoming_expenses.bills 提供)
-  // 未扣排前,已扣排后;非本期(cycle_paid undefined,理论上极少见)排最后
-  const billStatusMap = new Map(calc.upcoming_expenses.bills.map((b) => [b.id, b]));
+  // 固定账单：未扣排前，已扣排后
   const billRows = bills
     .map((bill) => {
-      const status = billStatusMap.get(bill.id);
-      return { bill, cyclePaid: status?.cycle_paid, cycleDaysUntil: status?.cycle_days_until };
+      const { paid, daysDiff } = getCalendarMonthDueStatus(bill.due_day, today, weekendShift);
+      return { bill, cyclePaid: paid, cycleDaysUntil: daysDiff };
     })
-    .sort((a, b) => Number(a.cyclePaid ?? false) - Number(b.cyclePaid ?? false));
+    .sort((a, b) => Number(a.cyclePaid) - Number(b.cyclePaid) || a.cycleDaysUntil - b.cycleDaysUntil);
   const billTotal = bills.reduce((s, b) => s + b.amount, 0);
 
   return (
@@ -122,7 +134,7 @@ export function ExpensesPage() {
         {(openEdit) =>
           cardRows.map(({ card, status, days_until_due, amount }) => {
             const hasMonthly = card.monthly_statements && Object.keys(card.monthly_statements).length > 0;
-            const tone = status === 'paid' ? 'neutral' : 'warning';
+            const tone = status === 'active' ? 'warning' : 'neutral';
             const moneySign = status === 'active' ? 'negative' : 'neutral';
             return (
             <EntityRow
@@ -138,14 +150,14 @@ export function ExpensesPage() {
                     </span>
                   ) : status === 'paid' ? (
                     <span className="badge-success badge text-[10px] px-1.5 py-0.5">
-                      {days_until_due === 0 ? '今天已扣' : `${Math.abs(days_until_due)} 天前已扣`}
+                      {days_until_due === 0 ? '今天已扣' : `${days_until_due} 天前已扣`}
                     </span>
                   ) : (
-                    <span className="badge-muted badge text-[10px] px-1.5 py-0.5">非本期</span>
+                    <span className="badge-muted badge text-[10px] px-1.5 py-0.5">没有账单</span>
                   )}
                 </>
               }
-              subtitle={`每月 ${card.due_day} 号扣款 · 账单 ${formatYen(amount)}${hasMonthly ? ' · 按月账单' : ''}`}
+              subtitle={`每月 ${card.due_day} 号扣款${amount > 0 ? ` · 账单 ${formatYen(amount)}` : ''}${hasMonthly ? ' · 按月账单' : ''}`}
               money={<Money amount={amount} size="md" sign={moneySign} />}
               onEdit={() => openEdit(card)}
               onDelete={() =>
@@ -210,15 +222,15 @@ export function ExpensesPage() {
               title={
                 <>
                   {b.name}{' '}
-                  {cyclePaid === true ? (
+                  {cyclePaid ? (
                     <span className="badge-success badge text-[10px] px-1.5 py-0.5">
                       {cycleDaysUntil === 0 ? '今天已扣' : `${cycleDaysUntil} 天前已扣`}
                     </span>
-                  ) : cyclePaid === false ? (
+                  ) : (
                     <span className="badge-warning badge text-[10px] px-1.5 py-0.5">
                       {cycleDaysUntil === 0 ? '今天扣款' : `${cycleDaysUntil} 天后扣款`}
                     </span>
-                  ) : null}
+                  )}
                 </>
               }
               subtitle={`每月 ${b.due_day} 号扣款`}
