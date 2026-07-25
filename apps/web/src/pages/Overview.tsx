@@ -292,7 +292,9 @@ export function Overview() {
         />
       )}
 
-      {/* 收支图：有本期收入时 = 收入去向；无收入时 = 支出分布 */}
+      {/* 收支图：有本期收入时 = 收入去向；无收入时 = 支出分布
+            注：公式行已合并进 FlowChartRow 内部（v1.7 升级：从卡片底部 11px 灰字
+            升级到圆环下方的视觉胶囊），这里不再重复。 */}
       {(totalConsume > 0 || totalInvestment > 0) && (
         <Card
           title={
@@ -308,13 +310,6 @@ export function Overview() {
             netFlow={netFlow}
             hasIncome={totalIncome > 0}
           />
-          <div className="mt-3 pt-3 border-t border-[var(--c-border)] text-[11px] text-notion-text-muted leading-relaxed">
-            {totalIncome > 0
-              ? '结余 = 本期收入 − 消费 − 投资'
-              : netFlow > 0
-              ? '结余 = 净可用现金 − 账单 − 订阅 − 投资（信用卡已在净可用中扣除）'
-              : '本期暂无收入到账；在「收入」页录入后可查看结余'}
-          </div>
         </Card>
       )}
 
@@ -895,34 +890,93 @@ function FlowChartRow({
   const centerValue = total;
 
   return (
-    <div className="flex items-center gap-4">
-      <FlowDonut segments={segments} centerLabel={centerLabel} centerValue={centerValue} />
-      <div className="flex-1 min-w-0 space-y-1.5">
-        {segments.map((seg) => {
-          const pct = Math.round((seg.value / total) * 100);
-          const isNet = seg.label === '结余';
-          return (
-            <div key={seg.label} className="flex items-center gap-2 text-[12px]">
-              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: seg.color }} />
-              <span className={`flex-shrink-0 ${isNet ? 'text-notion-success font-semibold' : 'text-notion-text-muted'}`}>
-                {seg.label}
-              </span>
-              <span className={`font-numeric ml-auto ${isNet ? 'text-notion-success font-semibold' : 'text-notion-text'}`}>
-                {isNet ? `+${formatYen(seg.value)}` : formatYen(seg.value)}
-              </span>
-              <span className={`w-8 text-right flex-shrink-0 ${isNet ? 'text-notion-success font-semibold' : 'text-notion-text-muted'}`}>
-                {pct}%
+    <div className="space-y-4">
+      {/* 圆环 + 图例：flex 布局，圆环放大到 140px */}
+      <div className="flex items-center gap-5">
+        <FlowDonut segments={segments} centerLabel={centerLabel} centerValue={centerValue} />
+        <div className="flex-1 min-w-0 space-y-2.5">
+          {segments.map((seg) => {
+            const pct = Math.round((seg.value / total) * 100);
+            const isNet = seg.label === '结余';
+            // 流出（消费/投资）用 warning 文字弱化；结余用 success 强调
+            // 统一前缀符号：流出 "-", 留存 "+" → 语义一目了然
+            const sign = isNet ? '+' : '−';
+            const valueClass = isNet ? 'text-notion-success font-semibold' : 'text-notion-text';
+            return (
+              <div key={seg.label} className="group/legend flex items-center gap-2.5 text-[13px]">
+                <span
+                  className="w-3 h-3 rounded-[3px] flex-shrink-0 transition-transform duration-[var(--dur-fast)] group-hover/legend:scale-110"
+                  style={{ background: seg.color }}
+                  aria-hidden="true"
+                />
+                <span className={`flex-shrink-0 ${isNet ? 'text-notion-success font-semibold' : 'text-notion-text-secondary'}`}>
+                  {seg.label}
+                </span>
+                <span className={`font-numeric ml-auto tabular-nums ${valueClass}`}>
+                  {sign}{formatYen(seg.value)}
+                </span>
+                <span
+                  className={`w-10 text-right flex-shrink-0 font-numeric tabular-nums ${
+                    isNet ? 'text-notion-success font-semibold' : 'text-notion-text-muted'
+                  }`}
+                >
+                  {pct}%
+                </span>
+              </div>
+            );
+          })}
+          {/* 超支行：仅在有收入且支出超过收入时显示 */}
+          {overspend && (
+            <div className="flex items-center gap-2.5 text-[13px] pt-2 border-t border-[var(--c-border)] mt-1">
+              <span className="w-3 h-3 rounded-[3px] flex-shrink-0 bg-[var(--c-warning)]" aria-hidden="true" />
+              <span className="text-notion-warning font-semibold flex-shrink-0">超支</span>
+              <span className="font-numeric ml-auto tabular-nums text-notion-warning font-semibold">
+                −{formatYen(Math.abs(netFlow))}
               </span>
             </div>
-          );
-        })}
-        {/* 超支行：仅在有收入且支出超过收入时显示 */}
-        {overspend && (
-          <div className="flex items-center gap-2 text-[12px] pt-1.5 border-t border-[var(--c-border)] mt-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0 bg-[var(--c-warning)]" />
-            <span className="text-notion-warning font-semibold flex-shrink-0">超支</span>
-            <span className="font-numeric text-notion-warning font-semibold ml-auto">{formatYen(netFlow)}</span>
-          </div>
+          )}
+        </div>
+      </div>
+
+      {/* 验算公式（v1.7 升级：从卡片底部 11px 灰字提升到圆环下方的视觉胶囊） */}
+      <div
+        className="
+          flex items-center justify-center gap-2 px-3 py-2
+          rounded-[var(--radius-md)]
+          bg-[var(--c-bg-alt)]
+          border border-[var(--c-border)]
+          font-mono text-[12px] tabular-nums
+          text-notion-text-secondary
+        "
+        role="note"
+        aria-label="本期收入验算公式"
+      >
+        {hasIncome ? (
+          <>
+            <span className="text-notion-text font-semibold">{formatYen(centerValue)}</span>
+            <span className="opacity-60">=</span>
+            <span>{formatYen(consume)}</span>
+            <span className="opacity-60">+</span>
+            <span>{formatYen(invest)}</span>
+            {netFlow > 0 && (
+              <>
+                <span className="opacity-60">+</span>
+                <span className="text-notion-success font-semibold">{formatYen(netFlow)}</span>
+              </>
+            )}
+            {overspend && (
+              <>
+                <span className="opacity-60">−</span>
+                <span className="text-notion-warning font-semibold">{formatYen(Math.abs(netFlow))}</span>
+              </>
+            )}
+          </>
+        ) : netFlow > 0 ? (
+          <>
+            <span>结余 = 净可用 − 账单 − 订阅 − 投资</span>
+          </>
+        ) : (
+          <span>本期暂无收入到账</span>
         )}
       </div>
     </div>
@@ -935,13 +989,16 @@ function FlowDonut({
   const total = segments.reduce((s, x) => s + x.value, 0);
   if (total <= 0) return null;
 
-  const cx = 50, cy = 50, R = 45, rInner = 33;
+  // v1.7 视觉升级：圆环从 104×104 放大到 140×140；环带从 12px 加粗到 16px；
+  // 段间间隙从 0.04 弧度（≈2.3°）加大到 0.08（≈4.6°），让三段弧肉眼可分；
+  // 中心数字从 11px 提升到 16px 粗体 + success 色（与结余同色强调总收入）。
+  const cx = 60, cy = 60, R = 52, rInner = 36;
   const hasGap = segments.length > 1;
   let angle = -Math.PI / 2;
 
   const arcs = segments.map((seg) => {
     const sweep = (seg.value / total) * 2 * Math.PI;
-    const gap = hasGap ? 0.04 : 0;
+    const gap = hasGap ? 0.08 : 0;
     const sa = angle + gap / 2;
     const ea = angle + sweep - gap / 2;
     angle += sweep;
@@ -950,6 +1007,11 @@ function FlowDonut({
     const large = actualSweep > Math.PI ? 1 : 0;
     const cos1 = Math.cos(sa), sin1 = Math.sin(sa);
     const cos2 = Math.cos(ea), sin2 = Math.sin(ea);
+    // 段中点角度（用于外侧标注百分比位置）
+    const mid = sa + actualSweep / 2;
+    const labelR = R + 9;
+    const labelX = cx + labelR * Math.cos(mid);
+    const labelY = cy + labelR * Math.sin(mid);
     return {
       d: [
         `M${cx + R * cos1},${cy + R * sin1}`,
@@ -959,13 +1021,21 @@ function FlowDonut({
         'Z',
       ].join(' '),
       color: seg.color,
+      // 仅显示 ≥8% 的段，过滤掉太细的标签避免重叠（视觉噪声过滤）
+      label: (seg.value / total) >= 0.08 ? {
+        x: labelX,
+        y: labelY,
+        pct: Math.round((seg.value / total) * 100),
+      } : null,
     };
-  }).filter(Boolean) as { d: string; color: string }[];
+  }).filter(Boolean) as {
+    d: string; color: string; label: { x: number; y: number; pct: number } | null;
+  }[];
 
   return (
     <svg
-      width="104" height="104"
-      viewBox="0 0 100 100"
+      width="140" height="140"
+      viewBox="0 0 120 120"
       className="flex-shrink-0"
       role="img"
       aria-label={`${centerLabel} ${formatYen(centerValue)}`}
@@ -973,13 +1043,43 @@ function FlowDonut({
       {arcs.map((arc, i) => (
         <path key={i} d={arc.d} style={{ fill: arc.color }} />
       ))}
-      <text x="50" y="46" textAnchor="middle" style={{ fontSize: '7px', fill: 'var(--c-text-muted)' }}>
+      {/* 段外侧百分比标签（小段不显示，避免和别的标签/中心数字重叠） */}
+      {arcs.map((arc, i) =>
+        arc.label ? (
+          <text
+            key={`lbl-${i}`}
+            x={arc.label.x}
+            y={arc.label.y}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            className="font-numeric"
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              fill: 'var(--c-text)',
+              paintOrder: 'stroke',
+              stroke: 'var(--c-bg-elev)',
+              strokeWidth: 3,
+              strokeLinejoin: 'round',
+            }}
+          >
+            {arc.label.pct}%
+          </text>
+        ) : null
+      )}
+      {/* 中心标签：标题小注 + 大数字（数字用 success 色强调总收入） */}
+      <text
+        x="60" y="50"
+        textAnchor="middle"
+        style={{ fontSize: '8.5px', fill: 'var(--c-text-muted)', letterSpacing: '0.05em' }}
+      >
         {centerLabel}
       </text>
       <text
-        x="50" y="59" textAnchor="middle"
+        x="60" y="70"
+        textAnchor="middle"
         className="font-numeric"
-        style={{ fontSize: '11px', fontWeight: 600, fill: 'var(--c-text)' }}
+        style={{ fontSize: '16px', fontWeight: 700, fill: 'var(--c-success)' }}
       >
         {formatYen(centerValue)}
       </text>
