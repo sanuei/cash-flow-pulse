@@ -891,11 +891,13 @@ function FlowChartRow({
 
   return (
     <div className="space-y-4">
-      {/* 圆环 + 图例：v1.7.1 调整为 items-start + gap-4，
-          圆环靠顶左对齐，让大圆环垂直占满但水平只占左 ~30%，给图例让出横向空间 */}
-      <div className="flex items-start gap-4">
+      {/* 圆环 + 图例：v1.7.2 仅压缩图例区，圆环保持 168px
+          - gap-4→gap-3：圆环与图例间距缩 4px
+          - 图例 max-w-[220px]：限制图例区最大宽度，圆环获得更多横向空间
+            （之前图例 flex-1 会"吃满"圆环剩下的所有宽度，导致左轻右重） */}
+      <div className="flex items-start gap-3">
         <FlowDonut segments={segments} centerLabel={centerLabel} centerValue={centerValue} />
-        <div className="flex-1 min-w-0 space-y-1.5 pt-1">
+        <div className="flex-1 min-w-0 max-w-[220px] space-y-1 pt-1">
           {segments.map((seg) => {
             const pct = Math.round((seg.value / total) * 100);
             const isNet = seg.label === '结余';
@@ -904,7 +906,7 @@ function FlowChartRow({
             const sign = isNet ? '+' : '−';
             const valueClass = isNet ? 'text-notion-success font-semibold' : 'text-notion-text';
             return (
-              <div key={seg.label} className="group/legend flex items-center gap-2 text-[13px]">
+              <div key={seg.label} className="group/legend flex items-center gap-1.5 text-[13px]">
                 <span
                   className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0 transition-transform duration-[var(--dur-fast)] group-hover/legend:scale-110"
                   style={{ background: seg.color }}
@@ -917,7 +919,7 @@ function FlowChartRow({
                   {sign}{formatYen(seg.value)}
                 </span>
                 <span
-                  className={`w-9 text-right flex-shrink-0 font-numeric tabular-nums ${
+                  className={`w-8 text-right flex-shrink-0 font-numeric tabular-nums ${
                     isNet ? 'text-notion-success font-semibold' : 'text-notion-text-muted'
                   }`}
                 >
@@ -928,7 +930,7 @@ function FlowChartRow({
           })}
           {/* 超支行：仅在有收入且支出超过收入时显示 */}
           {overspend && (
-            <div className="flex items-center gap-2 text-[13px] pt-1.5 border-t border-[var(--c-border)] mt-1">
+            <div className="flex items-center gap-1.5 text-[13px] pt-1.5 border-t border-[var(--c-border)] mt-1">
               <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0 bg-[var(--c-warning)]" aria-hidden="true" />
               <span className="text-notion-warning font-semibold flex-shrink-0">超支</span>
               <span className="font-numeric ml-auto tabular-nums text-notion-warning font-semibold">
