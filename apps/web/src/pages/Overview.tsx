@@ -293,13 +293,13 @@ export function Overview() {
       )}
 
       {/* 收支图：有本期收入时 = 收入去向；无收入时 = 支出分布
-            注：公式行已合并进 FlowChartRow 内部（v1.7 升级：从卡片底部 11px 灰字
-            升级到圆环下方的视觉胶囊），这里不再重复。 */}
+            v1.8 起内部是「总额 + 横向堆叠条 + 图例」（原环形图的段外标签会被
+            viewBox 裁掉，详见 FlowChartRow 顶部注释） */}
       {(totalConsume > 0 || totalInvestment > 0) && (
         <Card
           title={
             <div className="flex items-center gap-2">
-              <Icon name="pie" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
+              <Icon name="bar-chart" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
               <span>{totalIncome > 0 ? '本期收入去向' : netFlow > 0 ? '账户分配概览' : '本期支出分布'}</span>
             </div>
           }
@@ -862,11 +862,22 @@ function IncomeRow({ item }: { item: UpcomingIncomeItem }) {
   );
 }
 
-// ── 本期收入去向环形图 ──────────────────────────────────────────────────────
-// 分母 = 本期收入（纯流量）。消费 + 投资 + 净流入 = 本期收入。
+// ── 本期收入去向：总额 + 横向堆叠条 + 图例 ──────────────────────────────────
+// 分母 = 本期收入（纯流量）。消费 + 投资 + 结余 = 本期收入。
 // 若超支（净流入<0），分母退化为本期支出，并单列「超支」。
+//
+// v1.8 重新设计（原本是环形图 + 段外百分比标签）：
+//   1) 环形图的段外标签半径 labelR = R+12 = 70，圆心 (70,70) → 最大坐标正好
+//      140 = viewBox 边界，偏右下的段标签会被裁掉（线上出现过 "52%" 只剩 "52"）。
+//      part-to-whole 改用横向堆叠条：没有极坐标，就永远不会有标签溢出。
+//   2) 百分比原来出现三遍（段外标签 + 图例 + 底部公式），现在只在图例出现一次。
+//   3) 原布局用 ml-auto 把图例推到右缘，圆环与图例之间被撑出一大片空白；
+//      堆叠条按容器宽度铺满，横向空间利用率更高，窄屏也不用挤一个 168px 的圆。
+//   4) 段间用 2px 卡面色缝隙分隔（而不是给每段描边），两端 4px 圆角。
+//   5) 底部等宽字体的验算公式去掉——堆叠条本身就是"构成"的可视化，
+//      图例已给出精确数字，再列一行公式是第三次重复。
 
-type DonutSeg = { value: number; color: string; label: string };
+type FlowSeg = { value: number; color: string; label: string; positive?: boolean };
 
 function FlowChartRow({
   consume, invest, netFlow, hasIncome,
@@ -874,222 +885,99 @@ function FlowChartRow({
   // 超支：只有有收入且入不敷出时才算"超支"；无收入时只是"现金不够覆盖账单"
   const overspend = hasIncome && netFlow < 0;
 
-  const segments: DonutSeg[] = [
-    // 消费=warning(橙)/投资=invest(青绿)/结余=success(绿):投资和结余都是"绿色系"
-    // 但用不同色相区分开,不会在饼图里叠成一坨。结余保持 success 不变——它的
-    // 图例文字用 text-notion-success 硬编码,颜色不能脱节
+  const segments: FlowSeg[] = [
+    // 消费=warning(橙红) / 投资=invest(青蓝 hue248) / 结余=success(绿 hue152)
+    // 三色相互拉开 ~100°，CVD 下也能分辨（已用 dataviz 调色板校验器验证：
+    // 浅色模式全项通过，最差相邻对 ΔE 18.7 deutan / 20.1 normal）
     { value: consume, color: 'var(--c-warning)', label: '消费' },
     { value: invest,  color: 'var(--c-invest)',  label: '投资' },
-    ...(netFlow > 0 ? [{ value: netFlow, color: 'var(--c-success)', label: '结余' }] : []),
+    ...(netFlow > 0 ? [{ value: netFlow, color: 'var(--c-success)', label: '结余', positive: true }] : []),
   ].filter(s => s.value > 0);
 
   const total = segments.reduce((s, x) => s + x.value, 0);
   if (total <= 0) return null;
 
-  const centerLabel = hasIncome ? '本期收入' : netFlow > 0 ? '现金分配' : '本期支出';
-  const centerValue = total;
+  const totalLabel = hasIncome ? '本期收入' : netFlow > 0 ? '现金分配' : '本期支出';
 
   return (
     <div className="space-y-4">
-      {/* 圆环 + 图例：v1.7.3 把图例推到右侧对齐
-          - 关键 bug：v1.7.2 用 max-w-[220px] + flex-1,但 flex-1 仍然"吃满"
-            圆环右侧的所有剩余空间，导致图例紧贴圆环、右边留大片空白
-          - 正确改法：去掉 flex-1,改用 ml-auto 自动推到右边缘
-            （圆环 168px 固定,图例只占自己内容宽度并右对齐,中间由 ml-auto 撑开）
-          - 圆环保持 168px 不变,SVG 内部已经留足 viewBox 边距（不再被裁） */}
-      <div className="flex items-start gap-3">
-        <FlowDonut segments={segments} centerLabel={centerLabel} centerValue={centerValue} />
-        <div className="ml-auto max-w-[220px] space-y-1 pt-1">
-          {segments.map((seg) => {
-            const pct = Math.round((seg.value / total) * 100);
-            const isNet = seg.label === '结余';
-            // 流出（消费/投资）用 warning 文字弱化；结余用 success 强调
-            // 统一前缀符号：流出 "-", 留存 "+" → 语义一目了然
-            const sign = isNet ? '+' : '−';
-            const valueClass = isNet ? 'text-notion-success font-semibold' : 'text-notion-text';
-            return (
-              <div key={seg.label} className="group/legend flex items-center gap-1.5 text-[13px]">
-                <span
-                  className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0 transition-transform duration-[var(--dur-fast)] group-hover/legend:scale-110"
-                  style={{ background: seg.color }}
-                  aria-hidden="true"
-                />
-                <span className={`flex-shrink-0 ${isNet ? 'text-notion-success font-semibold' : 'text-notion-text-secondary'}`}>
-                  {seg.label}
-                </span>
-                <span className={`font-numeric ml-auto tabular-nums ${valueClass}`}>
-                  {sign}{formatYen(seg.value)}
-                </span>
-                <span
-                  className={`w-8 text-right flex-shrink-0 font-numeric tabular-nums ${
-                    isNet ? 'text-notion-success font-semibold' : 'text-notion-text-muted'
-                  }`}
-                >
-                  {pct}%
-                </span>
-              </div>
-            );
-          })}
-          {/* 超支行：仅在有收入且支出超过收入时显示 */}
-          {overspend && (
-            <div className="flex items-center gap-1.5 text-[13px] pt-1.5 border-t border-[var(--c-border)] mt-1">
-              <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0 bg-[var(--c-warning)]" aria-hidden="true" />
-              <span className="text-notion-warning font-semibold flex-shrink-0">超支</span>
-              <span className="font-numeric ml-auto tabular-nums text-notion-warning font-semibold">
-                −{formatYen(Math.abs(netFlow))}
-              </span>
-            </div>
-          )}
+      {/* 总额：这张卡的主角数字（不用 tabular-nums——大号数字等宽会显得松散） */}
+      <div>
+        <div className="text-[11px] text-notion-text-muted">{totalLabel}</div>
+        <div className="font-display font-semibold text-[30px] leading-tight text-notion-text tracking-tight-section">
+          {formatYen(total)}
         </div>
       </div>
 
-      {/* 验算公式（v1.7 升级：从卡片底部 11px 灰字提升到圆环下方的视觉胶囊） */}
+      {/* 横向堆叠条：flex-grow 按数值比例分配（gap 自动被吸收，永不溢出）；
+          min-w 保证极小的段也看得见；两端 4px 圆角 */}
       <div
-        className="
-          flex items-center justify-center gap-2 px-3 py-2
-          rounded-[var(--radius-md)]
-          bg-[var(--c-bg-alt)]
-          border border-[var(--c-border)]
-          font-mono text-[12px] tabular-nums
-          text-notion-text-secondary
-        "
-        role="note"
-        aria-label="本期收入验算公式"
+        className="flex h-3 gap-[2px]"
+        role="img"
+        aria-label={segments
+          .map((s) => `${s.label} ${Math.round((s.value / total) * 100)}%`)
+          .join('，')}
       >
-        {hasIncome ? (
-          <>
-            <span className="text-notion-text font-semibold">{formatYen(centerValue)}</span>
-            <span className="opacity-60">=</span>
-            <span>{formatYen(consume)}</span>
-            <span className="opacity-60">+</span>
-            <span>{formatYen(invest)}</span>
-            {netFlow > 0 && (
-              <>
-                <span className="opacity-60">+</span>
-                <span className="text-notion-success font-semibold">{formatYen(netFlow)}</span>
-              </>
-            )}
-            {overspend && (
-              <>
-                <span className="opacity-60">−</span>
-                <span className="text-notion-warning font-semibold">{formatYen(Math.abs(netFlow))}</span>
-              </>
-            )}
-          </>
-        ) : netFlow > 0 ? (
-          <>
-            <span>结余 = 净可用 − 账单 − 订阅 − 投资</span>
-          </>
-        ) : (
-          <span>本期暂无收入到账</span>
+        {segments.map((seg) => (
+          <div
+            key={seg.label}
+            title={`${seg.label} ${formatYen(seg.value)}`}
+            className="
+              min-w-[3px] first:rounded-l-[4px] last:rounded-r-[4px]
+              transition-opacity duration-[var(--dur-fast)] hover:opacity-75
+            "
+            style={{ flex: seg.value, background: seg.color }}
+          />
+        ))}
+      </div>
+
+      {/* 图例：每段都直接标注（≤4 段时直接标注是必须的，identity 不能只靠颜色）；
+          金额/百分比各自成列右对齐，列内用 tabular-nums 对齐数位。
+          行间用 1px 分隔线（比纯间距更有"账目"感，也把三行撑到与左侧图表卡等高） */}
+      <div className="divide-y divide-[var(--c-border)]">
+        {segments.map((seg) => {
+          const pct = Math.round((seg.value / total) * 100);
+          return (
+            <div key={seg.label} className="flex items-center gap-2 text-[13px] py-2">
+              <span
+                className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0"
+                style={{ background: seg.color }}
+                aria-hidden="true"
+              />
+              <span className="text-notion-text-secondary">{seg.label}</span>
+              <span
+                className={`font-numeric ml-auto tabular-nums ${
+                  seg.positive ? 'text-notion-success font-semibold' : 'text-notion-text'
+                }`}
+              >
+                {seg.positive ? '+' : '−'}{formatYen(seg.value)}
+              </span>
+              <span className="w-9 text-right flex-shrink-0 font-numeric tabular-nums text-notion-text-muted">
+                {pct}%
+              </span>
+            </div>
+          );
+        })}
+
+        {/* 超支行：仅在有收入且支出超过收入时显示 */}
+        {overspend && (
+          <div className="flex items-center gap-2 text-[13px] py-2">
+            <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0 bg-[var(--c-warning)]" aria-hidden="true" />
+            <span className="text-notion-warning font-semibold">超支</span>
+            <span className="font-numeric ml-auto tabular-nums text-notion-warning font-semibold">
+              −{formatYen(Math.abs(netFlow))}
+            </span>
+            <span className="w-9 flex-shrink-0" aria-hidden="true" />
+          </div>
         )}
       </div>
-    </div>
-  );
-}
 
-function FlowDonut({
-  segments, centerLabel, centerValue,
-}: { segments: DonutSeg[]; centerLabel: string; centerValue: number }) {
-  const total = segments.reduce((s, x) => s + x.value, 0);
-  if (total <= 0) return null;
-
-  // v1.7.1 视觉调优：圆环从 140 进一步放大到 168；viewBox 改成 140×140（之前
-  // 120×120 留 9px 给段外标签，但角度偏右下的段会擦边/超出，被 viewBox 裁掉）；
-  // 现在 viewBox 140 配 labelR=R+12=70，让最外侧标签（含 stroke 描边）也安全。
-  // 中心数字从 16px 降到 13px，避免在更大圆环里"挤内圈"。
-  const cx = 70, cy = 70, R = 58, rInner = 40;
-  const hasGap = segments.length > 1;
-  let angle = -Math.PI / 2;
-
-  const arcs = segments.map((seg) => {
-    const sweep = (seg.value / total) * 2 * Math.PI;
-    const gap = hasGap ? 0.08 : 0;
-    const sa = angle + gap / 2;
-    const ea = angle + sweep - gap / 2;
-    angle += sweep;
-    const actualSweep = ea - sa;
-    if (actualSweep <= 0) return null;
-    const large = actualSweep > Math.PI ? 1 : 0;
-    const cos1 = Math.cos(sa), sin1 = Math.sin(sa);
-    const cos2 = Math.cos(ea), sin2 = Math.sin(ea);
-    // 段中点角度（用于外侧标注百分比位置）；labelR 距外圈 12px，
-    // 最大坐标 = 70 + 70 = 140，正好等于 viewBox 边界（stroke 描边 2px 内缩）
-    const mid = sa + actualSweep / 2;
-    const labelR = R + 12;
-    const labelX = cx + labelR * Math.cos(mid);
-    const labelY = cy + labelR * Math.sin(mid);
-    return {
-      d: [
-        `M${cx + R * cos1},${cy + R * sin1}`,
-        `A${R},${R},0,${large},1,${cx + R * cos2},${cy + R * sin2}`,
-        `L${cx + rInner * cos2},${cy + rInner * sin2}`,
-        `A${rInner},${rInner},0,${large},0,${cx + rInner * cos1},${cy + rInner * sin1}`,
-        'Z',
-      ].join(' '),
-      color: seg.color,
-      // 仅显示 ≥8% 的段，过滤掉太细的标签避免重叠（视觉噪声过滤）
-      label: (seg.value / total) >= 0.08 ? {
-        x: labelX,
-        y: labelY,
-        pct: Math.round((seg.value / total) * 100),
-      } : null,
-    };
-  }).filter(Boolean) as {
-    d: string; color: string; label: { x: number; y: number; pct: number } | null;
-  }[];
-
-  return (
-    <svg
-      width="168" height="168"
-      viewBox="0 0 140 140"
-      className="flex-shrink-0"
-      role="img"
-      aria-label={`${centerLabel} ${formatYen(centerValue)}`}
-    >
-      {arcs.map((arc, i) => (
-        <path key={i} d={arc.d} style={{ fill: arc.color }} />
-      ))}
-      {/* 段外侧百分比标签（小段不显示，避免和别的标签/中心数字重叠） */}
-      {arcs.map((arc, i) =>
-        arc.label ? (
-          <text
-            key={`lbl-${i}`}
-            x={arc.label.x}
-            y={arc.label.y}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            className="font-numeric"
-            style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              fill: 'var(--c-text)',
-              paintOrder: 'stroke',
-              stroke: 'var(--c-bg-elev)',
-              strokeWidth: 2.5,
-              strokeLinejoin: 'round',
-            }}
-          >
-            {arc.label.pct}%
-          </text>
-        ) : null
+      {/* 无收入时补一句口径说明（有收入时堆叠条 + 图例已经说清构成，不再赘述） */}
+      {!hasIncome && (
+        <p className="text-[11px] text-notion-text-muted leading-relaxed">
+          {netFlow > 0 ? '结余 = 净可用现金 − 账单 − 订阅 − 投资' : '本期暂无收入到账'}
+        </p>
       )}
-      {/* 中心标签：标题小注 + 大数字（数字用 success 色强调总收入） */}
-      <text
-        x="70" y="62"
-        textAnchor="middle"
-        style={{ fontSize: '8px', fill: 'var(--c-text-muted)', letterSpacing: '0.05em' }}
-      >
-        {centerLabel}
-      </text>
-      <text
-        x="70" y="82"
-        textAnchor="middle"
-        className="font-numeric"
-        style={{ fontSize: '13px', fontWeight: 700, fill: 'var(--c-success)' }}
-      >
-        {formatYen(centerValue)}
-      </text>
-    </svg>
+    </div>
   );
 }
