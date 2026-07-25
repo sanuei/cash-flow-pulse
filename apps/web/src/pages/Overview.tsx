@@ -891,10 +891,11 @@ function FlowChartRow({
 
   return (
     <div className="space-y-4">
-      {/* 圆环 + 图例：flex 布局，圆环放大到 140px */}
-      <div className="flex items-center gap-5">
+      {/* 圆环 + 图例：v1.7.1 调整为 items-start + gap-4，
+          圆环靠顶左对齐，让大圆环垂直占满但水平只占左 ~30%，给图例让出横向空间 */}
+      <div className="flex items-start gap-4">
         <FlowDonut segments={segments} centerLabel={centerLabel} centerValue={centerValue} />
-        <div className="flex-1 min-w-0 space-y-2.5">
+        <div className="flex-1 min-w-0 space-y-1.5 pt-1">
           {segments.map((seg) => {
             const pct = Math.round((seg.value / total) * 100);
             const isNet = seg.label === '结余';
@@ -903,9 +904,9 @@ function FlowChartRow({
             const sign = isNet ? '+' : '−';
             const valueClass = isNet ? 'text-notion-success font-semibold' : 'text-notion-text';
             return (
-              <div key={seg.label} className="group/legend flex items-center gap-2.5 text-[13px]">
+              <div key={seg.label} className="group/legend flex items-center gap-2 text-[13px]">
                 <span
-                  className="w-3 h-3 rounded-[3px] flex-shrink-0 transition-transform duration-[var(--dur-fast)] group-hover/legend:scale-110"
+                  className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0 transition-transform duration-[var(--dur-fast)] group-hover/legend:scale-110"
                   style={{ background: seg.color }}
                   aria-hidden="true"
                 />
@@ -916,7 +917,7 @@ function FlowChartRow({
                   {sign}{formatYen(seg.value)}
                 </span>
                 <span
-                  className={`w-10 text-right flex-shrink-0 font-numeric tabular-nums ${
+                  className={`w-9 text-right flex-shrink-0 font-numeric tabular-nums ${
                     isNet ? 'text-notion-success font-semibold' : 'text-notion-text-muted'
                   }`}
                 >
@@ -927,8 +928,8 @@ function FlowChartRow({
           })}
           {/* 超支行：仅在有收入且支出超过收入时显示 */}
           {overspend && (
-            <div className="flex items-center gap-2.5 text-[13px] pt-2 border-t border-[var(--c-border)] mt-1">
-              <span className="w-3 h-3 rounded-[3px] flex-shrink-0 bg-[var(--c-warning)]" aria-hidden="true" />
+            <div className="flex items-center gap-2 text-[13px] pt-1.5 border-t border-[var(--c-border)] mt-1">
+              <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0 bg-[var(--c-warning)]" aria-hidden="true" />
               <span className="text-notion-warning font-semibold flex-shrink-0">超支</span>
               <span className="font-numeric ml-auto tabular-nums text-notion-warning font-semibold">
                 −{formatYen(Math.abs(netFlow))}
@@ -989,10 +990,11 @@ function FlowDonut({
   const total = segments.reduce((s, x) => s + x.value, 0);
   if (total <= 0) return null;
 
-  // v1.7 视觉升级：圆环从 104×104 放大到 140×140；环带从 12px 加粗到 16px；
-  // 段间间隙从 0.04 弧度（≈2.3°）加大到 0.08（≈4.6°），让三段弧肉眼可分；
-  // 中心数字从 11px 提升到 16px 粗体 + success 色（与结余同色强调总收入）。
-  const cx = 60, cy = 60, R = 52, rInner = 36;
+  // v1.7.1 视觉调优：圆环从 140 进一步放大到 168；viewBox 改成 140×140（之前
+  // 120×120 留 9px 给段外标签，但角度偏右下的段会擦边/超出，被 viewBox 裁掉）；
+  // 现在 viewBox 140 配 labelR=R+12=70，让最外侧标签（含 stroke 描边）也安全。
+  // 中心数字从 16px 降到 13px，避免在更大圆环里"挤内圈"。
+  const cx = 70, cy = 70, R = 58, rInner = 40;
   const hasGap = segments.length > 1;
   let angle = -Math.PI / 2;
 
@@ -1007,9 +1009,10 @@ function FlowDonut({
     const large = actualSweep > Math.PI ? 1 : 0;
     const cos1 = Math.cos(sa), sin1 = Math.sin(sa);
     const cos2 = Math.cos(ea), sin2 = Math.sin(ea);
-    // 段中点角度（用于外侧标注百分比位置）
+    // 段中点角度（用于外侧标注百分比位置）；labelR 距外圈 12px，
+    // 最大坐标 = 70 + 70 = 140，正好等于 viewBox 边界（stroke 描边 2px 内缩）
     const mid = sa + actualSweep / 2;
-    const labelR = R + 9;
+    const labelR = R + 12;
     const labelX = cx + labelR * Math.cos(mid);
     const labelY = cy + labelR * Math.sin(mid);
     return {
@@ -1034,8 +1037,8 @@ function FlowDonut({
 
   return (
     <svg
-      width="140" height="140"
-      viewBox="0 0 120 120"
+      width="168" height="168"
+      viewBox="0 0 140 140"
       className="flex-shrink-0"
       role="img"
       aria-label={`${centerLabel} ${formatYen(centerValue)}`}
@@ -1054,12 +1057,12 @@ function FlowDonut({
             dominantBaseline="middle"
             className="font-numeric"
             style={{
-              fontSize: '10px',
+              fontSize: '11px',
               fontWeight: 700,
               fill: 'var(--c-text)',
               paintOrder: 'stroke',
               stroke: 'var(--c-bg-elev)',
-              strokeWidth: 3,
+              strokeWidth: 2.5,
               strokeLinejoin: 'round',
             }}
           >
@@ -1069,17 +1072,17 @@ function FlowDonut({
       )}
       {/* 中心标签：标题小注 + 大数字（数字用 success 色强调总收入） */}
       <text
-        x="60" y="50"
+        x="70" y="62"
         textAnchor="middle"
-        style={{ fontSize: '8.5px', fill: 'var(--c-text-muted)', letterSpacing: '0.05em' }}
+        style={{ fontSize: '8px', fill: 'var(--c-text-muted)', letterSpacing: '0.05em' }}
       >
         {centerLabel}
       </text>
       <text
-        x="60" y="70"
+        x="70" y="82"
         textAnchor="middle"
         className="font-numeric"
-        style={{ fontSize: '16px', fontWeight: 700, fill: 'var(--c-success)' }}
+        style={{ fontSize: '13px', fontWeight: 700, fill: 'var(--c-success)' }}
       >
         {formatYen(centerValue)}
       </text>
