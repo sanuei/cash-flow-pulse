@@ -2,6 +2,12 @@ import { useState, useRef, useId, useEffect, type ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
 import { useSwipeReveal } from '../lib/swipeReveal';
 
+// 触屏端：保留原有的"滑开→再点"两段式删除手势（行 122 滑动按钮）
+// 桌面端：用三点菜单折叠次要操作，避免编辑/删除按钮过近造成的误触
+// —— Linear / Notion / Things 的同款做法。
+// 「more menu」的桌面端坐标同时存在 N 行，但同一时刻只允许一个展开：
+// 借助 swipeReveal 共享 store 做互斥，避免一次 hover 多行同时弹出。
+
 const SWIPE_REVEAL_WIDTH = 76;    // px：滑开后露出的删除按钮宽度（也是最大可拖动距离）
 const SWIPE_REVEAL_TRIGGER = 40;  // px：松手时超过此距离才"锁定展开"，否则弹回
 
@@ -43,6 +49,32 @@ export function EntityRow({
   const startX = useRef(0);
   const startY = useRef(0);
   const dragging = useRef(false);
+
+  // 桌面端三点菜单的展开状态：单击三点图标展开，再点别处/Escape/触发删除后收起
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // 点别处 / Escape / 滚动列表 → 收起菜单
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) close();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onClick);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+    };
+  }, [menuOpen]);
+  // 滚列表时同步收起（菜单是 fixed 定位，滚到别的位置还浮着很怪）
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onScroll = () => setMenuOpen(false);
+    window.addEventListener('scroll', onScroll, true);
+    return () => window.removeEventListener('scroll', onScroll, true);
+  }, [menuOpen]);
 
   // 别的行被滑开时，本行如果处于展开态要自动收起
   useEffect(() => {
@@ -112,9 +144,10 @@ export function EntityRow({
     }
   };
 
-  // 鼠标端：编辑按钮旁常驻一个删除按钮（hover 才可见），点击走原生确认弹窗——
-  // 单次点击不像滑动手势那样容易误触，但仍需要一次明确确认才真正删除
-  const handleMouseDelete = () => {
+  // 鼠标端：从三点菜单里点删除（菜单本身就是「需要多一步才能触发」的天然屏障），
+  // 触发后弹原生 confirm 二次确认——双重保险，误触概率降到接近 0。
+  const handleMenuDelete = () => {
+    setMenuOpen(false);
     if (window.confirm('确定要删除这一项吗？')) onDelete();
   };
 
@@ -193,7 +226,8 @@ export function EntityRow({
 
         <div className="text-right shrink-0">{money}</div>
 
-        {/* 编辑按钮（始终可见）+ 删除按钮（仅鼠标 hover 显示，点击需二次确认；触屏靠"滑开→再点"两段式手势） */}
+        {/* 编辑按钮（始终可见，主操作）+ 三点菜单（hover 才显，桌面端专用，
+            触屏走"滑开→再点"两段式手势，菜单按钮隐藏避免和滑动手势冲突） */}
         <div className="flex shrink-0 items-center">
           <button
             onClick={onEdit}
@@ -208,19 +242,56 @@ export function EntityRow({
           >
             <Icon name="edit" size={14} strokeWidth={1.75} />
           </button>
-          <button
-            onClick={handleMouseDelete}
-            className="
-              p-1.5 rounded-[var(--radius-sm)]
-              text-[var(--c-text-muted)] hover:text-[var(--c-warning)]
-              hover:bg-[var(--c-warning-soft)]
-              opacity-0 group-hover:opacity-100
-              transition-all duration-[var(--dur-fast)] ease-[var(--ease-out-expo)]
-            "
-            aria-label="删除"
+
+          {/* 三点菜单触发按钮：仅桌面端显示，hover 行才出现（与 group hover 同步） */}
+          <div
+            ref={menuRef}
+            className="relative hidden md:block opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--dur-fast)]"
           >
-            <Icon name="trash" size={14} strokeWidth={1.75} />
-          </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
+              className={`
+                p-1.5 rounded-[var(--radius-sm)]
+                text-[var(--c-text-muted)] hover:text-[var(--c-text-secondary)]
+                hover:bg-[var(--c-bg-elev)]
+                transition-all duration-[var(--dur-fast)] ease-[var(--ease-out-expo)]
+                ${menuOpen ? 'bg-[var(--c-bg-elev)] text-[var(--c-text-secondary)]' : ''}
+              `}
+              aria-label="更多操作"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+            >
+              <Icon name="more" size={14} strokeWidth={1.75} />
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                className="
+                  absolute right-0 top-full mt-1 z-20
+                  min-w-[140px] py-1
+                  bg-[var(--c-bg-overlay)] backdrop-blur-md
+                  border border-[var(--c-border)] rounded-[var(--radius-md)]
+                  shadow-[var(--shadow-popover)]
+                  origin-top-right
+                  animate-scale-in
+                "
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  role="menuitem"
+                  onClick={handleMenuDelete}
+                  className="
+                    w-full flex items-center gap-2 px-3 py-2 text-[13px]
+                    text-[var(--c-warning)] hover:bg-[var(--c-warning-soft)]
+                    transition-colors duration-[var(--dur-fast)]
+                  "
+                >
+                  <Icon name="trash" size={14} strokeWidth={1.75} />
+                  <span>删除</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </li>

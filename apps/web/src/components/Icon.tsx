@@ -44,6 +44,7 @@ import {
   Building2,       // 房产
   Gem,             // 其他资产
   Trash2,          // 删除（鼠标端显式删除按钮）
+  MoreHorizontal,  // 三点菜单（折叠次要操作）
   type LucideIcon,
 } from 'lucide-react';
 import { forwardRef, type CSSProperties } from 'react';
@@ -97,8 +98,9 @@ export type IconName =
   | 'stock'      // 股票/基金
   | 'crypto'     // 加密货币
   | 'realestate' // 房产
-  | 'asset-other' // 其他资产
-  | 'trash';     // 删除
+  | 'asset-other'  // 其他资产
+  | 'trash'        // 删除
+  | 'more';        // 三点菜单（折叠次要操作，如「删除」）
 
 const map: Record<IconName, LucideIcon> = {
   wallet: Wallet,
@@ -145,6 +147,7 @@ const map: Record<IconName, LucideIcon> = {
   realestate: Building2,
   'asset-other': Gem,
   trash: Trash2,
+  more: MoreHorizontal,
 };
 
 type Props = {

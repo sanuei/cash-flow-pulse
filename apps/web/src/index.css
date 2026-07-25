@@ -98,6 +98,11 @@
                0 4px 8px oklch(45% 0.1 45 / 0.07);
   --shadow-xl: 0 24px 60px oklch(45% 0.1 45 / 0.2),
                0 8px 16px oklch(45% 0.1 45 / 0.1);
+  /* 浮层阴影（菜单 / popover，比 --shadow-md 更聚焦，扩散范围更小） */
+  --shadow-popover: 0 8px 24px -4px oklch(45% 0.1 45 / 0.18),
+                    0 2px 6px oklch(45% 0.1 45 / 0.08);
+  /* 浮层背景（在 --c-bg-elev 之上再叠一层"边缘质感"，让 popover 视觉跳出来） */
+  --c-bg-overlay:    color-mix(in oklch, var(--c-bg-elev) 96%, var(--c-text) 4%);
   /* 橙色辉光（主按钮 / Hero） */
   --glow-accent: 0 8px 20px -6px oklch(64% 0.165 42 / 0.5);
 
