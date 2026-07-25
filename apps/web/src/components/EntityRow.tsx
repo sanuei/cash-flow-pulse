@@ -1,12 +1,16 @@
-import { useState, useRef, useId, useEffect, type ReactNode } from 'react';
+import { useState, useRef, useId, useEffect, useLayoutEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './Icon';
 import { useSwipeReveal } from '../lib/swipeReveal';
 
-// 触屏端：保留原有的"滑开→再点"两段式删除手势（行 122 滑动按钮）
+// 触屏端：保留原有的"滑开→再点"两段式删除手势
 // 桌面端：用三点菜单折叠次要操作，避免编辑/删除按钮过近造成的误触
 // —— Linear / Notion / Things 的同款做法。
-// 「more menu」的桌面端坐标同时存在 N 行，但同一时刻只允许一个展开：
-// 借助 swipeReveal 共享 store 做互斥，避免一次 hover 多行同时弹出。
+//
+// 菜单用 createPortal 渲染到 document.body（而不是 EntityRow 内部），
+// 原因是 ManagedListCard 里的 <ul className="... overflow-hidden ..."> 会把
+// 超出卡片底部的下拉裁掉。Portal 出去后菜单永远在最外层 z-stack 顶端，
+// 跟任何 overflow 上下文无关。
 
 const SWIPE_REVEAL_WIDTH = 76;    // px：滑开后露出的删除按钮宽度（也是最大可拖动距离）
 const SWIPE_REVEAL_TRIGGER = 40;  // px：松手时超过此距离才"锁定展开"，否则弹回
@@ -51,15 +55,44 @@ export function EntityRow({
   const dragging = useRef(false);
 
   // 桌面端三点菜单的展开状态：单击三点图标展开，再点别处/Escape/触发删除后收起
+  // 菜单用 createPortal 渲染到 document.body（详见顶部注释），所以这里维护的是
+  // "打开/关闭 + 坐标"两套状态。
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  // 点别处 / Escape / 滚动列表 → 收起菜单
+  const triggerRef = useRef<HTMLButtonElement>(null);  // 三点按钮自身
+  const menuRef = useRef<HTMLDivElement>(null);        // 渲染到 body 的菜单本体
+  // 菜单坐标（viewport 坐标，配 fixed 定位用）；null 表示菜单未挂载
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  // 在菜单打开时记录触发按钮的视口位置；之后滚动/resize 时同步跟随移动
+  useLayoutEffect(() => {
+    if (!menuOpen) { setMenuPos(null); return; }
+    const place = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      // 菜单右下角对齐按钮右下角，再向上 4px 留出小间隙
+      setMenuPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [menuOpen]);
+  // 点别处 / Escape → 收起菜单（菜单是 portal 到 body 的，所以"包含判断"
+  // 要把 trigger 按钮本身排除，否则"再点按钮关闭"这条主流交互会被吞掉）
   useEffect(() => {
     if (!menuOpen) return;
     const close = () => setMenuOpen(false);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
     const onClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) close();
+      const t = e.target as Node;
+      // 点 trigger（按钮本身）允许再次关闭，不算"点别处"
+      if (triggerRef.current?.contains(t)) return;
+      // 点菜单内部不关（菜单内的点击有自己的 handler 决定）
+      if (menuRef.current?.contains(t)) return;
+      close();
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('mousedown', onClick);
@@ -67,13 +100,6 @@ export function EntityRow({
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('mousedown', onClick);
     };
-  }, [menuOpen]);
-  // 滚列表时同步收起（菜单是 fixed 定位，滚到别的位置还浮着很怪）
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onScroll = () => setMenuOpen(false);
-    window.addEventListener('scroll', onScroll, true);
-    return () => window.removeEventListener('scroll', onScroll, true);
   }, [menuOpen]);
 
   // 别的行被滑开时，本行如果处于展开态要自动收起
@@ -244,11 +270,9 @@ export function EntityRow({
           </button>
 
           {/* 三点菜单触发按钮：仅桌面端显示，hover 行才出现（与 group hover 同步） */}
-          <div
-            ref={menuRef}
-            className="relative hidden md:block opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--dur-fast)]"
-          >
+          <div className="relative hidden md:block opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--dur-fast)]">
             <button
+              ref={triggerRef}
               onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
               className={`
                 p-1.5 rounded-[var(--radius-sm)]
@@ -263,37 +287,48 @@ export function EntityRow({
             >
               <Icon name="more" size={14} strokeWidth={1.75} />
             </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="
-                  absolute right-0 top-full mt-1 z-20
-                  min-w-[140px] py-1
-                  bg-[var(--c-bg-overlay)] backdrop-blur-md
-                  border border-[var(--c-border)] rounded-[var(--radius-md)]
-                  shadow-[var(--shadow-popover)]
-                  origin-top-right
-                  animate-scale-in
-                "
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  role="menuitem"
-                  onClick={handleMenuDelete}
-                  className="
-                    w-full flex items-center gap-2 px-3 py-2 text-[13px]
-                    text-[var(--c-warning)] hover:bg-[var(--c-warning-soft)]
-                    transition-colors duration-[var(--dur-fast)]
-                  "
-                >
-                  <Icon name="trash" size={14} strokeWidth={1.75} />
-                  <span>删除</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>
+
+      {/* 三点菜单本体：用 createPortal 渲染到 document.body，避开父级
+          ManagedListCard 的 <ul className="... overflow-hidden ..."> 裁剪；
+          定位用 fixed + 触发按钮的 getBoundingClientRect() 计算（见 useLayoutEffect） */}
+      {menuOpen && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          role="menu"
+          style={{
+            position: 'fixed',
+            top: menuPos.top,
+            right: menuPos.right,
+            zIndex: 50,
+          }}
+          className="
+            min-w-[140px] py-1
+            bg-[var(--c-bg-overlay)] backdrop-blur-md
+            border border-[var(--c-border)] rounded-[var(--radius-md)]
+            shadow-[var(--shadow-popover)]
+            origin-top-right
+            animate-scale-in
+          "
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            role="menuitem"
+            onClick={handleMenuDelete}
+            className="
+              w-full flex items-center gap-2 px-3 py-2 text-[13px]
+              text-[var(--c-warning)] hover:bg-[var(--c-warning-soft)]
+              transition-colors duration-[var(--dur-fast)]
+            "
+          >
+            <Icon name="trash" size={14} strokeWidth={1.75} />
+            <span>删除</span>
+          </button>
+        </div>,
+        document.body,
+      )}
     </li>
   );
 }
