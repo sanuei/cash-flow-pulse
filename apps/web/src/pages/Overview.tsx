@@ -891,13 +891,15 @@ function FlowChartRow({
 
   return (
     <div className="space-y-4">
-      {/* 圆环 + 图例：v1.7.2 仅压缩图例区，圆环保持 168px
-          - gap-4→gap-3：圆环与图例间距缩 4px
-          - 图例 max-w-[220px]：限制图例区最大宽度，圆环获得更多横向空间
-            （之前图例 flex-1 会"吃满"圆环剩下的所有宽度，导致左轻右重） */}
+      {/* 圆环 + 图例：v1.7.3 把图例推到右侧对齐
+          - 关键 bug：v1.7.2 用 max-w-[220px] + flex-1,但 flex-1 仍然"吃满"
+            圆环右侧的所有剩余空间，导致图例紧贴圆环、右边留大片空白
+          - 正确改法：去掉 flex-1,改用 ml-auto 自动推到右边缘
+            （圆环 168px 固定,图例只占自己内容宽度并右对齐,中间由 ml-auto 撑开）
+          - 圆环保持 168px 不变,SVG 内部已经留足 viewBox 边距（不再被裁） */}
       <div className="flex items-start gap-3">
         <FlowDonut segments={segments} centerLabel={centerLabel} centerValue={centerValue} />
-        <div className="flex-1 min-w-0 max-w-[220px] space-y-1 pt-1">
+        <div className="ml-auto max-w-[220px] space-y-1 pt-1">
           {segments.map((seg) => {
             const pct = Math.round((seg.value / total) * 100);
             const isNet = seg.label === '结余';
