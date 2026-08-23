@@ -264,50 +264,51 @@ export function IncomesPage() {
       {/* 往期月份折叠区：按月聚合，仅在确实存在往期时显示 */}
       {pastByMonth.length > 0 && (
         <Card
+          divided={false}
           className="!p-0 overflow-hidden"
-          title={
-            <button
-              type="button"
-              onClick={() => setPastOpen((v) => !v)}
-              className="
-                group flex items-center justify-between gap-2 w-full text-left
-                px-5 py-4 -mx-5
-                transition-colors duration-[var(--dur-base)]
-                hover:bg-[var(--c-bg-alt)]
-              "
-              aria-expanded={pastOpen}
-            >
-              <span className="flex items-center gap-2 min-w-0">
-                <Icon
-                  name={pastOpen ? 'chevron-down' : 'chevron-right'}
-                  size={14}
-                  className="text-notion-text-muted transition-transform duration-[var(--dur-fast)]"
-                />
-                <span className="text-[14px] font-semibold text-notion-text">
-                  往期临时收入
-                </span>
-                <span className="badge badge-muted text-[11px] px-2 py-0.5">
-                  {oneOffsPast.length} 笔
-                </span>
-                <span className="text-[11px] text-notion-text-muted">
-                  · {pastByMonth.length} 个月
-                </span>
-              </span>
-              <span className="text-[12px] tabular-nums font-semibold text-notion-text-secondary whitespace-nowrap">
-                {formatYen(oneOffsPast.reduce((s, i) => s + i.amount, 0))}
-              </span>
-            </button>
-          }
+          title={null}
+          action={null}
         >
+          <button
+            type="button"
+            onClick={() => setPastOpen((v) => !v)}
+            className="
+              group flex items-center justify-between gap-3 w-full text-left
+              px-5 py-4
+              transition-colors duration-[var(--dur-base)]
+              hover:bg-[var(--c-bg-alt)]
+            "
+            aria-expanded={pastOpen}
+          >
+            <span className="flex items-center gap-2.5 min-w-0 flex-1">
+              <Icon
+                name={pastOpen ? 'chevron-down' : 'chevron-right'}
+                size={14}
+                className="text-notion-text-muted transition-transform duration-[var(--dur-fast)] shrink-0"
+              />
+              <span className="text-[14px] font-semibold text-notion-text whitespace-nowrap shrink-0">
+                往期临时收入
+              </span>
+              <span className="badge badge-muted text-[11px] px-2 py-0.5 whitespace-nowrap shrink-0">
+                {oneOffsPast.length} 笔
+              </span>
+              <span className="text-[11px] text-notion-text-muted whitespace-nowrap shrink-0">
+                · {pastByMonth.length} 个月
+              </span>
+            </span>
+            <span className="text-[12px] tabular-nums font-semibold text-notion-text-secondary whitespace-nowrap shrink-0">
+              {formatYen(oneOffsPast.reduce((s, i) => s + i.amount, 0))}
+            </span>
+          </button>
           {pastOpen && (
-            <div className="space-y-3 pt-1">
+            <div className="px-5 pb-5 space-y-3">
               {pastByMonth.map((group) => (
                 <div key={group.ym}>
                   <div className="flex items-center justify-between px-1 py-1.5">
-                    <span className="text-[12px] font-medium text-notion-text-secondary">
+                    <span className="text-[12px] font-medium text-notion-text-secondary whitespace-nowrap">
                       {group.label}
                     </span>
-                    <span className="text-[11px] tabular-nums text-notion-text-muted">
+                    <span className="text-[11px] tabular-nums text-notion-text-muted whitespace-nowrap">
                       {formatYen(group.total)} · {group.items.length} 笔
                     </span>
                   </div>
