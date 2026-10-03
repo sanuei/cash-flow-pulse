@@ -15,6 +15,9 @@ type Metric = {
   advice?: string;
   target?: string;     // 兼容旧记录
 };
+// 分析区间（多个发薪周期）；旧记录只看本期，没有该字段
+type DiagnosisWindow = { cycles: number; from: string; to: string };
+type CycleStat = { cycle_id: string; income: number; expense: number; consume: number; invest: number; surplus: number };
 type HistoryItem = {
   id: string;
   cycle_id: string;
@@ -22,9 +25,22 @@ type HistoryItem = {
   score: number | null;
   analysis: string;
   metrics?: Metric[];
+  window?: DiagnosisWindow | null;
+  cycles?: CycleStat[];
   created_at: number;
 };
-type DiagnoseResponse = { id: string; cycle_id: string; score: number | null; analysis: string; metrics: Metric[]; generated_at: number; remaining: number | null };
+type DiagnoseResponse = {
+  id: string; cycle_id: string; score: number | null; analysis: string; metrics: Metric[];
+  window: DiagnosisWindow; cycles: CycleStat[]; generated_at: number; remaining: number | null;
+};
+
+function windowText(it: HistoryItem): string {
+  const w = it.window;
+  if (!w || w.cycles <= 1) return `周期 ${it.cycle_id}`;
+  return `近 ${w.cycles} 期 ${w.from} ~ ${w.to}`;
+}
+
+const yenText = (n: number) => '¥' + Math.round(Math.abs(n)).toLocaleString('en-US');
 
 const STATUS_COLOR: Record<Metric['status'], string> = {
   good: 'var(--c-success)',
@@ -84,6 +100,8 @@ export function DiagnosisPage() {
         score: data.score,
         analysis: data.analysis,
         metrics: data.metrics,
+        window: data.window,
+        cycles: data.cycles,
         created_at: data.generated_at,
       };
       setItems((prev) => [item, ...(prev ?? [])]);
@@ -105,7 +123,7 @@ export function DiagnosisPage() {
       {/* 操作行 */}
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12px] text-notion-text-muted leading-relaxed">
-          依据储蓄率、应急金覆盖月数、支出结构等客观基准分析本期财务。
+          依据储蓄率、应急金覆盖月数、支出结构等客观基准，综合近 6 个发薪周期分析财务状况。
           {remaining !== null && <span className="ml-1">今日剩余 {remaining} 次。</span>}
         </p>
         <button
@@ -169,13 +187,14 @@ export function DiagnosisPage() {
           }
           action={
             <span className="text-[11px] text-notion-text-muted">
-              周期 {current.cycle_id} · {fmtTime(current.created_at)}
+              {windowText(current)} · {fmtTime(current.created_at)}
             </span>
           }
         >
           {current.metrics && current.metrics.length > 0 && (
             <MetricsChart metrics={current.metrics} score={current.score} />
           )}
+          {current.cycles && current.cycles.length > 1 && <CyclesChart cycles={current.cycles} />}
           <Markdown text={current.analysis} />
           <div className="mt-4 pt-3 border-t border-[var(--c-border)] text-[11px] text-notion-text-muted leading-relaxed">
             AI 建议仅供参考，不构成投资或财务意见。
@@ -220,7 +239,7 @@ export function DiagnosisPage() {
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] text-notion-text font-medium">{fmtTime(it.created_at)}</div>
-                    <div className="text-[11px] text-notion-text-muted">周期 {it.cycle_id}</div>
+                    <div className="text-[11px] text-notion-text-muted">{windowText(it)}</div>
                   </div>
                   {active && <Icon name="chevron-right" size={14} className="text-[var(--c-accent-text)] flex-shrink-0" />}
                 </button>
@@ -317,6 +336,50 @@ function MetricsChart({ metrics, score }: { metrics: Metric[]; score: number | n
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ── 各期收支：每期结余柱（正绿负红）+ 收入/支出 ──────────────────────
+function CyclesChart({ cycles }: { cycles: CycleStat[] }) {
+  const maxAbs = Math.max(1, ...cycles.map((c) => Math.abs(c.surplus)));
+  return (
+    <div className="mb-4 pb-4 border-b border-[var(--c-border)]">
+      <div className="text-[12px] font-semibold text-notion-text mb-0.5">各期收支</div>
+      <div className="text-[10px] text-notion-text-muted mb-3">上方比率为这 {cycles.length} 期的合计口径；柱高为每期结余</div>
+      <div className="flex items-stretch gap-1.5">
+        {cycles.map((c, i) => {
+          const h = Math.round((Math.abs(c.surplus) / maxAbs) * 100);
+          const color = c.surplus >= 0 ? 'var(--c-success)' : 'var(--c-warning)';
+          const isCurrent = i === cycles.length - 1;
+          return (
+            <div
+              key={c.cycle_id}
+              className="flex-1 min-w-0 flex flex-col items-center"
+              title={`收入 ${yenText(c.income)} · 支出 ${yenText(c.expense)}（消费 ${yenText(c.consume)} / 投资 ${yenText(c.invest)}）`}
+            >
+              <div className="text-[10px] font-numeric font-semibold truncate max-w-full" style={{ color }}>
+                {c.surplus >= 0 ? '+' : '−'}{Math.round(Math.abs(c.surplus) / 1000).toLocaleString('en-US')}k
+              </div>
+              {/* 上半区：正结余；下半区：透支 */}
+              <div className="w-full h-10 flex items-end justify-center">
+                {c.surplus >= 0 && <div className="w-3/5 max-w-[28px] rounded-t-[3px]" style={{ height: `${h}%`, background: color }} />}
+              </div>
+              <div className="w-full h-px bg-[var(--c-border)]" />
+              <div className="w-full h-10 flex items-start justify-center">
+                {c.surplus < 0 && <div className="w-3/5 max-w-[28px] rounded-b-[3px]" style={{ height: `${h}%`, background: color }} />}
+              </div>
+              <div className={`text-[10px] font-numeric mt-1 ${isCurrent ? 'text-[var(--c-accent-text)] font-semibold' : 'text-notion-text-muted'}`}>
+                {c.cycle_id.slice(2)}
+              </div>
+              <div className="text-[9px] text-notion-text-muted font-numeric truncate max-w-full">
+                {Math.round(c.income / 1000).toLocaleString('en-US')}k/{Math.round(c.expense / 1000).toLocaleString('en-US')}k
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[10px] text-notion-text-muted mt-2">底部为 收入/支出（千日元）；最后一期为进行中的本期</div>
     </div>
   );
 }

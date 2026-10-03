@@ -2,7 +2,8 @@
  * AI 财务诊断（/api/ai）
  *
  * POST /api/ai/diagnose
- *   1. 复用 computeDashboardV2 计算本期指标 + 读历史快照
+ *   1. 复用 computeDashboardV2 计算本期 + 往前共 WINDOW_CYCLES 个发薪周期的收支，
+ *      按区间汇总（储蓄率/消费占比/投资率/应急金都看多期平均，不只看当月）
  *   2. 组装「脱敏财务摘要」——只有聚合数字/比例/趋势，
  *      绝不包含账户名、银行/机构名、信用卡名等任何名称类字段
  *   3. 调用智谱 GLM（key 存 Worker secret GLM_API_KEY，前端永不接触）
@@ -15,7 +16,7 @@
  */
 
 import { Hono } from 'hono';
-import { computeDashboardV2, formatDate } from '@cfp/shared';
+import { computeDashboardV2, formatDate, getCurrentCycle, addDays, parseDate } from '@cfp/shared';
 import { generateId } from '../lib/utils';
 import { FOUNDER_EMAIL } from '../lib/auth';
 import type { Env } from '../index';
@@ -25,6 +26,9 @@ export const aiRoutes = new Hono<{ Bindings: Env }>();
 const DAILY_LIMIT = 5;
 const GLM_ENDPOINT = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 const DEFAULT_MODEL = 'glm-5.2'; // 智谱旗舰；可用 GLM_MODEL var/secret 覆盖
+// 诊断看的发薪周期数（含本期）。单月会被大额信用卡账单/临时支出放大，
+// 多期平均才反映真实的收支结构
+const WINDOW_CYCLES = 6;
 
 // 摘要里所有金额四舍五入到整数，比例保留整数百分比
 const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
@@ -56,7 +60,7 @@ aiRoutes.post('/diagnose', async (c) => {
   }
 
   // ── 拉数据（与 dashboard 一致）──
-  const [configRow, cashRows, cardRows, snapshotRows, investmentRows, billRows, incomeRows, subscriptionRows, oneOffRows, otherAssetRows] =
+  const [configRow, cashRows, cardRows, snapshotRows, investmentRows, billRows, incomeRows, subscriptionRows, oneOffRows, otherAssetRows, firstSnapshotRow] =
     await Promise.all([
       db.prepare('SELECT * FROM user_config WHERE user_id = ?').bind(userId).first<any>(),
       db.prepare('SELECT * FROM cash_sources WHERE user_id = ?').bind(userId).all<any>(),
@@ -68,6 +72,7 @@ aiRoutes.post('/diagnose', async (c) => {
       db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').bind(userId).all<any>(),
       db.prepare('SELECT * FROM one_off_expenses WHERE user_id = ?').bind(userId).all<any>(),
       db.prepare('SELECT * FROM other_assets WHERE user_id = ?').bind(userId).all<any>(),
+      db.prepare('SELECT MIN(snapshot_date) AS d FROM snapshots WHERE user_id = ?').bind(userId).first<{ d: string | null }>(),
     ]);
 
   if (!configRow) {
@@ -94,8 +99,9 @@ aiRoutes.post('/diagnose', async (c) => {
     return { ...row, monthly_statements };
   });
 
+  const today = new Date();
   const calc = computeDashboardV2(
-    new Date(),
+    today,
     userConfig,
     cashRows.results || [],
     cards,
@@ -107,8 +113,19 @@ aiRoutes.post('/diagnose', async (c) => {
     oneOffRows.results || [],
   );
 
+  // ── 多期收支：本期 + 往前若干期（不早于用户开始记账的周期）──
+  const dataStart = earliestDataDate(configRow.created_at, firstSnapshotRow?.d ?? null, cards, oneOffRows.results || []);
+  const cycles = computeCycleHistory(today, userConfig.pay_day, calc, dataStart, (d) =>
+    computeDashboardV2(
+      d, userConfig, [], cards, [],
+      investmentRows.results || [], billRows.results || [], incomeRows.results || [],
+      subscriptionRows.results || [], oneOffRows.results || [],
+    ),
+  );
+  const agg = aggregateCycles(cycles);
+
   // ── 组装脱敏摘要（仅聚合数字，无任何名称）──
-  const summary = buildSummary(calc, snapshotRows.results || [], otherAssetRows.results || []);
+  const summary = buildSummary(calc, agg, cycles, snapshotRows.results || [], otherAssetRows.results || []);
 
   // ── 调 GLM ──
   let analysis: string;
@@ -131,14 +148,16 @@ aiRoutes.post('/diagnose', async (c) => {
   // ── 持久化诊断记录（保留历史，可回看/对比）──
   const diagId = generateId();
   const score = parseScore(analysis);
-  const metrics = buildMetrics(calc);
+  const metrics = buildMetrics(calc, agg);
+  const window: DiagnosisWindow = { cycles: agg.n, from: agg.from, to: agg.to };
   const model = c.env.GLM_MODEL || DEFAULT_MODEL;
   const now = Date.now();
   await db
     .prepare(
       'INSERT INTO ai_diagnoses (id, user_id, cycle_id, model, score, analysis, metrics_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    .bind(diagId, userId, calc.cycle_id, model, score, analysis, JSON.stringify(metrics), now)
+    // metrics_json：新格式为对象 { window, items, cycles }；旧记录是纯数组，/history 两种都兼容
+    .bind(diagId, userId, calc.cycle_id, model, score, analysis, JSON.stringify({ window, items: metrics, cycles }), now)
     .run();
 
   return c.json({
@@ -147,6 +166,8 @@ aiRoutes.post('/diagnose', async (c) => {
     score,
     analysis,
     metrics,
+    window,
+    cycles,
     generated_at: now,
     remaining: isUnlimited ? null : DAILY_LIMIT - used - 1,
   });
@@ -163,11 +184,22 @@ aiRoutes.get('/history', async (c) => {
     .all<any>();
   const items = (rows.results || []).map((r: any) => {
     let metrics: Metric[] = [];
+    let window: DiagnosisWindow | null = null;
+    let cycles: CycleStat[] = [];
     if (r.metrics_json) {
-      try { metrics = JSON.parse(r.metrics_json); } catch { /* 旧记录无 metrics */ }
+      try {
+        const parsed = JSON.parse(r.metrics_json);
+        if (Array.isArray(parsed)) {
+          metrics = parsed; // 旧记录：只看本期，纯数组
+        } else if (parsed && typeof parsed === 'object') {
+          metrics = Array.isArray(parsed.items) ? parsed.items : [];
+          window = parsed.window ?? null;
+          cycles = Array.isArray(parsed.cycles) ? parsed.cycles : [];
+        }
+      } catch { /* 旧记录无 metrics */ }
     }
     const { metrics_json: _m, ...rest } = r;
-    return { ...rest, metrics };
+    return { ...rest, metrics, window, cycles };
   });
   return c.json({ items });
 });
@@ -188,35 +220,138 @@ const ASSET_CATEGORY_LABEL: Record<string, string> = {
   other: '其他',
 };
 
-// ── 脱敏摘要：把 calc 提炼成聚合指标 ─────────────────────────────────
-function buildSummary(calc: ReturnType<typeof computeDashboardV2>, snapshots: any[], otherAssets: any[] = []) {
-  const ue = calc.upcoming_expenses;
-  const totalExpense = calc.total_expense || 0;
-  const consume = (ue?.total_credit_card ?? 0) + (ue?.total_bills ?? 0) + (ue?.total_subscriptions ?? 0);
-  const invest = ue?.total_investments ?? 0;
+// ── 多期收支 ─────────────────────────────────────────────────────
+type Calc = ReturnType<typeof computeDashboardV2>;
 
-  // 历史趋势：按周期取每期最新一条快照的净可用/结余，最近 6 期
+// 单个发薪周期的收支（只有聚合数字）
+type CycleStat = {
+  cycle_id: string;
+  income: number;
+  expense: number;  // 总支出（含投资）
+  consume: number;  // 信用卡 + 固定账单 + 订阅 + 临时支出
+  invest: number;
+  surplus: number;  // income - expense
+};
+
+type DiagnosisWindow = { cycles: number; from: string; to: string };
+
+type CycleAgg = {
+  n: number;
+  from: string;
+  to: string;
+  income: number;   // 区间合计
+  expense: number;
+  consume: number;
+  invest: number;
+  surplus: number;
+  avgIncome: number;  // 每期平均
+  avgExpense: number;
+  avgConsume: number;
+  avgInvest: number;
+  avgSurplus: number;
+  deficitCycles: number; // 透支（结余<0）的期数
+};
+
+function cycleStat(calc: Calc): CycleStat {
+  const ue = calc.upcoming_expenses;
+  const consume = (ue?.total_credit_card ?? 0) + (ue?.total_bills ?? 0) + (ue?.total_subscriptions ?? 0) + (ue?.total_one_off ?? 0);
+  return {
+    cycle_id: calc.cycle_id,
+    income: yen(calc.total_income),
+    expense: yen(calc.total_expense),
+    consume: yen(consume),
+    invest: yen(ue?.total_investments ?? 0),
+    surplus: yen(calc.total_income - calc.total_expense),
+  };
+}
+
+// 用户开始记账的大致日期：取配置创建、最早快照、最早信用卡账单月、最早临时支出中最早的一个。
+// 早于此的周期不计入（否则固定收支会被"复制"到用户还没用本应用的月份，虚增期数）
+function earliestDataDate(configCreatedAt: number | null, firstSnapshot: string | null, cards: any[], oneOffs: any[]): Date {
+  const candidates: Date[] = [];
+  if (configCreatedAt) candidates.push(new Date(configCreatedAt));
+  if (firstSnapshot) candidates.push(parseDate(firstSnapshot));
+  for (const card of cards) {
+    for (const k of Object.keys(card.monthly_statements ?? {})) {
+      if (/^\d{4}-\d{2}$/.test(k)) candidates.push(parseDate(`${k}-01`));
+    }
+  }
+  for (const o of oneOffs) {
+    if (typeof o.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.date)) candidates.push(parseDate(o.date));
+  }
+  const valid = candidates.filter((d) => !Number.isNaN(d.getTime()));
+  if (valid.length === 0) return new Date();
+  return new Date(Math.min(...valid.map((d) => d.getTime())));
+}
+
+// 本期 + 往前最多 WINDOW_CYCLES-1 期，按时间升序返回。
+// 往期用该周期内的某天重跑 computeDashboardV2，只取收支（现金余额是当前值，往期不可用）
+function computeCycleHistory(
+  today: Date,
+  payDay: number,
+  current: Calc,
+  dataStart: Date,
+  calcAt: (d: Date) => Calc,
+): CycleStat[] {
+  const startMidnight = new Date(dataStart.getFullYear(), dataStart.getMonth(), dataStart.getDate());
+  const out: CycleStat[] = [cycleStat(current)];
+  let cycleStart = getCurrentCycle(today, payDay).start_date;
+  for (let i = 1; i < WINDOW_CYCLES; i++) {
+    const d = addDays(cycleStart, -1); // 上一期的最后一天
+    if (d < startMidnight) break;      // 整期都在开始记账之前
+    out.push(cycleStat(calcAt(d)));
+    cycleStart = getCurrentCycle(d, payDay).start_date;
+  }
+  return out.reverse();
+}
+
+function aggregateCycles(cycles: CycleStat[]): CycleAgg {
+  const n = cycles.length;
+  const sum = (k: keyof Omit<CycleStat, 'cycle_id'>) => cycles.reduce((s, c) => s + c[k], 0);
+  const income = sum('income');
+  const expense = sum('expense');
+  const consume = sum('consume');
+  const invest = sum('invest');
+  const surplus = sum('surplus');
+  const avg = (v: number) => (n > 0 ? yen(v / n) : 0);
+  return {
+    n,
+    from: cycles[0]?.cycle_id ?? '',
+    to: cycles[n - 1]?.cycle_id ?? '',
+    income, expense, consume, invest, surplus,
+    avgIncome: avg(income),
+    avgExpense: avg(expense),
+    avgConsume: avg(consume),
+    avgInvest: avg(invest),
+    avgSurplus: avg(surplus),
+    deficitCycles: cycles.filter((c) => c.surplus < 0).length,
+  };
+}
+
+// 区间称呼：多期 →「近N期」，只有一期 →「本期」
+const periodLabel = (agg: CycleAgg) => (agg.n > 1 ? `近${agg.n}期` : '本期');
+
+// ── 脱敏摘要：把 calc + 多期汇总提炼成聚合指标 ─────────────────────
+function buildSummary(calc: Calc, agg: CycleAgg, cycles: CycleStat[], snapshots: any[], otherAssets: any[] = []) {
+  const ue = calc.upcoming_expenses;
+
+  // 净可用现金走势：按周期取每期最新一条快照（现金余额只能从快照拿到历史值）
   const byCycle = new Map<string, any>();
   for (const s of snapshots) {
     const prev = byCycle.get(s.cycle_id);
     if (!prev || s.snapshot_date > prev.snapshot_date) byCycle.set(s.cycle_id, s);
   }
-  const trend = [...byCycle.values()]
+  const cashTrend = [...byCycle.values()]
     .sort((a, b) => (a.cycle_id < b.cycle_id ? -1 : 1))
-    .slice(-6)
-    .map((s) => ({
-      周期: s.cycle_id,
-      净可用现金: yen(s.net_available),
-      日均预算: yen(s.daily_budget),
-      当期收入: yen(s.total_income ?? 0),
-      当期支出: yen(s.total_expense ?? 0),
-    }));
+    .slice(-WINDOW_CYCLES)
+    .map((s) => ({ 周期: s.cycle_id, 净可用现金: yen(s.net_available) }));
 
-  // 应急金覆盖月数 = 净可用现金 ÷ 月支出（本期支出≈一个月）；理论基准 3-6 月
-  // 注意：分母/分子均只用净可用现金（流动资产），不含下方「其他资产」——
+  // 应急金覆盖月数 = 净可用现金 ÷ 区间平均每期支出（每期≈一个月）；理论基准 3-6 月
+  // 用多期平均做分母，避免某个月大额账单把覆盖月数算得忽高忽低。
+  // 注意：只用净可用现金（流动资产），不含下方「其他资产」——
   // 股票/加密货币/房产波动大、不能说取就取，不该虚增抗风险能力
-  const emergencyMonths = totalExpense > 0
-    ? Math.round((calc.net_available / totalExpense) * 10) / 10
+  const emergencyMonths = agg.avgExpense > 0
+    ? Math.round((calc.net_available / agg.avgExpense) * 10) / 10
     : null;
 
   // 其他资产：按类别汇总市值（无任何具体资产名称），供 AI 做净值/多元化层面的参考
@@ -228,43 +363,64 @@ function buildSummary(calc: ReturnType<typeof computeDashboardV2>, snapshots: an
   const otherAssetsTotal = Object.values(otherAssetsByCategory).reduce((s, v) => s + v, 0);
 
   return {
-    本期周期: calc.cycle_id,
-    周期已过天数: calc.current_cycle_day,
-    距发薪日天数: calc.days_to_payday,
-    现金账户: {
+    分析区间: {
+      期数: agg.n,
+      起始周期: agg.from,
+      结束周期: agg.to,
+      说明: '每期=一个发薪周期(约一个月)；最后一期为进行中的本期，其支出按整期应付计',
+    },
+    区间汇总: {
+      平均每期收入: agg.avgIncome,
+      平均每期支出: agg.avgExpense,
+      平均每期消费: agg.avgConsume,
+      平均每期投资: agg.avgInvest,
+      平均每期结余: agg.avgSurplus,
+      储蓄率_pct: pct(agg.surplus, agg.income),
+      投资率_pct: pct(agg.invest, agg.income),
+      消费占收入_pct: pct(agg.consume, agg.income),
+      消费占支出_pct: pct(agg.consume, agg.expense),
+      透支期数: agg.deficitCycles,
+    },
+    各期收支: cycles.map((c) => ({
+      周期: c.cycle_id,
+      收入: c.income,
+      支出: c.expense,
+      消费: c.consume,
+      投资: c.invest,
+      结余: c.surplus,
+    })),
+    现金账户_当前: {
       总余额: yen(calc.total_balance),
       锁定金额: yen(calc.total_locked),
       净可用现金: yen(calc.net_available),
     },
+    抗风险: {
+      应急金覆盖月数: emergencyMonths, // 当前净可用现金 ÷ 区间平均每期支出；基准 3-6 月
+    },
     // 股票/基金、加密货币、房产等，仅类别汇总市值（不参与预算/应急金计算，供净值与配置层面参考）
     其他资产: otherAssetsTotal > 0 ? { 按类别汇总: otherAssetsByCategory, 合计: otherAssetsTotal } : null,
     总净值_现金加其他资产: yen(calc.net_available) + otherAssetsTotal,
-    日均可用预算: yen(calc.daily_budget),
-    本期收入总额: yen(calc.total_income),
-    本期支出: {
-      总额: yen(totalExpense),
-      信用卡: yen(ue?.total_credit_card ?? 0),
-      固定账单: yen(ue?.total_bills ?? 0),
-      订阅: yen(ue?.total_subscriptions ?? 0),
-      固定投资: yen(invest),
+    本期_进行中: {
+      周期: calc.cycle_id,
+      已过天数: calc.current_cycle_day,
+      距发薪日天数: calc.days_to_payday,
+      日均可用预算: yen(calc.daily_budget),
+      收入: yen(calc.total_income),
+      支出明细: {
+        信用卡: yen(ue?.total_credit_card ?? 0),
+        固定账单: yen(ue?.total_bills ?? 0),
+        订阅: yen(ue?.total_subscriptions ?? 0),
+        临时支出: yen(ue?.total_one_off ?? 0),
+        固定投资: yen(ue?.total_investments ?? 0),
+      },
     },
-    结构占比: {
-      消费占支出_pct: pct(consume, totalExpense),
-      投资占支出_pct: pct(invest, totalExpense),
-    },
-    本期结余: yen(calc.total_income - totalExpense),
-    储蓄率_pct: pct(calc.total_income - totalExpense, calc.total_income),
-    投资率_pct: pct(invest, calc.total_income),
-    抗风险: {
-      应急金覆盖月数: emergencyMonths,   // 净可用现金 ÷ 月支出；基准 3-6 月
-      消费占收入_pct: pct(consume, calc.total_income),
-    },
-    近期走势: trend,
+    净可用现金走势_快照: cashTrend,
     货币单位: '日元(JPY)',
   };
 }
 
 // ── 结构化健康指标（确定性，不依赖 AI；用于前端图表 + 历史存档）──
+// 比率类指标一律按区间合计计算（= 收入加权平均），不只看当月
 type Metric = {
   key: string;
   label: string;
@@ -276,64 +432,64 @@ type Metric = {
   advice: string;                          // 具体目标数字（确定性算缺口）
 };
 
-function buildMetrics(calc: ReturnType<typeof computeDashboardV2>): Metric[] {
-  const ue = calc.upcoming_expenses;
-  const income = calc.total_income || 0;
-  const totalExpense = calc.total_expense || 0;
-  const consume = (ue?.total_credit_card ?? 0) + (ue?.total_bills ?? 0) + (ue?.total_subscriptions ?? 0);
-  const invest = ue?.total_investments ?? 0;
-  const surplus = income - totalExpense;
+function buildMetrics(calc: Calc, agg: CycleAgg): Metric[] {
+  const period = periodLabel(agg);
+  const income = agg.avgIncome;
+  const totalExpense = agg.avgExpense;
+  const consume = agg.avgConsume;
+  const surplus = agg.avgSurplus;
 
-  const rate = (part: number) => (income > 0 ? Math.round((part / income) * 100) : 0);
-  const savings = rate(surplus);
-  const consumeRatio = rate(consume);
-  const investRate = rate(invest);
+  const rate = (part: number) => (agg.income > 0 ? Math.round((part / agg.income) * 100) : 0);
+  const savings = rate(agg.surplus);
+  const consumeRatio = rate(agg.consume);
+  const investRate = rate(agg.invest);
   const emg = totalExpense > 0 ? Math.round((calc.net_available / totalExpense) * 10) / 10 : 0;
   const clamp = (v: number, max: number) => Math.max(0, Math.min(100, Math.round((v / max) * 100)));
   const yen0 = (n: number) => '¥' + Math.round(Math.abs(n)).toLocaleString('en-US');
   const signed = (n: number) => (n >= 0 ? '+' : '−') + yen0(n);
 
-  // 各项达标目标（确定性算缺口，给出具体行动数字）
+  // 各项达标目标（按每期平均算缺口，给出具体行动数字）
   const targetSurplus = Math.round(income * 0.2); // 储蓄率 20%
   const savingsGap = targetSurplus - surplus;
   const targetNet = Math.round(totalExpense * 3); // 应急金 3 个月
   const emgGap = targetNet - calc.net_available;
   const targetConsume = Math.round(income * 0.5); // 消费 ≤50%
   const consumeCut = consume - targetConsume;
+  const deficitNote = agg.n > 1 && agg.deficitCycles > 0 ? `（${agg.n} 期中 ${agg.deficitCycles} 期透支）` : '';
 
   return [
     {
-      key: 'savings', label: '储蓄率', valueText: `${savings}%`,
+      key: 'savings', label: `储蓄率 · ${period}`, valueText: `${savings}%`,
       status: savings >= 20 ? 'good' : savings >= 10 ? 'warning' : 'bad',
       bar: { pct: clamp(savings, 40), markPct: clamp(20, 40) },
       criteria: '≥20% 优秀 · 10–20% 一般 · <10% 偏低',
       verdict: savings >= 20 ? '优秀' : savings >= 10 ? '一般' : '偏低',
       advice: income <= 0 ? '暂无收入数据'
         : savingsGap <= 0 ? '已达 20% 目标，继续保持'
-        : `距 20% 目标（结余 ${yen0(targetSurplus)}）还差 ${yen0(savingsGap)}/期`,
+        : `距 20% 目标（每期结余 ${yen0(targetSurplus)}）平均还差 ${yen0(savingsGap)}/期`,
     },
     {
       key: 'emergency', label: '应急金', valueText: emg > 0 ? `${emg} 个月` : '—',
       status: emg >= 3 ? 'good' : emg >= 1.5 ? 'warning' : 'bad',
       bar: { pct: clamp(emg, 6), markPct: clamp(3, 6) },
-      criteria: '≥3 个月 达标 · 1.5–3 偏低 · <1.5 不足',
+      criteria: `≥3 个月 达标 · 1.5–3 偏低 · <1.5 不足（按${period}平均支出算）`,
       verdict: emg >= 3 ? '达标' : emg >= 1.5 ? '偏低' : '不足',
       advice: totalExpense <= 0 ? '暂无支出数据'
         : emgGap <= 0 ? '应急金充足，继续保持'
         : `补到 3 个月（${yen0(targetNet)}）还差 ${yen0(emgGap)}`,
     },
     {
-      key: 'consume', label: '消费占收入', valueText: `${consumeRatio}%`,
+      key: 'consume', label: `消费占收入 · ${period}`, valueText: `${consumeRatio}%`,
       status: consumeRatio <= 50 ? 'good' : consumeRatio <= 70 ? 'warning' : 'bad',
       bar: { pct: clamp(consumeRatio, 100), markPct: clamp(50, 100) },
       criteria: '≤50% 健康 · 50–70% 偏紧 · >70% 过高',
       verdict: consumeRatio <= 50 ? '健康' : consumeRatio <= 70 ? '偏紧' : '过高',
       advice: income <= 0 ? '暂无收入数据'
         : consumeCut <= 0 ? '消费占比健康'
-        : `降到收入 50%（≤${yen0(targetConsume)}）需再压 ${yen0(consumeCut)}`,
+        : `降到收入 50%（每期 ≤${yen0(targetConsume)}）平均需再压 ${yen0(consumeCut)}/期`,
     },
     {
-      key: 'invest', label: '投资率', valueText: `${investRate}%`,
+      key: 'invest', label: `投资率 · ${period}`, valueText: `${investRate}%`,
       status: investRate > 0 ? 'good' : 'warning',
       bar: { pct: clamp(investRate, 30) },
       criteria: '有持续投资为佳（不应牺牲应急金）',
@@ -343,13 +499,14 @@ function buildMetrics(calc: ReturnType<typeof computeDashboardV2>): Metric[] {
         : '暂无投资，先补应急金再考虑',
     },
     {
-      key: 'cashflow', label: '本期结余', valueText: signed(surplus),
-      status: surplus > 0 ? 'good' : surplus === 0 ? 'warning' : 'bad',
-      criteria: '≥0 正向 · <0 透支',
-      verdict: surplus > 0 ? '正向' : surplus === 0 ? '持平' : '透支',
-      advice: surplus > 0 ? '本期正向，继续保持'
+      key: 'cashflow', label: agg.n > 1 ? `平均每期结余 · ${period}` : '本期结余', valueText: signed(surplus),
+      status: surplus > 0 && agg.deficitCycles === 0 ? 'good' : surplus >= 0 ? 'warning' : 'bad',
+      criteria: agg.n > 1 ? '平均 ≥0 且无透支期为佳 · 平均 <0 入不敷出' : '≥0 正向 · <0 透支',
+      verdict: (surplus > 0 ? '正向' : surplus === 0 ? '持平' : '透支') + deficitNote,
+      advice: surplus > 0
+        ? (agg.deficitCycles > 0 ? '整体正向，但个别期透支，注意平滑大额支出' : '持续正向，继续保持')
         : surplus === 0 ? '收支持平，尽量留出结余'
-        : `本期透支 ${yen0(surplus)}，需削减支出或增收`,
+        : `平均每期透支 ${yen0(surplus)}，需削减支出或增收`,
     },
   ];
 }
@@ -360,14 +517,17 @@ async function callGLM(env: Env, summary: unknown): Promise<string> {
 
   const systemPrompt = [
     '你是一位专业、务实的个人理财顾问。用户会给你一份【已脱敏的聚合财务摘要】(仅数字，无任何账户/机构名称)。',
+    '摘要覆盖【多个发薪周期】(见「分析区间」，每期约一个月)：评分与结论必须以「区间汇总」的多期平均为准，'
+      + '不要被单个月份的大额信用卡账单或临时支出带偏；「本期_进行中」只作补充参考。'
+      + '若区间只有 1 期，说明用户记账时间较短，结论需提示样本有限。',
     '你必须依据下面这套【客观评分标准】逐项对照打分，而不是凭感觉给分。标准综合了 50/30/20 预算法则、通用应急金共识与 CFPB 金融健康量表(0-100)：',
     [
       '评分维度与达标线(总分 0-100，各维度对照后综合)：',
-      '1) 现金流健康（权重高）：本期结余 ≥ 0 为及格；储蓄率 ≥20% 优秀 / 10-20% 一般 / <10% 偏弱（50/30/20 建议储蓄+还债≥20%）。',
+      '1) 现金流健康（权重高）：区间平均每期结余 ≥ 0 为及格，透支期数越多越扣分；区间储蓄率 ≥20% 优秀 / 10-20% 一般 / <10% 偏弱（50/30/20 建议储蓄+还债≥20%）。',
       '2) 抗风险·应急金（权重高）：应急金覆盖月数 ≥6 充足 / 3-6 合格 / <3 不足（通用共识 3-6 个月必要开支）。',
-      '3) 支出结构：消费占收入 ≤50% 健康，越高越吃紧。',
+      '3) 支出结构：区间消费占收入 ≤50% 健康，越高越吃紧。',
       '4) 财富增值：有持续投资(投资率>0)加分，但不应以牺牲应急金为代价。',
-      '5) 趋势：近期净可用现金稳定或上升为佳，持续下滑扣分。',
+      '5) 趋势与稳定性：对照「各期收支」看结余是改善还是恶化、波动是否大；「净可用现金走势_快照」稳定或上升为佳，持续下滑扣分。',
     ].join('\n'),
     '若摘要中含【其他资产】(股票基金/加密货币/房产等按类别汇总的市值)，这是补充参考信息：'
       + '可用于评论整体净值规模、资产配置是否过度集中于单一类别(如全部加密货币)。'
@@ -376,7 +536,7 @@ async function callGLM(env: Env, summary: unknown): Promise<string> {
     '注意：每个维度的实际数值、标准、结论、目标缺口已由系统在图表中逐项展示，你【不要】再逐项复述数字，聚焦总体解读、跨维度的风险与综合建议。',
     '请用中文、Markdown 输出，结构如下：',
     '## 总体健康度\n首行必须是「评分：NN/100」(整数)，随后一到两句话结论（点明最拖后腿的 1-2 项）。',
-    '## 风险与关注点\n2-3 条最需要改进的问题（可跨维度关联，如"应急金不足却仍在投资"）。',
+    '## 风险与关注点\n2-3 条最需要改进的问题（可跨维度关联，如"应急金不足却仍在投资"；可指出多期趋势/波动，如"近几期支出持续上升"）。',
     '## 行动建议\n3-4 条具体、可落地的建议，按优先级排序。',
     '要求：只依据给定数字，不要编造未提供的信息；金额都是日元；评分必须与各维度状态一致(不能多数不达标却给高分)；语气专业但亲切；总字数控制在 350 字以内。',
   ].join('\n\n');
