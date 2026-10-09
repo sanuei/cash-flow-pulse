@@ -17,13 +17,24 @@ type FormData = {
   note: string | null;
 };
 
+// 编辑已有投资时改了金额/频率：
+//   'from' → 从 effective_from 起生效：旧记录在该日截止（保留历史），新规则从该日开始
+//   'all'  → 直接改这条记录（之前录错了，历史一起改）
+export type ChangeScope = { mode: 'from'; effective_from: string } | { mode: 'all' };
+
+// 本地日期 YYYY-MM-DD（不用 toISOString，避免日本时间早上被算成前一天）
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function InvestmentForm({
   initial,
   onSubmit,
   onCancel,
 }: {
   initial?: FormData;
-  onSubmit: (data: FormData) => Promise<void>;
+  onSubmit: (data: FormData, scope?: ChangeScope) => Promise<void>;
   onCancel?: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
@@ -36,6 +47,8 @@ export function InvestmentForm({
   );
   const [endDate, setEndDate] = useState(initial?.end_date ?? '');
   const [note, setNote] = useState(initial?.note ?? '');
+  const [scopeMode, setScopeMode] = useState<'from' | 'all'>('from');
+  const [effectiveFrom, setEffectiveFrom] = useState(todayLocal());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,11 +65,28 @@ export function InvestmentForm({
     }
   }, [initial]);
 
+  // 编辑一条「已经开始扣款」的投资，并改了扣款规则 → 需要问清楚改动从哪天起算
+  const ruleChanged = !!initial && (
+    amount !== initial.amount ||
+    frequency !== initial.frequency ||
+    (frequency === 'monthly' && payDay !== initial.pay_day) ||
+    (frequency === 'weekly' && dayOfWeek !== initial.day_of_week)
+  );
+  const hasHistory = !!initial && initial.start_date < todayLocal();
+  const askScope = ruleChanged && hasHistory;
+  const fromMode = askScope && scopeMode === 'from';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!name.trim()) { setError('名称不能为空'); return; }
-    if (amount <= 0) { setError('金额必须大于 0'); return; }
+    if (fromMode) {
+      if (!effectiveFrom) { setError('请选择生效日期'); return; }
+      if (effectiveFrom <= initial!.start_date) { setError(`生效日期需晚于开始日期 ${initial!.start_date}；若要连历史一起改，选「修改全部历史」`); return; }
+      if (initial!.end_date && effectiveFrom >= initial!.end_date) { setError(`生效日期需早于结束日期 ${initial!.end_date}`); return; }
+    }
+    // 「从某天起」允许金额为 0 = 从该日起暂停扣款
+    if (amount < 0 || (amount === 0 && !fromMode)) { setError('金额必须大于 0'); return; }
     if (!startDate) { setError('开始日期必填'); return; }
     if (frequency === 'monthly' && (payDay < 1 || payDay > 31)) { setError('扣款日必须在 1-31 之间'); return; }
     setSaving(true);
@@ -70,7 +100,7 @@ export function InvestmentForm({
         start_date: startDate,
         end_date: endDate || null,
         note: note.trim() || null,
-      });
+      }, askScope ? (scopeMode === 'from' ? { mode: 'from', effective_from: effectiveFrom } : { mode: 'all' }) : undefined);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -88,6 +118,31 @@ export function InvestmentForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <HeroAmount label="投资金额（每次）" value={amount} onChange={setAmount} tone="accent" />
+
+      {askScope && (
+        <div className="rounded-[var(--radius-md)] border border-[var(--c-border)] p-3 space-y-3">
+          <Field
+            label="这次修改从哪天起算？"
+            hint={scopeMode === 'from'
+              ? '之前的扣款记录保持原金额不变，只有生效日及之后按新设置计算。金额填 0 = 从该日起暂停。'
+              : '这条投资从开始日期起的所有历史都会按新设置重算，仅在之前录错时使用。'}
+          >
+            <Segmented
+              options={[
+                { value: 'from' as const, label: '从某天起生效' },
+                { value: 'all' as const, label: '修改全部历史' },
+              ]}
+              value={scopeMode}
+              onChange={setScopeMode}
+            />
+          </Field>
+          {scopeMode === 'from' && (
+            <Field label="生效日期">
+              <input type="date" className="input font-numeric max-w-[200px]" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+            </Field>
+          )}
+        </div>
+      )}
 
       <Field label="名称">
         <input

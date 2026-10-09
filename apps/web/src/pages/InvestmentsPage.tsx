@@ -5,7 +5,7 @@ import { SearchBar } from '../components/SearchBar';
 import { ManagedListCard } from '../components/ManagedListCard';
 import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
-import { InvestmentForm } from '../components/InvestmentForm';
+import { InvestmentForm, type ChangeScope } from '../components/InvestmentForm';
 import { OneOffForm } from '../components/OneOffForm';
 import { PageTitle } from '../components/PageTitle';
 import { formatYen } from '@cfp/shared';
@@ -34,6 +34,14 @@ function freqDesc(inv: RecurringInvestment): string {
   return FREQ_LABEL[inv.frequency];
 }
 
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// end_date 是开区间上界：end_date 当天及之后不再扣款
+const isEnded = (inv: RecurringInvestment, today: string) => !!inv.end_date && inv.end_date <= today;
+
 export function InvestmentsPage() {
   const calc = useStore((s) => s.calc);
   const investmentsAll = useStore((s) => s.investments);
@@ -46,7 +54,11 @@ export function InvestmentsPage() {
     .filter((i) => !pendingDeletes.includes(i.id))
     .filter((i) => !query || i.name.toLowerCase().includes(query.toLowerCase()));
   // 固定投资(循环) 与 临时投资(single) 分开
-  const investments = visible.filter((i) => i.frequency !== 'single');
+  // 进行中的排前面，已停止的（改金额/暂停后截止的旧记录）沉底
+  const today = todayLocal();
+  const investments = visible
+    .filter((i) => i.frequency !== 'single')
+    .sort((a, b) => Number(isEnded(a, today)) - Number(isEnded(b, today)));
   const oneOffs = visible.filter((i) => i.frequency === 'single').sort((a, b) => b.start_date.localeCompare(a.start_date));
   // 本期发生的投资 id（用于「本期」badge）
   const cycleInvestIds = new Set((calc?.upcoming_expenses.investments ?? []).map((it) => it.id));
@@ -88,9 +100,21 @@ export function InvestmentsPage() {
                   }
                 : undefined
             }
-            onSubmit={async (data) => {
-              if (editing) await useStore.getState().updateInvestment(editing.id, data);
-              else await useStore.getState().addInvestment(data);
+            onSubmit={async (data, scope?: ChangeScope) => {
+              const st = useStore.getState();
+              if (editing && scope?.mode === 'from') {
+                // 从生效日起改：旧记录截止到生效日（历史保持原金额），新规则从生效日开始；
+                // 金额 0 = 暂停，只截止不新建
+                const from = scope.effective_from;
+                await st.updateInvestment(editing.id, { end_date: from });
+                if (data.amount > 0) {
+                  await st.addInvestment({ ...data, start_date: from });
+                }
+              } else if (editing) {
+                await st.updateInvestment(editing.id, data);
+              } else {
+                await st.addInvestment(data);
+              }
               await loadDashboard();
               close();
             }}
@@ -99,13 +123,24 @@ export function InvestmentsPage() {
         )}
       >
         {(openEdit) =>
-          investments.map((inv) => (
+          investments.map((inv) => {
+            const ended = isEnded(inv, today);
+            // 有截止日：同年省略年份，手机宽度下不被截断
+            const range = inv.end_date
+              ? `${inv.start_date} ~ ${inv.end_date.slice(0, 4) === inv.start_date.slice(0, 4) ? inv.end_date.slice(5) : inv.end_date}`
+              : `始于 ${inv.start_date}`;
+            return (
             <EntityRow
               key={inv.id}
               icon="investment"
               tone="accent"
-              title={inv.name}
-              subtitle={`${freqDesc(inv)}扣款 ${formatYen(inv.amount)} · 始于 ${inv.start_date}`}
+              title={
+                <>
+                  {inv.name}{' '}
+                  {ended && <span className="badge-muted badge text-[10px] px-1.5 py-0.5">已停止</span>}
+                </>
+              }
+              subtitle={`${freqDesc(inv)}${inv.end_date ? ' ' : '扣款 '}${formatYen(inv.amount)} · ${range}`}
               money={<Money amount={inv.amount} size="md" sign="negative" />}
               onEdit={() => openEdit(inv)}
               onDelete={() =>
@@ -119,7 +154,8 @@ export function InvestmentsPage() {
                 })
               }
             />
-          ))
+            );
+          })
         }
       </ManagedListCard>
 
