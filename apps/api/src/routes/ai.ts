@@ -16,7 +16,8 @@
  */
 
 import { Hono } from 'hono';
-import { computeDashboardV2, formatDate, getCurrentCycle, addDays, parseDate } from '@cfp/shared';
+import { computeDashboardV2, formatDate, earliestDataDate, computeCycleHistory, aggregateCycles } from '@cfp/shared';
+import type { CycleStat, CycleAgg } from '@cfp/shared';
 import { generateId } from '../lib/utils';
 import { FOUNDER_EMAIL } from '../lib/auth';
 import type { Env } from '../index';
@@ -115,13 +116,12 @@ aiRoutes.post('/diagnose', async (c) => {
 
   // ── 多期收支：本期 + 往前若干期（不早于用户开始记账的周期）──
   const dataStart = earliestDataDate(configRow.created_at, firstSnapshotRow?.d ?? null, cards, oneOffRows.results || []);
-  const cycles = computeCycleHistory(today, userConfig.pay_day, calc, dataStart, (d) =>
-    computeDashboardV2(
-      d, userConfig, [], cards, [],
-      investmentRows.results || [], billRows.results || [], incomeRows.results || [],
-      subscriptionRows.results || [], oneOffRows.results || [],
-    ),
-  );
+  const cycles = computeCycleHistory({
+    today, config: userConfig, cards,
+    investments: investmentRows.results || [], bills: billRows.results || [], incomes: incomeRows.results || [],
+    subscriptions: subscriptionRows.results || [], oneOffs: oneOffRows.results || [],
+    dataStart, maxCycles: WINDOW_CYCLES,
+  });
   const agg = aggregateCycles(cycles);
 
   // ── 组装脱敏摘要（仅聚合数字，无任何名称）──
@@ -223,110 +223,7 @@ const ASSET_CATEGORY_LABEL: Record<string, string> = {
 // ── 多期收支 ─────────────────────────────────────────────────────
 type Calc = ReturnType<typeof computeDashboardV2>;
 
-// 单个发薪周期的收支（只有聚合数字）
-type CycleStat = {
-  cycle_id: string;
-  income: number;
-  expense: number;  // 总支出（含投资）
-  consume: number;  // 信用卡 + 固定账单 + 订阅 + 临时支出
-  invest: number;
-  surplus: number;  // income - expense
-};
-
 type DiagnosisWindow = { cycles: number; from: string; to: string };
-
-type CycleAgg = {
-  n: number;
-  from: string;
-  to: string;
-  income: number;   // 区间合计
-  expense: number;
-  consume: number;
-  invest: number;
-  surplus: number;
-  avgIncome: number;  // 每期平均
-  avgExpense: number;
-  avgConsume: number;
-  avgInvest: number;
-  avgSurplus: number;
-  deficitCycles: number; // 透支（结余<0）的期数
-};
-
-function cycleStat(calc: Calc): CycleStat {
-  const ue = calc.upcoming_expenses;
-  const consume = (ue?.total_credit_card ?? 0) + (ue?.total_bills ?? 0) + (ue?.total_subscriptions ?? 0) + (ue?.total_one_off ?? 0);
-  return {
-    cycle_id: calc.cycle_id,
-    income: yen(calc.total_income),
-    expense: yen(calc.total_expense),
-    consume: yen(consume),
-    invest: yen(ue?.total_investments ?? 0),
-    surplus: yen(calc.total_income - calc.total_expense),
-  };
-}
-
-// 用户开始记账的大致日期：取配置创建、最早快照、最早信用卡账单月、最早临时支出中最早的一个。
-// 早于此的周期不计入（否则固定收支会被"复制"到用户还没用本应用的月份，虚增期数）
-function earliestDataDate(configCreatedAt: number | null, firstSnapshot: string | null, cards: any[], oneOffs: any[]): Date {
-  const candidates: Date[] = [];
-  if (configCreatedAt) candidates.push(new Date(configCreatedAt));
-  if (firstSnapshot) candidates.push(parseDate(firstSnapshot));
-  for (const card of cards) {
-    for (const k of Object.keys(card.monthly_statements ?? {})) {
-      if (/^\d{4}-\d{2}$/.test(k)) candidates.push(parseDate(`${k}-01`));
-    }
-  }
-  for (const o of oneOffs) {
-    if (typeof o.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.date)) candidates.push(parseDate(o.date));
-  }
-  const valid = candidates.filter((d) => !Number.isNaN(d.getTime()));
-  if (valid.length === 0) return new Date();
-  return new Date(Math.min(...valid.map((d) => d.getTime())));
-}
-
-// 本期 + 往前最多 WINDOW_CYCLES-1 期，按时间升序返回。
-// 往期用该周期内的某天重跑 computeDashboardV2，只取收支（现金余额是当前值，往期不可用）
-function computeCycleHistory(
-  today: Date,
-  payDay: number,
-  current: Calc,
-  dataStart: Date,
-  calcAt: (d: Date) => Calc,
-): CycleStat[] {
-  const startMidnight = new Date(dataStart.getFullYear(), dataStart.getMonth(), dataStart.getDate());
-  const out: CycleStat[] = [cycleStat(current)];
-  let cycleStart = getCurrentCycle(today, payDay).start_date;
-  for (let i = 1; i < WINDOW_CYCLES; i++) {
-    const d = addDays(cycleStart, -1); // 上一期的最后一天
-    if (d < startMidnight) break;      // 整期都在开始记账之前
-    out.push(cycleStat(calcAt(d)));
-    cycleStart = getCurrentCycle(d, payDay).start_date;
-  }
-  return out.reverse();
-}
-
-function aggregateCycles(cycles: CycleStat[]): CycleAgg {
-  const n = cycles.length;
-  const sum = (k: keyof Omit<CycleStat, 'cycle_id'>) => cycles.reduce((s, c) => s + c[k], 0);
-  const income = sum('income');
-  const expense = sum('expense');
-  const consume = sum('consume');
-  const invest = sum('invest');
-  const surplus = sum('surplus');
-  const avg = (v: number) => (n > 0 ? yen(v / n) : 0);
-  return {
-    n,
-    from: cycles[0]?.cycle_id ?? '',
-    to: cycles[n - 1]?.cycle_id ?? '',
-    income, expense, consume, invest, surplus,
-    avgIncome: avg(income),
-    avgExpense: avg(expense),
-    avgConsume: avg(consume),
-    avgInvest: avg(invest),
-    avgSurplus: avg(surplus),
-    deficitCycles: cycles.filter((c) => c.surplus < 0).length,
-  };
-}
 
 // 区间称呼：多期 →「近N期」，只有一期 →「本期」
 const periodLabel = (agg: CycleAgg) => (agg.n > 1 ? `近${agg.n}期` : '本期');

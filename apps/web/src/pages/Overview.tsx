@@ -2,13 +2,14 @@ import { useState, useEffect, type ReactNode, Children, isValidElement, cloneEle
 import { Link } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { Card } from '../components/Card';
-import { Money } from '../components/Money';
 import { LoadingState } from '../components/States';
 import { Icon } from '../components/Icon';
-import { formatYen } from '@cfp/shared';
+import { formatYen, runwayMonths } from '@cfp/shared';
 import { HorizontalBarChart, type BarItem } from '../components/HorizontalBarChart';
 import { AiDiagnosis } from '../components/AiDiagnosis';
 import { CashFlowChart } from '../components/CashFlowChart';
+import { FireCard } from '../components/FireCard';
+import { useLongTermStats } from '../lib/longTerm';
 import { apiGet } from '../lib/api';
 import type { CashflowResult } from '@cfp/shared';
 import type {
@@ -89,6 +90,9 @@ export function Overview() {
     return () => { cancelled = true; };
   }, [cycleOffset]);
 
+  // 近 6 期收支（月均生活成本、净储蓄），供「可支撑月数」和「财务自由」
+  const longTerm = useLongTermStats();
+
   const [expensesExpanded, setExpensesExpanded] = useState(false);
   const [incomesExpanded, setIncomesExpanded] = useState(false);
 
@@ -139,6 +143,11 @@ export function Overview() {
     && totalIncome === 0
     && totalInvestment === 0
     && totalConsume === 0;
+
+  // 现金可支撑月数 = 净可用现金 ÷ 近 N 期月均生活成本（不含投资）
+  const livingCost = longTerm?.agg.avgConsume ?? 0;
+  const runway = runwayMonths(activeCalc.net_available, livingCost);
+  const livingPeriod = longTerm && longTerm.agg.n > 1 ? `近 ${longTerm.agg.n} 期平均` : '本期';
 
   // 周期进度（本期已过百分比）
   const cycleLen = activeCalc.current_cycle_day + activeCalc.days_to_payday;
@@ -220,23 +229,34 @@ export function Overview() {
         )}
 
         <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-caps font-semibold text-[var(--c-accent-text)] bg-[var(--c-accent-soft)] rounded-[var(--radius-pill)] px-3 py-1 mb-3">
-          {isPredicted ? '预测日均预算' : '日均可用预算'}
+          {isPredicted ? '预计现金可支撑' : '现金可支撑'}
         </div>
         <div className="mb-1.5">
-          <Money
-            amount={activeCalc.daily_budget}
-            size="hero"
-            className="font-display"
-            color="accent"
-            animate
-          />
+          <span
+            className="font-numeric font-display font-semibold tabular-nums text-[44px] sm:text-[56px] leading-[1.05] tracking-tight-display"
+            style={{
+              backgroundImage: 'linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent-hover) 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              color: 'transparent',
+            }}
+          >
+            {runway === null ? '—' : runway.toFixed(1)}
+          </span>
           <span className="text-[16px] sm:text-[18px] text-notion-text-secondary font-normal ml-1.5">
-            / 日
+            个月
           </span>
         </div>
         <div className="text-[13px] text-notion-text-secondary">
+          {livingCost > 0
+            ? <>月均生活成本 <b className="text-notion-text font-semibold">{formatYen(livingCost)}</b>（{livingPeriod}，不含投资）</>
+            : <>录入信用卡、账单、订阅等消费后显示</>
+          }
+        </div>
+        <div className="text-[12px] text-notion-text-muted mt-0.5">
           {isCurrentCycle
-            ? <>距发薪日（{activeCalc.next_payday_date}）还有 <b className="text-notion-text font-semibold">{activeCalc.days_to_payday}</b> 天</>
+            ? <>距发薪日（{activeCalc.next_payday_date}）还有 {activeCalc.days_to_payday} 天</>
             : <>{cycleMeta?.cycle_start} — {cycleMeta?.cycle_end}</>
           }
         </div>
@@ -269,6 +289,11 @@ export function Overview() {
           </span>
         </div>
       </section>
+
+      {/* 财务自由（仅本期，有数据时）*/}
+      {isCurrentCycle && !isNewUser && longTerm && (
+        <FireCard stats={longTerm} cashAssets={activeCalc.net_available + activeCalc.total_locked} />
+      )}
 
       {/* AI 财务诊断（仅本期，有数据时）*/}
       {isCurrentCycle && !isNewUser && <AiDiagnosis />}
@@ -323,7 +348,7 @@ export function Overview() {
             👋 欢迎使用现金流
           </div>
           <p className="text-[13px] text-notion-text-secondary mb-4 leading-relaxed">
-            添加数据后，这里会自动计算你的日均可用预算和收支结余。从这三步开始：
+            添加数据后，这里会自动计算现金能支撑几个月、财务自由还差多少。从这三步开始：
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <Link to="/incomes"
