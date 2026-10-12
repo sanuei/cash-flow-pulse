@@ -1149,7 +1149,16 @@ export function computeDashboardV2(
 
 export type CashflowEventType = 'card' | 'bill' | 'subscription' | 'investment' | 'income' | 'one_off';
 export type CashflowEvent = { label: string; amount: number; type: CashflowEventType };
-export type CashflowPoint = { date: string; balance: number; is_past: boolean; events: CashflowEvent[] };
+export type CashflowPoint = {
+  date: string;
+  balance: number;
+  is_past: boolean;
+  events: CashflowEvent[];
+  /** true = 来自每日快照的真实可用现金；false/缺省 = 按计划推演 */
+  actual?: boolean;
+};
+/** 每日快照里的真实可用现金（total_balance − total_locked），用于画「过去」段 */
+export type CashflowHistoryPoint = { date: string; balance: number };
 export type CashflowResult = {
   cycle_id: string;
   cycle_start: string;
@@ -1233,6 +1242,7 @@ export function computeDailyCashflow(
   subscriptions: Subscription[] = [],
   periodsAhead = 0,   // 额外向未来延伸的周期数（0=只本期）
   oneOffs: OneOffExpense[] = [],
+  history: CashflowHistoryPoint[] = [],  // 真实快照（任意日期范围，今天及以后的会被忽略）
 ): CashflowResult {
   const todayMs = cashflowMidMs(today);
   // 今天锚点：真实可用现金（未扣未来项）
@@ -1281,12 +1291,28 @@ export function computeDailyCashflow(
     carry = bal[days.length - 1]!;
   }
 
+  // 过去段用真实快照：
+  //   - 本期内、今天之前的日子：有快照就用快照值替换"按计划反推"的值（更真实）
+  //   - 本期开始之前的日子：只有快照才画（不再往前推演，避免编造历史）
+  //   今天本身始终是锚点（实时现金），不被快照覆盖
+  const todayStr = formatDate(today);
+  const hist = new Map<string, number>();
+  for (const h of history) if (h.date < todayStr) hist.set(h.date, Math.round(h.balance));
+  for (const pt of points) {
+    const v = hist.get(pt.date);
+    if (pt.is_past && pt.date < todayStr && v !== undefined) { pt.balance = v; pt.actual = true; }
+  }
+  const earlier: CashflowPoint[] = [...hist.entries()]
+    .filter(([d]) => d < cycle0.start_date_str)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, balance]) => ({ date, balance, is_past: true, events: [], actual: true }));
+
   return {
     cycle_id: cycle0.cycle_id,
-    cycle_start: cycle0.start_date_str,
+    cycle_start: earlier[0]?.date ?? cycle0.start_date_str,
     cycle_end: lastEnd,
-    today: formatDate(today),
+    today: todayStr,
     anchor: Math.round(anchor),
-    points,
+    points: [...earlier, ...points],
   };
 }

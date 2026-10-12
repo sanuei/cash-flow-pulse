@@ -13,6 +13,7 @@ import {
   isCardActiveInCycle,
   getCardAmountForDate,
   getCalendarMonthDueStatus,
+  computeDailyCashflow,
   computeDashboard,
   detectUnchanged,
   formatYen,
@@ -1066,5 +1067,36 @@ describe('getCalendarMonthDueStatus（消费页按自然月展示，不受发薪
     const today = new Date(2026, 1, 10); // 2026-02-10（2026 非闰年，2月28天）
     const r = getCalendarMonthDueStatus(31, today);
     expect(formatDate(r.dueDate)).toBe('2026-02-28');
+  });
+});
+describe('computeDailyCashflow 过去段使用真实快照', () => {
+  // pay_day=10，今天 2026-07-20 → 本期 [7/10, 8/10)
+  const today = new Date(2026, 6, 20);
+  const cash: CashSource[] = [
+    { id: 'c', user_id: 'u', name: '现金', balance: 100000, locked_amount: 0, sort_order: 0, created_at: 0, updated_at: 0 },
+  ];
+  const history = [
+    { date: '2026-06-15', balance: 80000 }, // 本期之前 → 作为更早的真实点前置
+    { date: '2026-07-12', balance: 95000 }, // 本期内、今天之前 → 覆盖推演值
+    { date: '2026-07-20', balance: 1 },     // 今天 → 忽略（今天始终是实时锚点）
+  ];
+  const r = computeDailyCashflow(today, baseConfig, cash, [], [], [], [], [], 0, [], history);
+  const at = (d: string) => r.points.find((p) => p.date === d);
+
+  it('本期之前的快照按日期前置，标为 actual', () => {
+    expect(r.points[0]).toMatchObject({ date: '2026-06-15', balance: 80000, is_past: true, actual: true });
+    expect(r.cycle_start).toBe('2026-06-15');
+  });
+  it('本期内已过去的日子用快照值替换', () => {
+    expect(at('2026-07-12')).toMatchObject({ balance: 95000, actual: true });
+    expect(at('2026-07-11')?.actual).toBeUndefined(); // 没快照的日子仍是推演值
+  });
+  it('今天不被快照覆盖，保持实时锚点', () => {
+    expect(at('2026-07-20')?.balance).toBe(100000);
+  });
+  it('点按日期升序且无重复', () => {
+    const ds = r.points.map((p) => p.date);
+    expect([...ds].sort()).toEqual(ds);
+    expect(new Set(ds).size).toBe(ds.length);
   });
 });

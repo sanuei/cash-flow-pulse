@@ -788,3 +788,45 @@ html[data-theme="neon"] .hero-gradient {
     radial-gradient(80% 60% at 75% 0%, oklch(92% 0.27 124 / 0.12) 0%, transparent 60%),
     linear-gradient(180deg, oklch(15% 0.018 133) 0%, oklch(11% 0.012 135) 100%);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   10. 构成环形图的分类色（cat-*）
+   来自 dataviz 校验过的参考调色板；按"实体"固定分配（不按排名），见
+   components/DonutBreakdown.tsx。已用 validate_palette 校验环上相邻对（含首尾）：
+   支出 = 橙/紫/黄/粉/蓝，收入 = 青绿/蓝/黄/紫，浅深两套均通过 CVD 与正常视觉阈值。
+   浅色主题必须显式写一遍：否则系统深色 + 浅色主题时会吃到深色那套值。
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root,
+html[data-theme="warm"],
+html[data-theme="white"],
+html[data-theme="green"] {
+  --c-cat-blue:    #2a78d6;
+  --c-cat-orange:  #eb6834;
+  --c-cat-aqua:    #1baf7a;
+  --c-cat-yellow:  #eda100;
+  --c-cat-magenta: #e87ba4;
+  --c-cat-violet:  #4a3aa7;
+  --c-cat-other:   oklch(70% 0.01 70);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-cat-blue:    #3987e5;
+    --c-cat-orange:  #d95926;
+    --c-cat-aqua:    #199e70;
+    --c-cat-yellow:  #c98500;
+    --c-cat-magenta: #d55181;
+    --c-cat-violet:  #9085e9;
+    --c-cat-other:   oklch(52% 0.01 70);
+  }
+}
+html[data-theme="dark"],
+html[data-theme="violet"],
+html[data-theme="neon"] {
+  --c-cat-blue:    #3987e5;
+  --c-cat-orange:  #d95926;
+  --c-cat-aqua:    #199e70;
+  --c-cat-yellow:  #c98500;
+  --c-cat-magenta: #d55181;
+  --c-cat-violet:  #9085e9;
+  --c-cat-other:   oklch(52% 0.01 70);
+}

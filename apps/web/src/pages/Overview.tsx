@@ -5,7 +5,7 @@ import { Card } from '../components/Card';
 import { LoadingState } from '../components/States';
 import { Icon } from '../components/Icon';
 import { formatYen, runwayMonths } from '@cfp/shared';
-import { HorizontalBarChart, type BarItem } from '../components/HorizontalBarChart';
+import { DonutBreakdown, type DonutItem } from '../components/DonutBreakdown';
 import { AiDiagnosis } from '../components/AiDiagnosis';
 import { CashFlowChart } from '../components/CashFlowChart';
 import { FireCard } from '../components/FireCard';
@@ -334,13 +334,12 @@ export function Overview() {
       )}
 
       {/* 收支图：有本期收入时 = 收入去向；无收入时 = 支出分布
-            v1.8 起内部是「总额 + 横向堆叠条 + 图例」（原环形图的段外标签会被
-            viewBox 裁掉，详见 FlowChartRow 顶部注释） */}
+            内部是 DonutBreakdown：环形图（中心=总额）+ 图例，文字全在 HTML 里不会被裁 */}
       {(totalConsume > 0 || totalInvestment > 0) && (
         <Card
           title={
             <div className="flex items-center gap-2">
-              <Icon name="bar-chart" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
+              <Icon name="pie" size={16} className="text-notion-text-secondary" strokeWidth={1.75} />
               <span>{totalIncome > 0 ? '本期收入去向' : netFlow > 0 ? '账户分配概览' : '本期支出分布'}</span>
             </div>
           }
@@ -455,20 +454,20 @@ export function Overview() {
             </button>
           }
         >
-          {/* 收起时:水平条形图(概览) — 4 个子类别聚合 */}
+          {/* 收起时：构成环形图（概览）— 按支出类别聚合 */}
           {!expensesExpanded && upcomingExpenses && (
             <div className="anim-fade-up">
-              <HorizontalBarChart
-                items={[
-                  // 颜色与上方「收入去向」一致：消费类=warning，投资=invest
-                  { name: '信用卡', amount: upcomingExpenses.total_credit_card, color: 'var(--c-warning)', icon: 'card' },
-                  { name: '固定账单', amount: upcomingExpenses.total_bills, color: 'var(--c-warning)', icon: 'bill' },
-                  { name: '临时账单', amount: upcomingExpenses.total_one_off ?? 0, color: 'var(--c-warning)', icon: 'calendar' },
-                  { name: '订阅', amount: upcomingExpenses.total_subscriptions, color: 'var(--c-warning)', icon: 'subscription' },
-                  { name: '固定投资', amount: upcomingExpenses.total_investments, color: 'var(--c-invest)', icon: 'investment' },
-                ]}
-                total={totalExpense}
+              <DonutBreakdown
+                centerLabel="本期支出"
                 emptyText="本期暂无支出"
+                items={[
+                  // 颜色按类别固定分配（cat-* 已校验环上相邻对），不随金额排名变化
+                  { key: 'card', name: '信用卡', amount: upcomingExpenses.total_credit_card, color: 'var(--c-cat-orange)' },
+                  { key: 'bill', name: '固定账单', amount: upcomingExpenses.total_bills, color: 'var(--c-cat-violet)' },
+                  { key: 'oneoff', name: '临时账单', amount: upcomingExpenses.total_one_off ?? 0, color: 'var(--c-cat-yellow)' },
+                  { key: 'sub', name: '订阅', amount: upcomingExpenses.total_subscriptions, color: 'var(--c-cat-magenta)' },
+                  { key: 'inv', name: '固定投资', amount: upcomingExpenses.total_investments, color: 'var(--c-cat-blue)' },
+                ]}
               />
             </div>
           )}
@@ -604,25 +603,29 @@ export function Overview() {
             </button>
           }
         >
-          {/* 收起时:水平条形图(概览) — 按 income 类别聚合 */}
+          {/* 收起时：构成环形图（概览）— 按收入名称聚合 */}
           {!incomesExpanded && (
             <div className="anim-fade-up">
-              <HorizontalBarChart
+              <DonutBreakdown
+                centerLabel="本期收入"
+                emptyText="本期暂无收入"
                 items={(() => {
-                  // 按 name 聚合(upcomingIncomes.items 里同 name 多个 occurrences)
+                  // 按名称聚合（同一收入本期可能多次到账）；颜色按数据顺序固定分配，
+                  // 只用 4 个校验过的色位，第 5 项起并入「其他」
                   const map = new Map<string, number>();
                   for (const inc of upcomingIncomes.items) {
                     map.set(inc.name, (map.get(inc.name) ?? 0) + inc.amount);
                   }
-                  return Array.from(map.entries()).map(([name, amount]) => ({
-                    name,
-                    amount,
-                    color: 'var(--c-success)',
-                    // 收入各行图标都一样，不加，把宽度留给名称
+                  const colors = ['var(--c-cat-aqua)', 'var(--c-cat-blue)', 'var(--c-cat-yellow)', 'var(--c-cat-violet)'];
+                  const entries = Array.from(map.entries());
+                  const head = entries.slice(0, colors.length).map(([name, amount], i) => ({
+                    key: name, name, amount, color: colors[i]!,
                   }));
+                  const rest = entries.slice(colors.length).reduce((s, [, a]) => s + a, 0);
+                  return rest > 0
+                    ? [...head, { key: '__other', name: '其他', amount: rest, color: 'var(--c-cat-other)' }]
+                    : head;
                 })()}
-                total={totalIncome}
-                emptyText="本期暂无收入"
               />
             </div>
           )}
@@ -904,122 +907,39 @@ function IncomeRow({ item }: { item: UpcomingIncomeItem }) {
   );
 }
 
-// ── 本期收入去向：总额 + 横向堆叠条 + 图例 ──────────────────────────────────
+// ── 本期收入去向：环形图（中心=总额）+ 图例 ─────────────────────────────────
 // 分母 = 本期收入（纯流量）。消费 + 投资 + 结余 = 本期收入。
-// 若超支（净流入<0），分母退化为本期支出，并单列「超支」。
-//
-// v1.8 重新设计（原本是环形图 + 段外百分比标签）：
-//   1) 环形图的段外标签半径 labelR = R+12 = 70，圆心 (70,70) → 最大坐标正好
-//      140 = viewBox 边界，偏右下的段标签会被裁掉（线上出现过 "52%" 只剩 "52"）。
-//      part-to-whole 改用横向堆叠条：没有极坐标，就永远不会有标签溢出。
-//   2) 百分比原来出现三遍（段外标签 + 图例 + 底部公式），现在只在图例出现一次。
-//   3) 原布局用 ml-auto 把图例推到右缘，圆环与图例之间被撑出一大片空白；
-//      堆叠条按容器宽度铺满，横向空间利用率更高，窄屏也不用挤一个 168px 的圆。
-//   4) 段间用 2px 卡面色缝隙分隔（而不是给每段描边），两端 4px 圆角。
-//   5) 底部等宽字体的验算公式去掉——堆叠条本身就是"构成"的可视化，
-//      图例已给出精确数字，再列一行公式是第三次重复。
-
-type FlowSeg = { value: number; color: string; label: string; positive?: boolean };
-
+// 若超支（净流入<0），没有结余段，单列「超支」。
+// 颜色是语义色（消费 warning / 投资 invest / 结余 success），与全站收支文字一致。
 function FlowChartRow({
   consume, invest, netFlow, hasIncome,
 }: { consume: number; invest: number; netFlow: number; hasIncome: boolean }) {
-  // 超支：只有有收入且入不敷出时才算"超支"；无收入时只是"现金不够覆盖账单"
   const overspend = hasIncome && netFlow < 0;
-
-  const segments: FlowSeg[] = [
-    // 消费=warning(橙红) / 投资=invest(青蓝 hue248) / 结余=success(绿 hue152)
-    // 三色相互拉开 ~100°，CVD 下也能分辨（已用 dataviz 调色板校验器验证：
-    // 浅色模式全项通过，最差相邻对 ΔE 18.7 deutan / 20.1 normal）
-    { value: consume, color: 'var(--c-warning)', label: '消费' },
-    { value: invest,  color: 'var(--c-invest)',  label: '投资' },
-    ...(netFlow > 0 ? [{ value: netFlow, color: 'var(--c-success)', label: '结余', positive: true }] : []),
-  ].filter(s => s.value > 0);
-
-  const total = segments.reduce((s, x) => s + x.value, 0);
-  if (total <= 0) return null;
-
-  const totalLabel = hasIncome ? '本期收入' : netFlow > 0 ? '现金分配' : '本期支出';
+  const items: DonutItem[] = [
+    { key: 'consume', name: '消费', amount: consume, color: 'var(--c-warning)', sign: '−' },
+    { key: 'invest',  name: '投资', amount: invest,  color: 'var(--c-invest)',  sign: '−' },
+    ...(netFlow > 0 ? [{ key: 'net', name: '结余', amount: netFlow, color: 'var(--c-success)', sign: '+', emphasis: true }] : []),
+  ];
+  const centerLabel = hasIncome ? '本期收入' : netFlow > 0 ? '现金分配' : '本期支出';
 
   return (
-    <div className="space-y-4">
-      {/* 总额：这张卡的主角数字（不用 tabular-nums——大号数字等宽会显得松散） */}
-      <div>
-        <div className="text-[11px] text-notion-text-muted">{totalLabel}</div>
-        <div className="font-display font-semibold text-[30px] leading-tight text-notion-text tracking-tight-section">
-          {formatYen(total)}
-        </div>
-      </div>
-
-      {/* 横向堆叠条：flex-grow 按数值比例分配（gap 自动被吸收，永不溢出）；
-          min-w 保证极小的段也看得见；两端 4px 圆角 */}
-      <div
-        className="flex h-3 gap-[2px]"
-        role="img"
-        aria-label={segments
-          .map((s) => `${s.label} ${Math.round((s.value / total) * 100)}%`)
-          .join('，')}
-      >
-        {segments.map((seg) => (
-          <div
-            key={seg.label}
-            title={`${seg.label} ${formatYen(seg.value)}`}
-            className="
-              min-w-[3px] first:rounded-l-[4px] last:rounded-r-[4px]
-              transition-opacity duration-[var(--dur-fast)] hover:opacity-75
-            "
-            style={{ flex: seg.value, background: seg.color }}
-          />
-        ))}
-      </div>
-
-      {/* 图例：每段都直接标注（≤4 段时直接标注是必须的，identity 不能只靠颜色）；
-          金额/百分比各自成列右对齐，列内用 tabular-nums 对齐数位。
-          行间用 1px 分隔线（比纯间距更有"账目"感，也把三行撑到与左侧图表卡等高） */}
-      <div className="divide-y divide-[var(--c-border)]">
-        {segments.map((seg) => {
-          const pct = Math.round((seg.value / total) * 100);
-          return (
-            <div key={seg.label} className="flex items-center gap-2 text-[13px] py-2">
-              <span
-                className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0"
-                style={{ background: seg.color }}
-                aria-hidden="true"
-              />
-              <span className="text-notion-text-secondary">{seg.label}</span>
-              <span
-                className={`font-numeric ml-auto tabular-nums ${
-                  seg.positive ? 'text-notion-success font-semibold' : 'text-notion-text'
-                }`}
-              >
-                {seg.positive ? '+' : '−'}{formatYen(seg.value)}
-              </span>
-              <span className="w-9 text-right flex-shrink-0 font-numeric tabular-nums text-notion-text-muted">
-                {pct}%
-              </span>
-            </div>
-          );
-        })}
-
-        {/* 超支行：仅在有收入且支出超过收入时显示 */}
-        {overspend && (
-          <div className="flex items-center gap-2 text-[13px] py-2">
-            <span className="w-2.5 h-2.5 rounded-[3px] flex-shrink-0 bg-[var(--c-warning)]" aria-hidden="true" />
+    <DonutBreakdown
+      items={items}
+      centerLabel={centerLabel}
+      footer={
+        overspend ? (
+          <div className="flex items-center gap-2 text-[13px] pt-2 border-t border-[var(--c-border)]">
             <span className="text-notion-warning font-semibold">超支</span>
             <span className="font-numeric ml-auto tabular-nums text-notion-warning font-semibold">
               −{formatYen(Math.abs(netFlow))}
             </span>
-            <span className="w-9 flex-shrink-0" aria-hidden="true" />
           </div>
-        )}
-      </div>
-
-      {/* 无收入时补一句口径说明（有收入时堆叠条 + 图例已经说清构成，不再赘述） */}
-      {!hasIncome && (
-        <p className="text-[11px] text-notion-text-muted leading-relaxed">
-          {netFlow > 0 ? '结余 = 净可用现金 − 账单 − 订阅 − 投资' : '本期暂无收入到账'}
-        </p>
-      )}
-    </div>
+        ) : !hasIncome ? (
+          <p className="text-[11px] text-notion-text-muted leading-relaxed">
+            {netFlow > 0 ? '结余 = 净可用现金 − 账单 − 订阅 − 投资' : '本期暂无收入到账'}
+          </p>
+        ) : null
+      }
+    />
   );
 }

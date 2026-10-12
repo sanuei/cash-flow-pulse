@@ -10,7 +10,7 @@
  */
 
 import { Hono } from 'hono';
-import { computeDashboardV2, computeDailyCashflow, addMonths, getCurrentCycle, diffDays } from '@cfp/shared';
+import { computeDashboardV2, computeDailyCashflow, addMonths, getCurrentCycle, diffDays, formatDate } from '@cfp/shared';
 import type { Env } from '../index';
 import { parseFireSettings } from '../lib/utils';
 
@@ -198,11 +198,26 @@ dashboardRoute.get('/cashflow', async (c) => {
     return { ...row, monthly_statements };
   });
 
-  // 向未来延伸的周期数（0=只本期，最多 3）
-  const periods = Math.max(0, Math.min(3, parseInt(c.req.query('periods') || '0', 10) || 0));
+  // periods = 向未来延伸的周期数，past = 向过去回看的月数（各 0~12）
+  const clamp12 = (v: string | undefined) => Math.max(0, Math.min(12, parseInt(v || '0', 10) || 0));
+  const periods = clamp12(c.req.query('periods'));
+  const past = clamp12(c.req.query('past'));
+
+  // 过去段用真实每日快照（可用现金 = 余额 − 锁定）。至少取到本期开始，
+  // 这样本期内已过去的日子也能用真实值替换"按计划反推"的值
+  const today = new Date();
+  const cycleStart = getCurrentCycle(today, userConfig.pay_day).start_date;
+  const histFrom = formatDate(past > 0 ? addMonths(cycleStart, -past) : cycleStart);
+  const histRows = await db
+    .prepare('SELECT snapshot_date, total_balance, total_locked FROM snapshots WHERE user_id = ? AND snapshot_date >= ? ORDER BY snapshot_date')
+    .bind(userId, histFrom)
+    .all<any>();
+  const history = (histRows.results || [])
+    .filter((r: any) => Number.isFinite(r.total_balance) && Number.isFinite(r.total_locked))
+    .map((r: any) => ({ date: r.snapshot_date, balance: r.total_balance - r.total_locked }));
 
   const result = computeDailyCashflow(
-    new Date(),
+    today,
     userConfig,
     cashRows.results || [],
     cards,
@@ -212,6 +227,7 @@ dashboardRoute.get('/cashflow', async (c) => {
     subscriptionRows.results || [],
     periods,
     oneOffRows.results || [],
+    history,
   );
 
   return c.json(result);

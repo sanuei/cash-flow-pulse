@@ -72,20 +72,31 @@ export function Trends() {
   const [loadingCharts, setLoadingCharts] = useState(false);
   const [cashflow, setCashflow] = useState<CashflowResult | null>(null);
   const [loadingCashflow, setLoadingCashflow] = useState(true);
-  const [cashflowPeriods, setCashflowPeriods] = useState(0); // 0=本期，1=+下期，2=+未来2期
+  const [cashflowMonths, setCashflowMonths] = useState(1); // 以今天为中心，前后各 N 个月
   const [metricKey, setMetricKey] = useState<MetricKey>('net_available');
 
-  // 逐日现金流预测（可延伸未来周期；不随上方 range 变）
+  // 逐日现金流：以今天为中心，前后各 N 个月（过去=真实快照，未来=按计划预测）。
+  // 后端按发薪周期整期返回，这里裁到 [今天−N月, 今天+N月]
   useEffect(() => {
     if (!config) return;
     let cancelled = false;
     setLoadingCashflow(true);
-    apiGet<CashflowResult>(`/dashboard/cashflow?periods=${cashflowPeriods}`)
-      .then((d) => { if (!cancelled) setCashflow(d); })
+    const n = cashflowMonths;
+    apiGet<CashflowResult>(`/dashboard/cashflow?periods=${n}&past=${n}`)
+      .then((d) => {
+        if (cancelled) return;
+        const t = new Date(`${d.today}T00:00:00`);
+        const from = new Date(t); from.setMonth(from.getMonth() - n);
+        const to = new Date(t); to.setMonth(to.getMonth() + n);
+        const iso = (x: Date) =>
+          `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+        const lo = iso(from), hi = iso(to);
+        setCashflow({ ...d, points: d.points.filter((p) => p.date >= lo && p.date <= hi) });
+      })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoadingCashflow(false); });
     return () => { cancelled = true; };
-  }, [config, cashflowPeriods]);
+  }, [config, cashflowMonths]);
 
   useEffect(() => {
     if (!config) return;
@@ -159,14 +170,14 @@ export function Trends() {
       {/* 收支概览：本期 vs 往期平均（收入 / 生活支出 / 净储蓄 / 储蓄率） */}
       {longTerm && hasCycleFlow && <CashFlowKpis cycles={longTerm.cycles} />}
 
-      {/* 图0：逐日可用现金（自成一体，用自己的「本期/+下期」切换，放最上作头图） */}
+      {/* 图0：逐日可用现金（自成一体，用自己的 1/3/6/12 个月切换：今天前后各 N 个月） */}
       <Card
         title="现金流 · 逐日可用现金"
         action={
           <Pills
-            options={[{ v: 0, l: '本期' }, { v: 1, l: '+下期' }, { v: 2, l: '+2期' }]}
-            value={cashflowPeriods}
-            onChange={setCashflowPeriods}
+            options={[{ v: 1, l: '1个月' }, { v: 3, l: '3个月' }, { v: 6, l: '6个月' }, { v: 12, l: '12个月' }]}
+            value={cashflowMonths}
+            onChange={setCashflowMonths}
           />
         }
       >
@@ -182,7 +193,7 @@ export function Trends() {
           { name: '未来（预测）', color: 'var(--c-accent)', dashed: true },
         ]} />
         <div className="mt-2 text-[11px] text-notion-text-muted leading-relaxed">
-          以今天真实可用现金为锚点，按每笔信用卡 / 账单 / 定投 / 收入的实际发生日逐日推演。灰竖线为今天，右侧为预测；橙色为透支线（0），跌破即入不敷出。未来月未填的信用卡按最近一期账单预估。
+          显示今天前后各 {cashflowMonths} 个月。灰竖线左侧是过去：有每日快照的日子用真实可用现金（余额 − 锁定）；右侧是预测：以今天真实可用现金为锚点，按每笔信用卡 / 账单 / 定投 / 收入的实际发生日逐日推演。橙色为透支线（0），跌破即入不敷出。未来月未填的信用卡按最近一期账单预估。
         </div>
       </Card>
 

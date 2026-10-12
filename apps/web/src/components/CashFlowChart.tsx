@@ -29,14 +29,29 @@ export function CashFlowChart({
   compact?: boolean;
 }) {
   const todayStr = data.today;
+  // x 轴用时间戳（数值轴）而不是 "MM-DD" 字符串：跨年的 12 个月范围里 MM-DD 会重复，
+  // 快照缺天时数值轴也能按真实时间间距画，不会把缺口挤掉
+  const ts = (d: string) => new Date(`${d}T00:00:00`).getTime();
   const chart = data.points.map((p) => ({
-    date: p.date.slice(5),
+    t: ts(p.date),
+    date: p.date,
     past: p.is_past ? p.balance : null,
     future: (!p.is_past || p.date === todayStr) ? p.balance : null,
     balance: p.balance,
+    actual: p.actual,
     events: p.events,
   }));
-  const todayLabel = todayStr.slice(5);
+  const todayT = ts(todayStr);
+  const first = chart[0]?.t ?? todayT;
+  const last = chart[chart.length - 1]?.t ?? todayT;
+  const longRange = last - first > 120 * 86400000;
+  const tickFmt = (v: number) => {
+    const d = new Date(v);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return longRange
+      ? `${String(d.getFullYear()).slice(2)}/${mm}`
+      : `${mm}-${String(d.getDate()).padStart(2, '0')}`;
+  };
   return (
     <div className={`${heightClass} -mx-2`}>
       <ResponsiveContainer width="100%" height="100%">
@@ -48,11 +63,15 @@ export function CashFlowChart({
             </linearGradient>
           </defs>
           <CartesianGrid vertical={false} stroke="var(--c-border)" />
-          <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} tickMargin={10} />
+          <XAxis
+            dataKey="t" type="number" scale="time" domain={[first, last]}
+            tickFormatter={tickFmt} tickCount={compact ? 4 : 7}
+            tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }} tickLine={false} axisLine={false} tickMargin={10}
+          />
           <YAxis tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }} tickFormatter={yenAxisTick} tickLine={false} axisLine={false} width={44} />
           <Tooltip content={<CashFlowTooltip />} cursor={{ stroke: 'var(--c-border-strong)', strokeWidth: 1 }} />
           <ReferenceLine y={0} stroke="var(--c-warning)" strokeOpacity={0.55} strokeDasharray="4 4" label={compact ? undefined : { value: '透支线', position: 'insideBottomLeft', fontSize: 10, fill: 'var(--c-warning)' }} />
-          <ReferenceLine x={todayLabel} stroke="var(--c-text-muted)" strokeDasharray="3 3" label={compact ? undefined : { value: '今天', position: 'insideTopRight', fontSize: 10, fill: 'var(--c-text-muted)' }} />
+          <ReferenceLine x={todayT} stroke="var(--c-text-muted)" strokeDasharray="3 3" label={compact ? undefined : { value: '今天', position: 'insideTopRight', fontSize: 10, fill: 'var(--c-text-muted)' }} />
           <Area type="monotone" dataKey="past" name="已过去" stroke="var(--c-accent)" strokeWidth={2.5} fill="url(#grad-cash)" dot={false} connectNulls />
           <Line type="monotone" dataKey="future" name="预测" stroke="var(--c-accent)" strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls />
         </ComposedChart>
@@ -61,10 +80,11 @@ export function CashFlowChart({
   );
 }
 
-function CashFlowTooltip({ active, payload, label }: any) {
+function CashFlowTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const pt = payload[0]?.payload;
   const events = pt?.events ?? [];
+  const label = pt?.date ? `${pt.date}${pt.actual ? ' · 实际' : pt.past == null ? ' · 预测' : ''}` : '';
   return (
     <div className="rounded-[var(--radius-lg)] border border-[var(--c-border)] bg-[var(--c-bg-elev)] shadow-[var(--shadow-lg)] px-3 py-2.5 min-w-[150px]">
       <div className="text-[11px] text-notion-text-muted mb-1">{label}</div>
