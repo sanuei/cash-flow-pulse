@@ -444,11 +444,12 @@ export function Overview() {
             <div className="anim-fade-up">
               <HorizontalBarChart
                 items={[
+                  // 颜色与上方「收入去向」一致：消费类=warning，投资=invest
                   { name: '信用卡', amount: upcomingExpenses.total_credit_card, color: 'var(--c-warning)', icon: 'card' },
-                  { name: '固定账单', amount: upcomingExpenses.total_bills, color: 'var(--c-accent)', icon: 'bill' },
-                  { name: '临时账单', amount: upcomingExpenses.total_one_off ?? 0, color: 'var(--c-accent-text)', icon: 'calendar' },
+                  { name: '固定账单', amount: upcomingExpenses.total_bills, color: 'var(--c-warning)', icon: 'bill' },
+                  { name: '临时账单', amount: upcomingExpenses.total_one_off ?? 0, color: 'var(--c-warning)', icon: 'calendar' },
+                  { name: '订阅', amount: upcomingExpenses.total_subscriptions, color: 'var(--c-warning)', icon: 'subscription' },
                   { name: '固定投资', amount: upcomingExpenses.total_investments, color: 'var(--c-invest)', icon: 'investment' },
-                  { name: '订阅', amount: upcomingExpenses.total_subscriptions, color: 'var(--c-text-muted)', icon: 'subscription' },
                 ]}
                 total={totalExpense}
                 emptyText="本期暂无支出"
@@ -601,7 +602,7 @@ export function Overview() {
                     name,
                     amount,
                     color: 'var(--c-success)',
-                    icon: 'income' as const,
+                    // 收入各行图标都一样，不加，把宽度留给名称
                   }));
                 })()}
                 total={totalIncome}

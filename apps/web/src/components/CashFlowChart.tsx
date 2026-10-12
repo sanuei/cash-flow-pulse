@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { formatYen } from '@cfp/shared';
 import type { CashflowResult } from '@cfp/shared';
+import { yenAxisTick } from '../lib/chartFormat';
 
 export function CashFlowChart({
   data,
@@ -46,9 +47,9 @@ export function CashFlowChart({
               <stop offset="100%" stopColor="var(--c-accent)" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid vertical={false} stroke="var(--c-border)" strokeDasharray="2 6" />
+          <CartesianGrid vertical={false} stroke="var(--c-border)" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} tickMargin={10} />
-          <YAxis tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tickLine={false} axisLine={false} width={40} />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }} tickFormatter={yenAxisTick} tickLine={false} axisLine={false} width={44} />
           <Tooltip content={<CashFlowTooltip />} cursor={{ stroke: 'var(--c-border-strong)', strokeWidth: 1 }} />
           <ReferenceLine y={0} stroke="var(--c-warning)" strokeOpacity={0.55} strokeDasharray="4 4" label={compact ? undefined : { value: '透支线', position: 'insideBottomLeft', fontSize: 10, fill: 'var(--c-warning)' }} />
           <ReferenceLine x={todayLabel} stroke="var(--c-text-muted)" strokeDasharray="3 3" label={compact ? undefined : { value: '今天', position: 'insideTopRight', fontSize: 10, fill: 'var(--c-text-muted)' }} />

@@ -26,6 +26,11 @@ export type CycleStat = {
   consume: number;  // 生活成本 = 信用卡 + 固定账单 + 订阅 + 临时支出（不含投资）
   invest: number;
   surplus: number;  // income - expense
+  // 生活成本拆分（consume = 四项之和）
+  card: number;
+  bills: number;
+  subscriptions: number;
+  oneOff: number;
 };
 
 export type CycleAgg = {
@@ -121,6 +126,10 @@ export function cycleStat(calc: ReturnType<typeof computeDashboardV2>): CycleSta
     consume: Math.round(consume),
     invest: Math.round(ue?.total_investments ?? 0),
     surplus: Math.round(calc.total_income - calc.total_expense),
+    card: Math.round(ue?.total_credit_card ?? 0),
+    bills: Math.round(ue?.total_bills ?? 0),
+    subscriptions: Math.round(ue?.total_subscriptions ?? 0),
+    oneOff: Math.round(ue?.total_one_off ?? 0),
   };
 }
 
