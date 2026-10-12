@@ -35,10 +35,11 @@ billRoutes.post('/', async (c) => {
 
   await c.env.DB
     .prepare(`INSERT INTO recurring_bills
-      (id, user_id, name, amount, due_day, note, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      (id, user_id, name, amount, due_day, start_date, end_date, note, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(
       id, userId, parsed.data.name, parsed.data.amount, parsed.data.due_day,
+      parsed.data.start_date ?? null, parsed.data.end_date ?? null,
       parsed.data.note ?? null,
       (maxOrder?.max_order ?? -1) + 1, ts, ts
     )
@@ -47,6 +48,8 @@ billRoutes.post('/', async (c) => {
   return c.json({
     id, user_id: userId, ...parsed.data,
     sort_order: (maxOrder?.max_order ?? -1) + 1,
+    start_date: parsed.data.start_date ?? null,
+    end_date: parsed.data.end_date ?? null,
     note: parsed.data.note ?? null,
     created_at: ts, updated_at: ts,
   }, 201);
@@ -67,6 +70,8 @@ billRoutes.put('/:id', async (c) => {
   if (parsed.data.name !== undefined) { updates.push('name = ?'); values.push(parsed.data.name); }
   if (parsed.data.amount !== undefined) { updates.push('amount = ?'); values.push(parsed.data.amount); }
   if (parsed.data.due_day !== undefined) { updates.push('due_day = ?'); values.push(parsed.data.due_day); }
+  if (parsed.data.start_date !== undefined) { updates.push('start_date = ?'); values.push(parsed.data.start_date); }
+  if (parsed.data.end_date !== undefined) { updates.push('end_date = ?'); values.push(parsed.data.end_date); }
   if (parsed.data.note !== undefined) { updates.push('note = ?'); values.push(parsed.data.note); }
   updates.push('updated_at = ?'); values.push(ts);
   values.push(id, userId);

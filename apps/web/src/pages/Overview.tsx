@@ -9,6 +9,7 @@ import { HorizontalBarChart, type BarItem } from '../components/HorizontalBarCha
 import { AiDiagnosis } from '../components/AiDiagnosis';
 import { CashFlowChart } from '../components/CashFlowChart';
 import { FireCard } from '../components/FireCard';
+import { RunwayGauge, LivingCostBars } from '../components/RunwayCharts';
 import { useLongTermStats } from '../lib/longTerm';
 import { apiGet } from '../lib/api';
 import type { CashflowResult } from '@cfp/shared';
@@ -228,33 +229,48 @@ export function Overview() {
           </div>
         )}
 
-        <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-caps font-semibold text-[var(--c-accent-text)] bg-[var(--c-accent-soft)] rounded-[var(--radius-pill)] px-3 py-1 mb-3">
-          {isPredicted ? '预计现金可支撑' : '现金可支撑'}
+        {/* 主体：桌面端左右两栏（左：可支撑月数 + 基准线刻度；右：每期生活成本柱图），移动端上下堆叠 */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10 lg:items-end">
+          <div>
+            <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-caps font-semibold text-[var(--c-accent-text)] bg-[var(--c-accent-soft)] rounded-[var(--radius-pill)] px-3 py-1 mb-3">
+              {isPredicted ? '预计现金可支撑' : '现金可支撑'}
+            </div>
+            <div className="mb-1">
+              <span
+                className="font-numeric font-display font-semibold text-[44px] sm:text-[56px] leading-[1.05] tracking-tight-display"
+                style={{
+                  backgroundImage: 'linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent-hover) 100%)',
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  color: 'transparent',
+                }}
+              >
+                {runway === null ? '—' : runway.toFixed(1)}
+              </span>
+              <span className="text-[16px] sm:text-[18px] text-notion-text-secondary font-normal ml-1.5">
+                个月
+              </span>
+            </div>
+            <div className="text-[13px] text-notion-text-secondary mb-4">
+              {livingCost > 0
+                ? <>月均生活成本 <b className="text-notion-text font-semibold">{formatYen(livingCost)}</b>（{livingPeriod}，不含投资）</>
+                : <>录入信用卡、账单、订阅等消费后显示</>
+              }
+            </div>
+            {livingCost > 0 && (
+              <RunwayGauge months={runway} monthlyCost={livingCost} cash={activeCalc.net_available} />
+            )}
+          </div>
+
+          {longTerm && longTerm.cycles.length > 0 && livingCost > 0 && (
+            <div className="lg:pl-10 lg:border-l lg:border-[var(--c-border)]">
+              <LivingCostBars cycles={longTerm.cycles} highlight={displayCycleId} />
+            </div>
+          )}
         </div>
-        <div className="mb-1.5">
-          <span
-            className="font-numeric font-display font-semibold tabular-nums text-[44px] sm:text-[56px] leading-[1.05] tracking-tight-display"
-            style={{
-              backgroundImage: 'linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent-hover) 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              color: 'transparent',
-            }}
-          >
-            {runway === null ? '—' : runway.toFixed(1)}
-          </span>
-          <span className="text-[16px] sm:text-[18px] text-notion-text-secondary font-normal ml-1.5">
-            个月
-          </span>
-        </div>
-        <div className="text-[13px] text-notion-text-secondary">
-          {livingCost > 0
-            ? <>月均生活成本 <b className="text-notion-text font-semibold">{formatYen(livingCost)}</b>（{livingPeriod}，不含投资）</>
-            : <>录入信用卡、账单、订阅等消费后显示</>
-          }
-        </div>
-        <div className="text-[12px] text-notion-text-muted mt-0.5">
+
+        <div className="text-[12px] text-notion-text-muted mt-4">
           {isCurrentCycle
             ? <>距发薪日（{activeCalc.next_payday_date}）还有 {activeCalc.days_to_payday} 天</>
             : <>{cycleMeta?.cycle_start} — {cycleMeta?.cycle_end}</>

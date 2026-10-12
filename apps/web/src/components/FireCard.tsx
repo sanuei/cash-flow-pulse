@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { computeFire, formatYen } from '@cfp/shared';
 import { Card } from './Card';
 import { Icon } from './Icon';
 import { MoneyInput } from './MoneyInput';
-import { loadFireSettings, saveFireSettings, DEFAULT_FIRE, type FireSettings, type LongTermStats } from '../lib/longTerm';
+import { DEFAULT_FIRE, takeLegacyFireSettings, clearLegacyFireSettings, type FireSettings, type LongTermStats } from '../lib/longTerm';
+import { useStore } from '../lib/store';
 
 /**
  * 财务自由进度：
@@ -12,8 +13,29 @@ import { loadFireSettings, saveFireSettings, DEFAULT_FIRE, type FireSettings, ty
  *   预计 = 按近 N 期月均「收入 − 生活成本」持续投入 + 预期年化收益，逐月复利推演
  */
 export function FireCard({ stats, cashAssets }: { stats: LongTermStats; cashAssets: number }) {
-  const [settings, setSettings] = useState<FireSettings>(loadFireSettings);
+  // 参数存在服务器（user_config.fire_settings），换设备也一致
+  const serverSettings = useStore((s) => s.config?.fire_settings ?? null);
+  const saveToServer = useStore((s) => s.saveFireSettings);
+  const [settings, setSettings] = useState<FireSettings>(() => serverSettings ?? takeLegacyFireSettings() ?? DEFAULT_FIRE);
   const [editing, setEditing] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 旧版本存在本机浏览器里的参数：服务器上还没有时上传一次，然后清掉本机副本
+  useEffect(() => {
+    const legacy = takeLegacyFireSettings();
+    if (!legacy) return;
+    if (serverSettings) { clearLegacyFireSettings(); return; }
+    saveToServer(legacy).then(clearLegacyFireSettings).catch(() => { /* 下次再试 */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 服务器值变化（其他设备改过后刷新）→ 同步到本地编辑状态
+  useEffect(() => {
+    if (serverSettings) setSettings(serverSettings);
+  }, [serverSettings]);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const { agg, otherAssetsTotal } = stats;
   const defaultAnnualSpend = agg.avgConsume * 12;
@@ -29,10 +51,14 @@ export function FireCard({ stats, cashAssets }: { stats: LongTermStats; cashAsse
     monthlyContribution,
   });
 
+  // 输入框每次按键都会触发，停顿 600ms 后再存服务器
   const update = (patch: Partial<FireSettings>) => {
     const next = { ...settings, ...patch };
     setSettings(next);
-    saveFireSettings(next);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      saveToServer(next).then(() => setSaveError(false)).catch(() => setSaveError(true));
+    }, 600);
   };
 
   const period = agg.n > 1 ? `近 ${agg.n} 期` : '本期';
@@ -132,7 +158,12 @@ export function FireCard({ stats, cashAssets }: { stats: LongTermStats; cashAsse
             <PctField label="安全提取率" value={settings.withdrawalRatePct} onChange={(v) => update({ withdrawalRatePct: v })} hint="4% 法则 = 年支出 × 25" />
             <PctField label="预期年化收益" value={settings.annualReturnPct} onChange={(v) => update({ annualReturnPct: v })} hint="扣除通胀后的实际收益" />
           </div>
-          <button onClick={() => update(DEFAULT_FIRE)} className="btn-ghost text-[12px]">恢复默认</button>
+          <div className="flex items-center justify-between gap-3">
+            <button onClick={() => update(DEFAULT_FIRE)} className="btn-ghost text-[12px]">恢复默认</button>
+            <span className={`text-[11px] ${saveError ? 'text-notion-warning' : 'text-notion-text-muted'}`}>
+              {saveError ? '保存失败，请稍后重试' : '参数自动保存到账户'}
+            </span>
+          </div>
         </div>
       )}
     </Card>

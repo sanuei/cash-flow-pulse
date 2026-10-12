@@ -6,6 +6,7 @@ import { ManagedListCard } from '../components/ManagedListCard';
 import { EntityRow } from '../components/EntityRow';
 import { Money } from '../components/Money';
 import { InvestmentForm, type ChangeScope } from '../components/InvestmentForm';
+import { saveWithScope, isEnded, todayLocal } from '../components/EffectiveScope';
 import { OneOffForm } from '../components/OneOffForm';
 import { PageTitle } from '../components/PageTitle';
 import { formatYen } from '@cfp/shared';
@@ -33,14 +34,6 @@ function freqDesc(inv: RecurringInvestment): string {
   if (inv.frequency === 'weekly' && inv.day_of_week != null) return WEEKDAYS[inv.day_of_week] ?? '每周';
   return FREQ_LABEL[inv.frequency];
 }
-
-function todayLocal(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-// end_date 是开区间上界：end_date 当天及之后不再扣款
-const isEnded = (inv: RecurringInvestment, today: string) => !!inv.end_date && inv.end_date <= today;
 
 export function InvestmentsPage() {
   const calc = useStore((s) => s.calc);
@@ -102,16 +95,9 @@ export function InvestmentsPage() {
             }
             onSubmit={async (data, scope?: ChangeScope) => {
               const st = useStore.getState();
-              if (editing && scope?.mode === 'from') {
-                // 从生效日起改：旧记录截止到生效日（历史保持原金额），新规则从生效日开始；
-                // 金额 0 = 暂停，只截止不新建
-                const from = scope.effective_from;
-                await st.updateInvestment(editing.id, { end_date: from });
-                if (data.amount > 0) {
-                  await st.addInvestment({ ...data, start_date: from });
-                }
-              } else if (editing) {
-                await st.updateInvestment(editing.id, data);
+              if (editing) {
+                // 从生效日起改：旧记录截止到生效日（历史保持原金额），新规则从生效日开始；金额 0 = 暂停
+                await saveWithScope(data, scope, (patch) => st.updateInvestment(editing.id, patch), (d) => st.addInvestment(d));
               } else {
                 await st.addInvestment(data);
               }

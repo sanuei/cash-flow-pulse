@@ -58,6 +58,11 @@ export const UserConfigUpdateSchema = z.object({
     .max(10, '最多 10 个采集点')
     .optional(),
   weekend_shift: z.boolean().optional(),
+  fire_settings: z.object({
+    withdrawalRatePct: z.number().min(0).max(100),
+    annualReturnPct: z.number().min(-50).max(100),
+    annualSpendOverride: z.number().positive().nullable(),
+  }).nullable().optional(),
 });
 
 // === 快照 ===
@@ -80,6 +85,11 @@ export const ImportPayloadSchema = z.object({
     pay_day: z.number().int().min(1).max(31),
     snapshot_offsets: z.array(z.number().int()),
     weekend_shift: z.boolean().optional(),
+    fire_settings: z.object({
+      withdrawalRatePct: z.number(),
+      annualReturnPct: z.number(),
+      annualSpendOverride: z.number().nullable(),
+    }).nullable().optional(),
   }),
   cash_sources: z.array(z.object({
     name: z.string(),
@@ -107,6 +117,8 @@ export const ImportPayloadSchema = z.object({
     name: z.string(),
     amount: z.number(),
     due_day: z.number(),
+    start_date: z.string().nullable().optional(),
+    end_date: z.string().nullable().optional(),
     note: z.string().nullable().optional(),
   })).optional(),
   incomes: z.array(z.object({
@@ -125,6 +137,8 @@ export const ImportPayloadSchema = z.object({
     billing_day: z.number(),
     billing_cycle: z.enum(['monthly', 'yearly']).optional(),
     category: z.string().nullable().optional(),
+    start_date: z.string().nullable().optional(),
+    end_date: z.string().nullable().optional(),
     note: z.string().nullable().optional(),
   })).optional(),
   one_offs: z.array(z.object({
@@ -181,6 +195,8 @@ export const BillInputSchema = z.object({
   name: z.string().min(1).max(50),
   amount: z.number().nonnegative(),
   due_day: z.number().int().min(1).max(31),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   note: z.string().max(200).nullable().optional(),
 });
 export const BillUpdateSchema = BillInputSchema.partial();
@@ -234,6 +250,8 @@ export const SubscriptionInputSchema = z.object({
   billing_day: z.number().int().min(1).max(31),
   billing_cycle: z.enum(['monthly', 'yearly']).default('monthly'),
   category: z.string().max(50).nullable().optional(),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   note: z.string().max(200).nullable().optional(),
 });
 export const SubscriptionUpdateSchema = SubscriptionInputSchema.partial();

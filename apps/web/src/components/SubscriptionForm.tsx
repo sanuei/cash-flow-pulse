@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { HeroAmount, Field, Segmented, Collapsible, FormError, FormActions } from './FormKit';
+import { useEffectiveScope, EffectiveScopeField, type ChangeScope } from './EffectiveScope';
 
 type Cycle = 'monthly' | 'yearly';
 
@@ -9,6 +10,8 @@ type FormData = {
   billing_day: number;
   billing_cycle: Cycle;
   category: string | null;
+  start_date: string | null; // 生效区间 [start_date, end_date)，null=不限
+  end_date: string | null;
   note: string | null;
 };
 
@@ -20,7 +23,7 @@ export function SubscriptionForm({
   onCancel,
 }: {
   initial?: FormData;
-  onSubmit: (data: FormData) => Promise<void>;
+  onSubmit: (data: FormData, scope?: ChangeScope) => Promise<void>;
   onCancel?: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? '');
@@ -29,6 +32,14 @@ export function SubscriptionForm({
   const [billingCycle, setBillingCycle] = useState<Cycle>(initial?.billing_cycle ?? 'monthly');
   const [category, setCategory] = useState(initial?.category ?? '');
   const [note, setNote] = useState(initial?.note ?? '');
+  const [startDate, setStartDate] = useState(initial?.start_date ?? '');
+  const [endDate, setEndDate] = useState(initial?.end_date ?? '');
+  const scopeState = useEffectiveScope({
+    editing: !!initial,
+    ruleChanged: !!initial && (amount !== initial.amount || billingDay !== initial.billing_day || billingCycle !== initial.billing_cycle),
+    startDate: initial?.start_date,
+    endDate: initial?.end_date,
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +51,8 @@ export function SubscriptionForm({
       setBillingCycle(initial.billing_cycle);
       setCategory(initial.category ?? '');
       setNote(initial.note ?? '');
+      setStartDate(initial.start_date ?? '');
+      setEndDate(initial.end_date ?? '');
     }
   }, [initial]);
 
@@ -48,6 +61,9 @@ export function SubscriptionForm({
     setError(null);
     if (!name.trim()) { setError('名称不能为空'); return; }
     if (billingDay < 1 || billingDay > 31) { setError('扣款日必须在 1-31 之间'); return; }
+    if (startDate && endDate && endDate <= startDate) { setError('结束日期需晚于开始日期'); return; }
+    const scopeError = scopeState.validate();
+    if (scopeError) { setError(scopeError); return; }
     setSaving(true);
     try {
       await onSubmit({
@@ -56,8 +72,10 @@ export function SubscriptionForm({
         billing_day: billingDay,
         billing_cycle: billingCycle,
         category: category || null,
+        start_date: startDate || null,
+        end_date: endDate || null,
         note: note.trim() || null,
-      });
+      }, scopeState.scope());
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -68,6 +86,8 @@ export function SubscriptionForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <HeroAmount label="订阅金额" value={amount} onChange={setAmount} tone="warning" />
+
+      <EffectiveScopeField state={scopeState} />
 
       <Field label="名称">
         <input
@@ -104,6 +124,14 @@ export function SubscriptionForm({
             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="开始日期（可选）">
+            <input type="date" className="input font-numeric" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </Field>
+          <Field label="结束日期（可选）">
+            <input type="date" className="input font-numeric" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </Field>
+        </div>
         <Field label="备注（可选）">
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </Field>

@@ -749,26 +749,46 @@ function isDayActiveInCycle(
   return { active: false, dueDate: null };
 }
 
+/** 有生效区间的条目（固定账单/订阅）：[start_date, end_date)，未设置的一端视为不限 */
+type DateBounded = { start_date?: string | null; end_date?: string | null };
+
 /**
- * 账单在指定周期内是否活跃（严格匹配）
+ * 某次扣款日是否落在条目的生效区间内。
+ * 「从某天起生效」改金额 = 旧条目 end_date=生效日 + 新条目 start_date=生效日，
+ * 两者在生效日无缝衔接、不重叠，往期按旧金额算，历史不被改写。
  */
-export function isBillActiveInCycle(
-  bill: Pick<RecurringBill, 'due_day'>,
-  cycleStart: Date,
-  cycleEnd: Date,
-) {
-  return isDayActiveInCycle(bill.due_day, cycleStart, cycleEnd);
+export function isWithinDateRange(item: DateBounded, d: Date): boolean {
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (item.start_date && day < parseDate(item.start_date)) return false;
+  if (item.end_date && day >= parseDate(item.end_date)) return false;
+  return true;
+}
+
+function boundedActive(item: DateBounded, r: { active: boolean; dueDate: Date | null }) {
+  if (r.active && r.dueDate && !isWithinDateRange(item, r.dueDate)) return { active: false, dueDate: null };
+  return r;
 }
 
 /**
- * 订阅在指定周期内是否活跃（严格匹配）
+ * 账单在指定周期内是否活跃（严格匹配；扣款日须在生效区间内）
+ */
+export function isBillActiveInCycle(
+  bill: Pick<RecurringBill, 'due_day'> & DateBounded,
+  cycleStart: Date,
+  cycleEnd: Date,
+) {
+  return boundedActive(bill, isDayActiveInCycle(bill.due_day, cycleStart, cycleEnd));
+}
+
+/**
+ * 订阅在指定周期内是否活跃（严格匹配；扣款日须在生效区间内）
  */
 export function isSubscriptionActiveInCycle(
-  sub: Pick<Subscription, 'billing_day' | 'billing_cycle'>,
+  sub: Pick<Subscription, 'billing_day' | 'billing_cycle'> & DateBounded,
   cycleStart: Date,
   cycleEnd: Date,
 ): { active: boolean; dueDate: Date | null } {
-  return isDayActiveInCycle(sub.billing_day, cycleStart, cycleEnd);
+  return boundedActive(sub, isDayActiveInCycle(sub.billing_day, cycleStart, cycleEnd));
 }
 
 /**
@@ -930,7 +950,7 @@ export function computeDashboardV2(
       : undefined;
     const cycleDaysUntil = effectiveCycleDue ? Math.abs(diffDays(todayMidnight, effectiveCycleDue)) : undefined;
 
-    if (days <= 60) {
+    if (days <= 60 && (inCycle || isWithinDateRange(bill, dueDate))) {
       billItems.push({
         source_type: 'bill',
         id: bill.id,
@@ -958,7 +978,7 @@ export function computeDashboardV2(
     }
     const dueDate = nextOccurrence(today, sub.billing_day, config.weekend_shift);
     const days = diffDays(today, dueDate);
-    if (days <= 60) {
+    if (days <= 60 && (inCycle || isWithinDateRange(sub, dueDate))) {
       const item: UpcomingExpenseItem = {
         source_type: 'subscription',
         id: sub.id,
@@ -1072,13 +1092,13 @@ export function computeDashboardV2(
   let futureBills = 0;
   for (const bill of bills) {
     const dueDate = nextOccurrence(today, bill.due_day, config.weekend_shift);
-    if (dueDate >= today && dueDate < cycleEnd) futureBills += bill.amount;
+    if (dueDate >= today && dueDate < cycleEnd && isWithinDateRange(bill, dueDate)) futureBills += bill.amount;
   }
   // 订阅:同上
   let futureSubs = 0;
   for (const sub of subscriptions) {
     const dueDate = nextOccurrence(today, sub.billing_day, config.weekend_shift);
-    if (dueDate >= today && dueDate < cycleEnd) futureSubs += sub.amount;
+    if (dueDate >= today && dueDate < cycleEnd && isWithinDateRange(sub, dueDate)) futureSubs += sub.amount;
   }
   // 投资:daily/weekly/monthly 在 [today, cycleEnd) 累计
   const futureInv = investments.reduce((s, inv) => {

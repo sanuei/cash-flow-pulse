@@ -9,7 +9,7 @@
 import { Hono } from 'hono';
 import { ImportPayloadSchema } from '@cfp/shared';
 import type { Env } from '../index';
-import { generateId, now } from '../lib/utils';
+import { generateId, now, parseFireSettings } from '../lib/utils';
 
 export const exportImportRoutes = new Hono<{ Bindings: Env }>();
 
@@ -48,6 +48,7 @@ exportImportRoutes.get('/export', async (c) => {
       pay_day: config?.pay_day ?? 10,
       snapshot_offsets: config ? JSON.parse(config.snapshot_offsets) : [0, 7, 14, 21],
       weekend_shift: !!config?.weekend_shift,
+      fire_settings: parseFireSettings(config?.fire_settings),
     },
     cash_sources: (cash.results || []).map((r: any) => ({
       name: r.name,
@@ -79,6 +80,8 @@ exportImportRoutes.get('/export', async (c) => {
       name: r.name,
       amount: r.amount,
       due_day: r.due_day,
+      start_date: r.start_date ?? null,
+      end_date: r.end_date ?? null,
       note: r.note,
     })),
     incomes: (incomes.results || []).map((r: any) => ({
@@ -97,6 +100,8 @@ exportImportRoutes.get('/export', async (c) => {
       billing_day: r.billing_day,
       billing_cycle: r.billing_cycle,
       category: r.category,
+      start_date: r.start_date ?? null,
+      end_date: r.end_date ?? null,
       note: r.note,
     })),
     one_offs: (oneOffs.results || []).map((r: any) => ({
@@ -193,6 +198,12 @@ exportImportRoutes.post('/import', async (c) => {
       .prepare('UPDATE user_config SET pay_day = ?, snapshot_offsets = ?, weekend_shift = ?, updated_at = ? WHERE user_id = ?')
       .bind(config.pay_day, JSON.stringify(config.snapshot_offsets), config.weekend_shift ? 1 : 0, ts, userId)
       .run();
+    if ((config as any).fire_settings !== undefined) {
+      await db
+        .prepare('UPDATE user_config SET fire_settings = ? WHERE user_id = ?')
+        .bind((config as any).fire_settings ? JSON.stringify((config as any).fire_settings) : null, userId)
+        .run();
+    }
 
     // 2. 现金来源
     const cashStmts = cash_sources.map((cs, i) =>
@@ -214,8 +225,8 @@ exportImportRoutes.post('/import', async (c) => {
 
     // 5. 账单
     const billStmts = bills.map((b: any, i: number) =>
-      db.prepare('INSERT OR REPLACE INTO recurring_bills (id, user_id, name, amount, due_day, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), userId, b.name, b.amount, b.due_day, b.note ?? null, i, ts, ts)
+      db.prepare('INSERT OR REPLACE INTO recurring_bills (id, user_id, name, amount, due_day, start_date, end_date, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(generateId(), userId, b.name, b.amount, b.due_day, b.start_date ?? null, b.end_date ?? null, b.note ?? null, i, ts, ts)
     );
 
     // 6. 收入
@@ -226,8 +237,8 @@ exportImportRoutes.post('/import', async (c) => {
 
     // 7. 订阅
     const subscriptionStmts = subscriptions.map((s: any, i: number) =>
-      db.prepare('INSERT OR REPLACE INTO subscriptions (id, user_id, name, amount, billing_day, billing_cycle, category, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(generateId(), userId, s.name, s.amount, s.billing_day, s.billing_cycle ?? 'monthly', s.category ?? null, s.note ?? null, i, ts, ts)
+      db.prepare('INSERT OR REPLACE INTO subscriptions (id, user_id, name, amount, billing_day, billing_cycle, category, start_date, end_date, note, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(generateId(), userId, s.name, s.amount, s.billing_day, s.billing_cycle ?? 'monthly', s.category ?? null, s.start_date ?? null, s.end_date ?? null, s.note ?? null, i, ts, ts)
     );
 
     // 7b. 临时账单

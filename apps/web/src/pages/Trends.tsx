@@ -131,7 +131,6 @@ export function Trends() {
   const agg = longTerm?.agg;
   const hasCycleFlow = cycleData.some((d) => d.income > 0 || d.consume > 0 || d.invest > 0);
   const periodLabel = agg && agg.n > 1 ? `近 ${agg.n} 期` : '本期';
-  const savingsRate = agg && agg.income > 0 ? Math.round((agg.surplus / agg.income) * 100) : null;
 
   // 支出结构：近 N 期月均（不是只看本月，避免大额账单月份失真）
   const structure = useMemo(() => {
@@ -155,7 +154,10 @@ export function Trends() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
-      <PageTitle icon="chart" title="趋势曲线" subtitle="逐日现金 · 每期收支 · 支出结构 · 快照趋势" />
+      <PageTitle icon="chart" title="趋势曲线" subtitle="收支概览 · 逐日现金 · 每期收支 · 支出结构 · 快照趋势" />
+
+      {/* 收支概览：本期 vs 往期平均（收入 / 生活支出 / 净储蓄 / 储蓄率） */}
+      {longTerm && hasCycleFlow && <CashFlowKpis cycles={longTerm.cycles} />}
 
       {/* 图0：逐日可用现金（自成一体，用自己的「本期/+下期」切换，放最上作头图） */}
       <Card
@@ -187,17 +189,6 @@ export function Trends() {
       {/* ── 每期收支（近 N 期）── */}
       <section className="space-y-3">
         <h2 className="text-[15px] font-semibold text-notion-text">每期收支 · {periodLabel}</h2>
-        {agg && hasCycleFlow && (
-          <div className="grid grid-cols-3 gap-3">
-            <StatCard label="月均收入" value={formatYen(agg.avgIncome)} />
-            <StatCard label="月均生活成本" value={formatYen(agg.avgConsume)} />
-            <StatCard
-              label="储蓄率"
-              value={savingsRate === null ? '—' : `${savingsRate}%`}
-              trend={savingsRate === null ? undefined : savingsRate >= 0 ? 'up' : 'down'}
-            />
-          </div>
-        )}
         <Card>
           {!hasCycleFlow ? (
             <EmptyState icon="chart" title="暂无收支数据" description="添加收入、信用卡、账单等项目后即可查看" />
@@ -258,23 +249,33 @@ export function Trends() {
           </div>
         </div>
 
-        {chartData.length > 0 && (
-          <div className="grid grid-cols-3 gap-3">
-            <StatCard label={`最新${metric.short}`} value={formatYen(latest!.value)} />
-            <StatCard
-              label="区间变化"
-              value={change === null ? '—' : `${change >= 0 ? '+' : '−'}${formatYen(Math.abs(change))}`}
-              sub={changePct === null ? undefined : `${changePct >= 0 ? '+' : ''}${changePct}%`}
-              trend={change === null || change === 0 ? undefined : change > 0 ? 'up' : 'down'}
-            />
-            <StatCard label="区间最低" value={formatYen(lowest!.value)} sub={lowest!.fullDate.slice(5)} />
-          </div>
-        )}
-
         <Card
           title={metric.label}
           action={<Pills options={METRICS.map((m) => ({ v: m.key, l: m.short }))} value={metricKey} onChange={setMetricKey} />}
         >
+          {!loadingCharts && chartData.length > 0 && (
+            // 图表标题区：一个主数字 + 区间变化（股票/理财 App 通用的「图表即读数」写法）
+            <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1 mb-3">
+              <div>
+                <div className="text-[11px] text-notion-text-muted">最新 · {latest!.fullDate.slice(5)}</div>
+                <div className="font-display font-semibold text-[26px] leading-tight text-notion-text">{formatYen(latest!.value)}</div>
+              </div>
+              <div className="text-right text-[12px] leading-relaxed">
+                {change !== null && (
+                  <div className="font-numeric font-semibold" style={{ color: change >= 0 ? 'var(--c-success)' : 'var(--c-warning)' }}>
+                    {change >= 0 ? '+' : '−'}{formatYen(Math.abs(change))}
+                    {changePct !== null && <span className="font-normal"> ({changePct >= 0 ? '+' : ''}{changePct}%)</span>}
+                    <span className="text-notion-text-muted font-normal"> 区间变化</span>
+                  </div>
+                )}
+                {lowest && (
+                  <div className="text-notion-text-muted">
+                    区间最低 <span className="font-numeric text-notion-text-secondary">{formatYen(lowest.value)}</span>（{lowest.fullDate.slice(5)}）
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {loadingCharts ? (
             <LoadingState />
           ) : chartData.length === 0 ? (
@@ -433,16 +434,127 @@ function ChartLegend({ items }: { items: { name: string; color: string; dashed?:
   );
 }
 
-function StatCard({ label, value, trend, sub }: { label: string; value: string; trend?: 'up' | 'down'; sub?: string }) {
-  // 三列并排在手机上每格只有 ~90px，金额用小一号字并截断，避免撑破
-  const trendClass = trend === 'up' ? 'text-notion-success' : trend === 'down' ? 'text-notion-warning' : 'text-notion-text';
+// ─── 收支概览 KPI ─────────────────────────────────────────────────────────────
+
+type KpiDef = {
+  key: string;
+  label: string;
+  hint: string;
+  values: number[];        // 按周期升序，最后一个 = 本期
+  format: (v: number) => string;
+  /** 上升是好事吗：收入/储蓄 ↑ 好，支出 ↑ 不好 */
+  higherIsBetter: boolean;
+  /** 百分比类指标的差值用「个百分点」而非相对百分比 */
+  isRate?: boolean;
+};
+
+/**
+ * 参考 Monarch / Copilot / Money Forward 的现金流报表：四个核心数字放在同一块面板里，
+ * 每格 = 本期值 + 对比往期平均的变化 + 近 N 期迷你走势；格与格之间用细分隔线，不再各自一张卡片。
+ * 净储蓄 = 收入 − 生活支出（定投算储蓄）；储蓄率 = 净储蓄 ÷ 收入。
+ */
+function CashFlowKpis({ cycles }: { cycles: { cycle_id: string; income: number; consume: number }[] }) {
+  const n = cycles.length;
+  const current = cycles[n - 1]!;
+  const rate = (c: { income: number; consume: number }) => (c.income > 0 ? ((c.income - c.consume) / c.income) * 100 : 0);
+  const kpis: KpiDef[] = [
+    { key: 'income', label: '收入', hint: '工资、副业等到账', values: cycles.map((c) => c.income), format: formatYen, higherIsBetter: true },
+    { key: 'spend', label: '生活支出', hint: '信用卡、账单、订阅、临时支出', values: cycles.map((c) => c.consume), format: formatYen, higherIsBetter: false },
+    { key: 'save', label: '净储蓄', hint: '收入 − 生活支出（含定投）', values: cycles.map((c) => c.income - c.consume), format: (v) => `${v < 0 ? '−' : ''}${formatYen(Math.abs(v))}`, higherIsBetter: true },
+    { key: 'rate', label: '储蓄率', hint: '净储蓄 ÷ 收入', values: cycles.map(rate), format: (v) => `${Math.round(v)}%`, higherIsBetter: true, isRate: true },
+  ];
+
   return (
-    <div className="card p-3 sm:p-4 min-w-0">
-      <div className="text-[11px] text-notion-text-muted font-semibold truncate">{label}</div>
-      <div className={`text-[15px] sm:text-2xl font-semibold font-numeric mt-1 truncate ${trendClass}`} title={value}>
-        {value}
+    <Card
+      title={
+        <div className="flex items-baseline gap-2">
+          <span>收支概览</span>
+          <span className="text-[12px] font-normal text-notion-text-muted">本期 {current.cycle_id}{n > 1 ? ` · 对比前 ${n - 1} 期平均` : ''}</span>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 -mx-5 -mb-5 border-t border-[var(--c-border)]">
+        {kpis.map((k, i) => (
+          <KpiTile key={k.key} kpi={k} className={[
+            // 细分隔线：移动端 2×2，桌面 1×4
+            i % 2 === 1 ? 'border-l' : '',
+            i >= 2 ? 'border-t lg:border-t-0' : '',
+            i === 2 ? 'lg:border-l' : '',
+          ].join(' ')} />
+        ))}
       </div>
-      {sub && <div className="text-[11px] text-notion-text-muted font-numeric mt-0.5 truncate">{sub}</div>}
+    </Card>
+  );
+}
+
+function KpiTile({ kpi, className = '' }: { kpi: KpiDef; className?: string }) {
+  const vals = kpi.values;
+  const cur = vals[vals.length - 1]!;
+  const prev = vals.slice(0, -1);
+  const base = prev.length > 0 ? prev.reduce((s, v) => s + v, 0) / prev.length : null;
+
+  let deltaText: string | null = null;
+  let good: boolean | null = null;
+  if (base !== null) {
+    const diff = cur - base;
+    if (kpi.isRate) {
+      const pts = Math.round(diff);
+      deltaText = `${pts > 0 ? '↑' : pts < 0 ? '↓' : ''}${Math.abs(pts)} 个百分点`;
+      good = pts === 0 ? null : (pts > 0) === kpi.higherIsBetter;
+    } else if (Math.abs(base) > 0) {
+      const pct = Math.round((diff / Math.abs(base)) * 100);
+      deltaText = `${pct > 0 ? '↑' : pct < 0 ? '↓' : ''}${Math.abs(pct)}%`;
+      good = pct === 0 ? null : (pct > 0) === kpi.higherIsBetter;
+    }
+  }
+
+  return (
+    <div className={`p-4 sm:p-5 border-[var(--c-border)] min-w-0 ${className}`} title={kpi.hint}>
+      <div className="text-[12px] text-notion-text-secondary">{kpi.label}</div>
+      <div className="font-numeric font-semibold text-[20px] sm:text-[24px] leading-tight text-notion-text mt-1 truncate">
+        {kpi.format(cur)}
+      </div>
+      <div className="text-[11px] mt-1 truncate">
+        {deltaText ? (
+          <>
+            <span className="font-semibold" style={{ color: good === null ? 'var(--c-text-muted)' : good ? 'var(--c-success)' : 'var(--c-warning)' }}>
+              {deltaText}
+            </span>
+            <span className="text-notion-text-muted"> vs 均值 {kpi.format(base!)}</span>
+          </>
+        ) : (
+          <span className="text-notion-text-muted">{kpi.hint}</span>
+        )}
+      </div>
+      {vals.length > 1 && <Sparkline values={vals} />}
+    </div>
+  );
+}
+
+/** 迷你走势：2px 线 + 末点圆点（本期），无坐标轴 */
+function Sparkline({ values }: { values: number[] }) {
+  const W = 100, H = 28, pad = 3;
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = max - min || 1;
+  const pts = values.map((v, i) => [
+    (i / (values.length - 1)) * W,
+    H - pad - ((v - min) / span) * (H - pad * 2),
+  ] as const);
+  const last = pts[pts.length - 1]!;
+  // 线条用拉伸的 SVG；末点用 HTML 圆点叠在上面（拉伸的 viewBox 会把 <circle> 压成椭圆）
+  return (
+    <div className="relative h-7 mt-2" aria-hidden="true">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full overflow-visible">
+        <polyline
+          points={pts.map(([x, y]) => `${x},${y}`).join(' ')}
+          fill="none" stroke="var(--c-text-muted)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
+          vectorEffect="non-scaling-stroke" opacity={0.55}
+        />
+      </svg>
+      <span
+        className="absolute w-2 h-2 -ml-1 -mt-1 rounded-full bg-[var(--c-accent)] ring-2 ring-[var(--c-bg-elev)]"
+        style={{ left: `${last[0]}%`, top: `${(last[1] / H) * 100}%` }}
+      />
     </div>
   );
 }

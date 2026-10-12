@@ -13,8 +13,16 @@ export interface UserConfig {
   pay_day: number;             // 1-31
   snapshot_offsets: number[];  // 相对发薪日的天数偏移，如 [0, 7, 14, 21]
   weekend_shift: boolean;      // 扣款日遇周六/日时顺延至下一个工作日（周一）
+  fire_settings?: FireSettings | null; // 财务自由参数；null = 默认值
   created_at: number;          // Unix ms
   updated_at: number;
+}
+
+/** 财务自由参数（存 user_config.fire_settings） */
+export interface FireSettings {
+  withdrawalRatePct: number;          // 安全提取率 %，默认 4
+  annualReturnPct: number;            // 预期实际年化收益 %，默认 5
+  annualSpendOverride: number | null; // 自定义年支出；null = 按月均生活成本 × 12
 }
 
 // === 现金来源 ===
@@ -178,6 +186,8 @@ export interface RecurringBill {
   name: string;
   amount: number;
   due_day: number;                 // 1-31
+  start_date?: string | null;      // 生效区间 [start_date, end_date)，null=不限
+  end_date?: string | null;
   note: string | null;
   sort_order: number;
   created_at: number;
@@ -240,6 +250,8 @@ export interface Subscription {
   billing_day: number;             // 1-31
   billing_cycle: SubscriptionCycle;
   category: string | null;         // 可选分类：影音/工具/云存储
+  start_date?: string | null;      // 生效区间 [start_date, end_date)，null=不限
+  end_date?: string | null;
   note: string | null;
   sort_order: number;
   created_at: number;

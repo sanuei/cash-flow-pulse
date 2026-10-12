@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS user_config (
                    CHECK (pay_day >= 1 AND pay_day <= 31),
   snapshot_offsets TEXT NOT NULL DEFAULT '[0,7,14,21]',  -- JSON 数组
   weekend_shift  INTEGER NOT NULL DEFAULT 0,             -- 扣款日遇周末顺延至周一（0=关 1=开）
+  fire_settings  TEXT,                                   -- 财务自由参数 JSON（NULL=默认）
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL
 );
@@ -123,6 +124,8 @@ CREATE TABLE IF NOT EXISTS recurring_bills (
   name        TEXT NOT NULL,
   amount      REAL NOT NULL CHECK (amount >= 0),
   due_day     INTEGER NOT NULL CHECK (due_day >= 1 AND due_day <= 31),
+  start_date  TEXT,                -- 生效区间 [start_date, end_date)，NULL=不限
+  end_date    TEXT,
   note        TEXT,
   sort_order  INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL,
@@ -163,6 +166,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   billing_cycle TEXT NOT NULL DEFAULT 'monthly'
                    CHECK (billing_cycle IN ('monthly','yearly')),
   category      TEXT,
+  start_date    TEXT,              -- 生效区间 [start_date, end_date)，NULL=不限
+  end_date      TEXT,
   note          TEXT,
   sort_order    INTEGER NOT NULL DEFAULT 0,
   created_at    INTEGER NOT NULL,

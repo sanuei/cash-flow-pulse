@@ -10,7 +10,8 @@ import { BillForm } from '../components/BillForm';
 import { CardForm } from '../components/CardForm';
 import { OneOffForm } from '../components/OneOffForm';
 import { PageTitle } from '../components/PageTitle';
-import { formatYen, getCalendarMonthDueStatus, getCardAmountForDate } from '@cfp/shared';
+import { formatYen, getCalendarMonthDueStatus, getCardAmountForDate, isWithinDateRange, parseDate } from '@cfp/shared';
+import { saveWithScope, type ChangeScope } from '../components/EffectiveScope';
 import type { RecurringBill, CreditCard, OneOffExpense } from '@cfp/shared';
 
 // YYYY-MM-DD → "7月15日"
@@ -70,14 +71,21 @@ export function ExpensesPage() {
     });
   const cardTotal = cardRows.reduce((s, r) => s + r.amount, 0);
 
-  // 固定账单：未扣排前，已扣排后
+  // 固定账单：本月扣款日不在生效区间内的（已停止 / 尚未开始）不计入合计、排最后；
+  // 其余未扣排前，已扣排后
   const billRows = bills
     .map((bill) => {
-      const { paid, daysDiff } = getCalendarMonthDueStatus(bill.due_day, today, weekendShift);
-      return { bill, cyclePaid: paid, cycleDaysUntil: daysDiff };
+      const { paid, daysDiff, rawDueDate } = getCalendarMonthDueStatus(bill.due_day, today, weekendShift);
+      const inRange = isWithinDateRange(bill, rawDueDate);
+      const state: 'active' | 'ended' | 'upcoming' = inRange
+        ? 'active'
+        : bill.start_date && rawDueDate < parseDate(bill.start_date) ? 'upcoming' : 'ended';
+      return { bill, cyclePaid: paid, cycleDaysUntil: daysDiff, state };
     })
-    .sort((a, b) => Number(a.cyclePaid) - Number(b.cyclePaid) || a.cycleDaysUntil - b.cycleDaysUntil);
-  const billTotal = bills.reduce((s, b) => s + b.amount, 0);
+    .sort((a, b) =>
+      Number(a.state !== 'active') - Number(b.state !== 'active') ||
+      Number(a.cyclePaid) - Number(b.cyclePaid) || a.cycleDaysUntil - b.cycleDaysUntil);
+  const billTotal = billRows.reduce((s, r) => s + (r.state === 'active' ? r.bill.amount : 0), 0);
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
@@ -192,12 +200,18 @@ export function ExpensesPage() {
           <BillForm
             initial={
               editing
-                ? { name: editing.name, amount: editing.amount, due_day: editing.due_day, note: editing.note }
+                ? {
+                    name: editing.name, amount: editing.amount, due_day: editing.due_day,
+                    start_date: editing.start_date ?? null, end_date: editing.end_date ?? null,
+                    note: editing.note,
+                  }
                 : undefined
             }
-            onSubmit={async (data) => {
-              if (editing) await useStore.getState().updateBill(editing.id, data);
-              else await useStore.getState().addBill(data);
+            onSubmit={async (data, scope?: ChangeScope) => {
+              const st = useStore.getState();
+              // 从生效日起改：旧账单截止到生效日（往期保持原金额），新金额从生效日开始；金额 0 = 停止
+              if (editing) await saveWithScope(data, scope, (patch) => st.updateBill(editing.id, patch), (d) => st.addBill(d));
+              else await st.addBill(data);
               await loadDashboard();
               close();
             }}
@@ -214,15 +228,19 @@ export function ExpensesPage() {
         }
       >
         {(openEdit) =>
-          billRows.map(({ bill: b, cyclePaid, cycleDaysUntil }) => (
+          billRows.map(({ bill: b, cyclePaid, cycleDaysUntil, state }) => (
             <EntityRow
               key={b.id}
               icon="bill"
-              tone={cyclePaid ? 'neutral' : 'warning'}
+              tone={cyclePaid || state !== 'active' ? 'neutral' : 'warning'}
               title={
                 <>
                   {b.name}{' '}
-                  {cyclePaid ? (
+                  {state === 'ended' ? (
+                    <span className="badge-muted badge text-[10px] px-1.5 py-0.5">已停止</span>
+                  ) : state === 'upcoming' ? (
+                    <span className="badge-muted badge text-[10px] px-1.5 py-0.5">{b.start_date!.slice(5)} 起生效</span>
+                  ) : cyclePaid ? (
                     <span className="badge-success badge text-[10px] px-1.5 py-0.5">
                       {cycleDaysUntil === 0 ? '今天已扣' : `${cycleDaysUntil} 天前已扣`}
                     </span>
@@ -233,8 +251,12 @@ export function ExpensesPage() {
                   )}
                 </>
               }
-              subtitle={`每月 ${b.due_day} 号扣款`}
-              money={<Money amount={b.amount} size="md" sign={cyclePaid ? 'neutral' : 'negative'} />}
+              subtitle={`每月 ${b.due_day} 号${
+                b.start_date && b.end_date ? ` · ${b.start_date} ~ ${b.end_date}`
+                : b.start_date ? ` · ${b.start_date} 起`
+                : b.end_date ? ` · 至 ${b.end_date}`
+                : '扣款'}`}
+              money={<Money amount={b.amount} size="md" sign={cyclePaid || state !== 'active' ? 'neutral' : 'negative'} />}
               onEdit={() => openEdit(b)}
               onDelete={() =>
                 softDelete({

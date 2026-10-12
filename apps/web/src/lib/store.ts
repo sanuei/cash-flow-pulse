@@ -21,8 +21,7 @@ import type {
   OtherAsset,
   DashboardCalc,
   UpcomingExpenses,
-  UpcomingIncomes,
-} from '@cfp/shared';
+  UpcomingIncomes, FireSettings } from '@cfp/shared';
 // v0.3: 计算结果使用 V2 类型（包含 upcoming_expenses/incomes）
 type DashboardCalcV2 = DashboardCalc & {
   prompt: SnapshotPrompt | null;
@@ -82,6 +81,8 @@ interface AppState {
   updateCard: (id: string, data: Partial<CreditCard>) => Promise<void>;
   deleteCard: (id: string) => Promise<void>;
   updateConfig: (data: Partial<Pick<UserConfig, 'pay_day' | 'snapshot_offsets' | 'weekend_shift'>>) => Promise<void>;
+  /** 财务自由参数存服务器（user_config.fire_settings），并同步到本地 config，不整页重载 */
+  saveFireSettings: (s: FireSettings | null) => Promise<void>;
   recordSnapshot: (cycleId: string, offsetIndex: number, note?: string) => Promise<void>;
 
   // ===== v0.3 Actions =====
@@ -256,6 +257,12 @@ export const useStore = create<AppState>((set, get) => ({
 
   async updateConfig(data) {
     await apiPut('/config', data);
+  },
+
+  async saveFireSettings(s) {
+    await apiPut('/config', { fire_settings: s });
+    const cfg = get().config;
+    if (cfg) set({ config: { ...cfg, fire_settings: s } });
   },
 
   async recordSnapshot(cycleId, offsetIndex, note) {

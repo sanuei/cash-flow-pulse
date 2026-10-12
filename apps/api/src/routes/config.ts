@@ -8,6 +8,7 @@
 import { Hono } from 'hono';
 import { UserConfigUpdateSchema } from '@cfp/shared';
 import type { Env } from '../index';
+import { parseFireSettings } from '../lib/utils';
 
 // userId 改为 c.get('user').id（v1.0+ 多用户）
 
@@ -34,6 +35,7 @@ configRoute.get('/', async (c) => {
     pay_day: row!.pay_day,
     snapshot_offsets: JSON.parse(row!.snapshot_offsets),
     weekend_shift: !!row!.weekend_shift,
+    fire_settings: parseFireSettings(row!.fire_settings),
     created_at: row!.created_at,
     updated_at: row!.updated_at,
   });
@@ -70,6 +72,10 @@ configRoute.put('/', async (c) => {
     if (parsed.data.weekend_shift !== undefined) {
       updates.push('weekend_shift = ?');
       values.push(parsed.data.weekend_shift ? 1 : 0);
+    }
+    if (parsed.data.fire_settings !== undefined) {
+      updates.push('fire_settings = ?');
+      values.push(parsed.data.fire_settings === null ? null : JSON.stringify(parsed.data.fire_settings));
     }
     updates.push('updated_at = ?');
     values.push(now);

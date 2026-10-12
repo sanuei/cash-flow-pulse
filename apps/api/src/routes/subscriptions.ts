@@ -35,12 +35,14 @@ subscriptionRoutes.post('/', async (c) => {
 
   await c.env.DB
     .prepare(`INSERT INTO subscriptions
-      (id, user_id, name, amount, billing_day, billing_cycle, category, note, sort_order, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      (id, user_id, name, amount, billing_day, billing_cycle, category, start_date, end_date, note, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(
       id, userId, parsed.data.name, parsed.data.amount,
       parsed.data.billing_day, parsed.data.billing_cycle,
-      parsed.data.category ?? null, parsed.data.note ?? null,
+      parsed.data.category ?? null,
+      parsed.data.start_date ?? null, parsed.data.end_date ?? null,
+      parsed.data.note ?? null,
       (maxOrder?.max_order ?? -1) + 1, ts, ts
     )
     .run();
@@ -49,6 +51,8 @@ subscriptionRoutes.post('/', async (c) => {
     id, user_id: userId, ...parsed.data,
     sort_order: (maxOrder?.max_order ?? -1) + 1,
     category: parsed.data.category ?? null,
+    start_date: parsed.data.start_date ?? null,
+    end_date: parsed.data.end_date ?? null,
     note: parsed.data.note ?? null,
     created_at: ts, updated_at: ts,
   }, 201);
@@ -71,6 +75,8 @@ subscriptionRoutes.put('/:id', async (c) => {
   if (parsed.data.billing_day !== undefined) { updates.push('billing_day = ?'); values.push(parsed.data.billing_day); }
   if (parsed.data.billing_cycle !== undefined) { updates.push('billing_cycle = ?'); values.push(parsed.data.billing_cycle); }
   if (parsed.data.category !== undefined) { updates.push('category = ?'); values.push(parsed.data.category); }
+  if (parsed.data.start_date !== undefined) { updates.push('start_date = ?'); values.push(parsed.data.start_date); }
+  if (parsed.data.end_date !== undefined) { updates.push('end_date = ?'); values.push(parsed.data.end_date); }
   if (parsed.data.note !== undefined) { updates.push('note = ?'); values.push(parsed.data.note); }
   updates.push('updated_at = ?'); values.push(ts);
   values.push(id, userId);

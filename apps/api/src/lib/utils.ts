@@ -12,3 +12,21 @@ export function generateId(): string {
 export function now(): number {
   return Date.now();
 }
+/** user_config.fire_settings（TEXT JSON）→ 对象；空/损坏 → null（前端用默认值） */
+export function parseFireSettings(raw: unknown): {
+  withdrawalRatePct: number; annualReturnPct: number; annualSpendOverride: number | null;
+} | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  try {
+    const p = JSON.parse(raw);
+    if (!p || typeof p !== 'object') return null;
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const w = num(p.withdrawalRatePct);
+    const r = num(p.annualReturnPct);
+    if (w === null || r === null) return null;
+    const o = num(p.annualSpendOverride);
+    return { withdrawalRatePct: w, annualReturnPct: r, annualSpendOverride: o !== null && o > 0 ? o : null };
+  } catch {
+    return null;
+  }
+}

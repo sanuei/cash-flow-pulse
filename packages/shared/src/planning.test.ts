@@ -82,3 +82,27 @@ describe('computeCycleHistory', () => {
     expect(d.getMonth()).toBe(6); // 2026-07
   });
 });
+
+describe('固定账单「从某天起生效」', () => {
+  const config = { user_id: 'u', pay_day: 25, snapshot_offsets: [0], weekend_shift: false, created_at: 0, updated_at: 0 };
+  const bill = (id: string, amount: number, start: string | null, end: string | null) =>
+    ({ id, user_id: 'u', name: '房租', amount, due_day: 27, start_date: start, end_date: end, note: null, sort_order: 0, created_at: 0, updated_at: 0 });
+  // 房租从 9/1 起由 80,000 涨到 95,000：旧条目截止 9/1，新条目从 9/1 开始
+  const bills = [bill('old', 80000, null, '2026-09-01'), bill('new', 95000, '2026-09-01', null)];
+  const input = { today: new Date(2026, 9, 3), config, cards: [], investments: [], incomes: [], subscriptions: [], oneOffs: [], bills, dataStart: new Date(2026, 4, 1) };
+
+  it('往期按旧金额、生效日之后按新金额，不重叠不遗漏', () => {
+    const cycles = computeCycleHistory(input);
+    const byId = Object.fromEntries(cycles.map((c) => [c.cycle_id, c.bills]));
+    expect(byId['2026-07']).toBe(80000); // 周期 7/25–8/25，扣款日 7/27
+    expect(byId['2026-08']).toBe(80000); // 周期 8/25–9/25，扣款日 8/27（生效日前）
+    expect(byId['2026-09']).toBe(95000); // 周期 9/25–10/25，扣款日 9/27
+  });
+
+  it('金额填 0 暂停 = 只截止旧条目：之后的周期不再扣', () => {
+    const cycles = computeCycleHistory({ ...input, bills: [bill('old', 80000, null, '2026-09-01')] });
+    const byId = Object.fromEntries(cycles.map((c) => [c.cycle_id, c.bills]));
+    expect(byId['2026-08']).toBe(80000);
+    expect(byId['2026-09']).toBe(0);
+  });
+});
