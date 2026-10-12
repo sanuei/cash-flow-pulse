@@ -9,8 +9,11 @@ pnpm monorepo：`apps/web`（React + Vite，Cloudflare Pages）、`apps/api`（H
   - `calc.test.ts` 里「computeDashboardV2 向后兼容」的 3 个用例在改动前就失败，不是新问题；其余用例必须全过。
 - 前端：推送到 `main` 后由 Cloudflare Pages 自动部署。
 - 后端：需要 `wrangler deploy`（`pnpm deploy:api`），要有 `CLOUDFLARE_API_TOKEN`。环境里没有 token 时，合并后提醒用户在本地运行 `pnpm deploy:api`。
-- 改了 D1 表结构时，迁移 SQL 放在 `apps/api/src/db/migrate_*.sql`，并提醒用户对远程库执行：
+- 改了 D1 表结构时，迁移 SQL 放在 `apps/api/src/db/migrate_*.sql`（同步更新 `schema.sql`）。
+  会话里有 Cloudflare 连接器时，用它的 `d1_database_query` 对生产库（database_id `222e5633-5a2c-4af7-8efb-dbb0f7d5d6b5`）
+  逐条执行；迁移只做加列等向后兼容的改动，并且**先迁移、再合并**。没有连接器时提醒用户执行：
   `wrangler d1 execute cash-flow-pulse-db --remote --file=./src/db/migrate_xxx.sql`
+- Cloudflare 连接器不能上传 Worker 代码，后端仍需 `pnpm deploy:api`。
 
 ## 约定
 
