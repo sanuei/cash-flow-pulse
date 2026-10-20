@@ -69,6 +69,7 @@ export const SimulatorSettingsSchema = z.object({
   retireSpendMonthly: z.number().nonnegative().max(1e10),
   withdrawalRatePct: pct(0.5, 20),
   annualReturnPct: pct(-20, 30),
+  volatilityPct: pct(0, 80),
   feePct: pct(0, 10),
   cashRatePct: pct(-5, 20),
   inflationPct: pct(-5, 30),

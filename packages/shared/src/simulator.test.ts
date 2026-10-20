@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   simulate, simulateScenarios, solveMonthlyInvest, solveRetireSpend, computeLevers, applySimSettings,
-  SIM_DEFAULTS, type SimInput,
+  monteCarlo, successGrid, successGridAxes, SIM_DEFAULTS, type SimInput,
 } from './simulator';
 
 const base: SimInput = {
@@ -135,5 +135,71 @@ describe('情景 / 反推 / 杠杆', () => {
     expect(out.annualReturnPct).toBe(3);
     expect(out.retireAge).toBe(55);
     expect(out.monthlyIncome).toBe(base.monthlyIncome);
+  });
+});
+
+describe('随机模拟', () => {
+  it('同一种子结果完全一样（拖滑块时不会乱跳）', () => {
+    const a = monteCarlo(base, { runs: 200 });
+    const b = monteCarlo(base, { runs: 200 });
+    expect(a.successRate).toBe(b.successRate);
+    expect(a.bands[20]!.p50).toBe(b.bands[20]!.p50);
+  });
+
+  it('波动率 0：所有路线都等于固定收益那条线', () => {
+    const det = simulate(base);
+    const mc = monteCarlo({ ...base, volatilityPct: 0 }, { runs: 50 });
+    expect(mc.bands[10]!.p10).toBeCloseTo(det.rows[9]!.endTotal, 0);
+    expect(mc.bands[10]!.p90).toBeCloseTo(det.rows[9]!.endTotal, 0);
+    expect(mc.successRate).toBe(det.depletedAge === null ? 1 : 0);
+  });
+
+  it('中位数路线接近固定收益那条线', () => {
+    const det = simulate({ ...base, retireAge: 60 });
+    const mc = monteCarlo({ ...base, retireAge: 60 }, { runs: 1000 });
+    const y = 20;
+    const ratio = mc.bands[y]!.p50 / det.rows[y - 1]!.endTotal;
+    expect(ratio).toBeGreaterThan(0.85);
+    expect(ratio).toBeLessThan(1.15);
+  });
+
+  it('分位数有序：p10 ≤ p25 ≤ p50 ≤ p75 ≤ p90', () => {
+    const mc = monteCarlo(base, { runs: 300 });
+    for (const b of mc.bands) {
+      expect(b.p10).toBeLessThanOrEqual(b.p25);
+      expect(b.p25).toBeLessThanOrEqual(b.p50);
+      expect(b.p50).toBeLessThanOrEqual(b.p75);
+      expect(b.p75).toBeLessThanOrEqual(b.p90);
+    }
+  });
+
+  it('固定收益下能撑住的方案：波动越大，成功率越低（序列风险）', () => {
+    const plan = { ...base, cash: 0, invested: 0, monthlyInvest: 150_000, retireAge: 55 };
+    expect(simulate(plan).depletedAge).toBeNull();
+    const calm = monteCarlo({ ...plan, volatilityPct: 5 }, { runs: 500 });
+    const wild = monteCarlo({ ...plan, volatilityPct: 25 }, { runs: 500 });
+    expect(wild.successRate).toBeLessThan(calm.successRate);
+  });
+
+  it('固定收益下撑不住的方案：波动反而让一部分路线撑住', () => {
+    const plan = { ...base, cash: 0, invested: 0, retireAge: 35 };
+    expect(simulate(plan).depletedAge).not.toBeNull();
+    expect(monteCarlo({ ...plan, volatilityPct: 25 }, { runs: 500 }).successRate).toBeLessThan(0.5);
+  });
+
+  it('「还有钱」的比例随年龄单调不增，最后一年 = 成功率', () => {
+    const mc = monteCarlo({ ...base, cash: 0, invested: 0, retireAge: 50 }, { runs: 300 });
+    for (let i = 1; i < mc.bands.length; i++) expect(mc.bands[i]!.alive).toBeLessThanOrEqual(mc.bands[i - 1]!.alive);
+    expect(mc.bands[mc.bands.length - 1]!.alive).toBeCloseTo(mc.successRate, 5);
+  });
+
+  it('热力图：花得越多成功率越低，越晚退休成功率越高', () => {
+    const axes = successGridAxes(base);
+    expect(axes.ages.length).toBeGreaterThan(3);
+    const g = successGrid(base, axes, { runs: 100 });
+    const last = g.rates.length - 1;
+    const col = 1;
+    expect(g.rates[last]![col]!).toBeLessThanOrEqual(g.rates[0]![col]!);
+    expect(g.rates[0]![g.ages.length - 1]!).toBeGreaterThanOrEqual(g.rates[0]![0]!);
   });
 });

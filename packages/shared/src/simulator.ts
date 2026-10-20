@@ -44,8 +44,10 @@ export type SimInput = {
   /** 财务自由（退休）后的月支出 */
   retireSpendMonthly: number;
   withdrawalRatePct: number;
-  /** 投资实际年化收益 % */
+  /** 投资实际年化收益 %（几何平均；随机模拟时为收益的中位数） */
   annualReturnPct: number;
+  /** 年收益波动率 %（只用于随机模拟；全球股票约 15%） */
+  volatilityPct: number;
   /** 年费率 % */
   feePct: number;
   /** 现金名义利率 % */
@@ -107,11 +109,15 @@ export type SimResult = {
 
 const MAX_YEARS = 100;
 
-export function simulate(input: SimInput): SimResult {
+/**
+ * @param returns 可选：逐年的投资实际收益（小数，未扣费率），用于随机模拟；不给则每年都是 annualReturnPct
+ */
+export function simulate(input: SimInput, returns?: ArrayLike<number>): SimResult {
   const months = Math.max(12, Math.min(MAX_YEARS * 12, Math.ceil((input.lifeExpectancy - input.startAge) * 12)));
   const wr = input.withdrawalRatePct / 100;
   const target = wr > 0 && input.retireSpendMonthly > 0 ? Math.round((input.retireSpendMonthly * 12) / wr) : 0;
-  const rInv = Math.pow(Math.max(0.0001, 1 + (input.annualReturnPct - input.feePct) / 100), 1 / 12) - 1;
+  const monthlyRate = (annual: number) => Math.pow(Math.max(0.0001, 1 + annual - input.feePct / 100), 1 / 12) - 1;
+  let rInv = monthlyRate(input.annualReturnPct / 100);
   const rCash = Math.pow(Math.max(0.0001, (1 + input.cashRatePct / 100) / (1 + input.inflationPct / 100)), 1 / 12) - 1;
   const tax = Math.min(1, Math.max(0, input.taxPct / 100));
   const growth = 1 + input.incomeGrowthPct / 100;
@@ -145,6 +151,7 @@ export function simulate(input: SimInput): SimResult {
     const total = cash + inv;
 
     if (m % 12 === 0) {
+      if (returns) rInv = monthlyRate(returns[year] ?? input.annualReturnPct / 100);
       row = {
         year, age: Math.floor(age), startTotal: total,
         income: 0, pension: 0, spend: 0, eventsNet: 0, contribution: 0, returns: 0, withdrawal: 0, tax: 0,
@@ -353,6 +360,7 @@ export const SIM_DEFAULTS = {
   latestWorkAge: 65,
   pensionStartAge: 65,
   pensionMonthly: 0,
+  volatilityPct: 15,
 };
 
 /** 用户覆盖合并到基准上（只取 SimInput 的字段） */
@@ -364,4 +372,184 @@ export function applySimSettings(base: SimInput, s: SimulatorSettings | null | u
     if (v !== undefined) (out as Record<string, unknown>)[k] = v;
   });
   return out;
+}
+
+// ── 随机模拟（蒙特卡洛）────────────────────────────────────────
+//
+// 每年的投资收益从对数正态分布里抽：ln(1+r) ~ N(ln(1+μ), σ_log)，
+// μ = 预期年化收益（几何），σ_log 由波动率换算。这样「中位数路线」≈ 固定收益的那条线。
+// 用固定种子 + 同一组随机数（common random numbers）：参数一变，所有路线一起平移，
+// 拖动滑块时成功率不会因为随机数不同而跳来跳去。
+
+export type MonteCarloBand = {
+  t: number;        // 距今年数
+  age: number;
+  p10: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+  /** 到这个时间点还没耗尽资产的路线占比（0~1） */
+  alive: number;
+};
+
+export type MonteCarloResult = {
+  runs: number;
+  /** 一直撑到模拟结束都没耗尽的比例（0~1） */
+  successRate: number;
+  /** 能达到财务自由目标的比例 */
+  fireRate: number;
+  /** 达成年龄的分位数（达不到的路线算作 ∞；对应分位落在 ∞ 时为 null） */
+  fireAgeP10: number | null;
+  fireAgeP50: number | null;
+  fireAgeP90: number | null;
+  endP10: number;
+  endP50: number;
+  endP90: number;
+  bands: MonteCarloBand[];
+};
+
+/** mulberry32：小而快的可复现伪随机数 */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const shockCache = new Map<string, Float64Array>();
+
+/** runs × years 个标准正态随机数（Box-Muller），按 (runs, years, seed) 缓存 */
+function shocks(runs: number, years: number, seed: number): Float64Array {
+  const key = `${runs}x${years}x${seed}`;
+  const hit = shockCache.get(key);
+  if (hit) return hit;
+  const rnd = mulberry32(seed);
+  const out = new Float64Array(runs * years);
+  for (let i = 0; i < out.length; i += 2) {
+    const u1 = Math.max(1e-12, rnd());
+    const u2 = rnd();
+    const r = Math.sqrt(-2 * Math.log(u1));
+    out[i] = r * Math.cos(2 * Math.PI * u2);
+    if (i + 1 < out.length) out[i + 1] = r * Math.sin(2 * Math.PI * u2);
+  }
+  if (shockCache.size > 8) shockCache.clear();
+  shockCache.set(key, out);
+  return out;
+}
+
+/** 第 run 条路线的逐年收益（小数） */
+function pathReturns(input: SimInput, z: Float64Array, run: number, years: number): Float64Array {
+  const mu = Math.log(Math.max(0.0001, 1 + input.annualReturnPct / 100));
+  const vol = Math.max(0, input.volatilityPct) / 100;
+  const sigma = Math.sqrt(Math.log(1 + (vol * vol) / Math.pow(1 + input.annualReturnPct / 100, 2)));
+  const out = new Float64Array(years);
+  for (let y = 0; y < years; y++) out[y] = Math.exp(mu + sigma * z[run * years + y]!) - 1;
+  return out;
+}
+
+function simYears(input: SimInput): number {
+  return Math.max(1, Math.min(MAX_YEARS, Math.ceil(input.lifeExpectancy - input.startAge)));
+}
+
+function quantile(sorted: ArrayLike<number>, q: number): number {
+  if (sorted.length === 0) return 0;
+  const i = Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))));
+  return sorted[i]!;
+}
+
+export const MC_RUNS = 1000;
+export const MC_SEED = 20261020;
+
+export function monteCarlo(input: SimInput, opts: { runs?: number; seed?: number } = {}): MonteCarloResult {
+  const runs = opts.runs ?? MC_RUNS;
+  const years = simYears(input);
+  const z = shocks(runs, years, opts.seed ?? MC_SEED);
+
+  const totals: Float64Array[] = []; // [year][run]，year 0 = 现在
+  for (let y = 0; y <= years; y++) totals.push(new Float64Array(runs));
+  const depletedYear = new Float64Array(runs).fill(Infinity);
+  const fireAges = new Float64Array(runs);
+  let success = 0;
+  let fire = 0;
+
+  for (let i = 0; i < runs; i++) {
+    const r = simulate(input, pathReturns(input, z, i, years));
+    totals[0]![i] = input.cash + input.invested;
+    for (let y = 0; y < years; y++) totals[y + 1]![i] = r.rows[y] ? r.rows[y]!.endTotal : r.endAssets;
+    if (r.depletedAge === null) success++;
+    else depletedYear[i] = r.depletedAge - input.startAge;
+    if (r.fireAge !== null) fire++;
+    fireAges[i] = r.fireAge ?? Infinity;
+  }
+
+  const bands: MonteCarloBand[] = [];
+  for (let y = 0; y <= years; y++) {
+    const col = totals[y]!.slice().sort();
+    let alive = 0;
+    for (let i = 0; i < runs; i++) if (depletedYear[i]! > y) alive++;
+    const t = Math.min(y, input.lifeExpectancy - input.startAge);
+    bands.push({
+      t, age: input.startAge + t,
+      p10: quantile(col, 0.1), p25: quantile(col, 0.25), p50: quantile(col, 0.5),
+      p75: quantile(col, 0.75), p90: quantile(col, 0.9),
+      alive: alive / runs,
+    });
+  }
+  const sortedFire = fireAges.slice().sort();
+  const fq = (q: number) => { const v = quantile(sortedFire, q); return Number.isFinite(v) ? v : null; };
+  const end = totals[years]!.slice().sort();
+  return {
+    runs,
+    successRate: success / runs,
+    fireRate: fire / runs,
+    fireAgeP10: fq(0.1),
+    fireAgeP50: fq(0.5),
+    fireAgeP90: fq(0.9),
+    endP10: quantile(end, 0.1),
+    endP50: quantile(end, 0.5),
+    endP90: quantile(end, 0.9),
+    bands,
+  };
+}
+
+// ── 成功率热力图：退休年龄 × 退休后月支出 ──────────────────────
+
+export type SuccessGrid = {
+  ages: number[];
+  spends: number[];
+  /** rates[支出行][年龄列]，0~1 */
+  rates: number[][];
+};
+
+/** 默认的网格轴：年龄每 5 岁一列（最多 8 列），支出为当前值的 70%~130% */
+export function successGridAxes(input: SimInput): { ages: number[]; spends: number[] } {
+  const first = Math.max(Math.ceil(input.startAge) + 1, Math.ceil((input.startAge + 3) / 5) * 5);
+  const last = Math.min(75, input.lifeExpectancy - 5);
+  const ages: number[] = [];
+  for (let a = first; a <= last && ages.length < 8; a += 5) ages.push(a);
+  const base = Math.max(10_000, input.retireSpendMonthly);
+  // 中间一行用当前值本身（不取整），这样框出的「当前方案」格子和成功率 KPI 完全一致
+  const spends = [0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3].map((k) => (k === 1 ? Math.round(base) : Math.round((base * k) / 10_000) * 10_000));
+  return { ages, spends: [...new Set(spends)] };
+}
+
+/**
+ * 在 age 岁固定退休、退休后每月花 spend 时，钱撑到模拟结束的概率。
+ * 默认和主模拟同样的 1000 条路线（同一组随机数），格子与成功率 KPI 口径一致。
+ */
+export function successGrid(
+  input: SimInput,
+  axes: { ages: number[]; spends: number[] },
+  opts: { runs?: number; seed?: number } = {},
+): SuccessGrid {
+  const runs = opts.runs ?? MC_RUNS;
+  const rates = axes.spends.map((spend) =>
+    axes.ages.map((age) => monteCarlo({ ...input, retireAge: age, retireSpendMonthly: spend }, { runs, seed: opts.seed }).successRate),
+  );
+  return { ...axes, rates };
 }

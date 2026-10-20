@@ -9,7 +9,7 @@ import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ReferenceDot,
 } from 'recharts';
-import type { SimInput, SimResult, SimEvent } from '@cfp/shared';
+import type { SimInput, SimResult, SimEvent, MonteCarloResult } from '@cfp/shared';
 import { yenCompact } from '../../lib/simulator';
 
 /** 「1.5亿」「3000万」——比 M/k 更符合中文读数习惯 */
@@ -19,6 +19,14 @@ export function yenAxisTickCn(v: number): string {
   if (a >= 1e8) return `${sign}${(a / 1e8).toFixed(a >= 1e9 ? 0 : 1).replace(/\.0$/, '')}亿`;
   if (a >= 1e4) return `${sign}${Math.round(a / 1e4)}万`;
   return `${Math.round(v)}`;
+}
+
+/** 向上取到「好看」的刻度值（1/2/2.5/5 × 10^n） */
+function niceCeil(v: number): number {
+  if (v <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const k of [1, 2, 2.5, 5, 10]) if (v <= k * p) return k * p;
+  return 10 * p;
 }
 
 /** 第 t 年（从现在起）的名义系数 */
@@ -38,11 +46,13 @@ function points(input: SimInput, r: SimResult) {
 
 const AXIS = { fontSize: 11, fill: 'var(--c-text-muted)' };
 
-export type TrajectoryMode = 'single' | 'scenarios';
+export type TrajectoryMode = 'single' | 'scenarios' | 'montecarlo';
 
 export function AssetTrajectoryChart({
-  input, result, baseline, scenarios, mode, nominal, showBaseline, events,
+  input, result, baseline, scenarios, mc, mode, nominal, showBaseline, events,
 }: {
+  /** 随机模拟结果（还没算完时为 null，只画固定收益那条线） */
+  mc: MonteCarloResult | null;
   input: SimInput;
   result: SimResult;
   baseline: SimResult;
@@ -66,8 +76,19 @@ export function AssetTrajectoryChart({
     band: mode === 'scenarios' && pess[i] && opt[i] ? [pess[i]!.total * f(p.t), opt[i]!.total * f(p.t)] : null,
     pess: pess[i] ? pess[i]!.total * f(p.t) : null,
     opt: opt[i] ? opt[i]!.total * f(p.t) : null,
+    mc80: mode === 'montecarlo' && mc?.bands[i] ? [mc.bands[i]!.p10 * f(p.t), mc.bands[i]!.p90 * f(p.t)] : null,
+    mc50: mode === 'montecarlo' && mc?.bands[i] ? [mc.bands[i]!.p25 * f(p.t), mc.bands[i]!.p75 * f(p.t)] : null,
+    p10: mc?.bands[i] ? mc.bands[i]!.p10 * f(p.t) : null,
+    p50: mc?.bands[i] ? mc.bands[i]!.p50 * f(p.t) : null,
+    p90: mc?.bands[i] ? mc.bands[i]!.p90 * f(p.t) : null,
     target: result.target * f(p.t),
   }));
+  const showMc = mode === 'montecarlo' && !!mc;
+  // 随机模拟时最乐观的那 10% 路线会冲到很高，把其余部分压扁：
+  // 纵轴上限取「中间 50% 区间的上沿 / 实线 / 参照线 / 目标」里最高的，超出部分截断
+  const yMax = showMc
+    ? Math.max(...data.map((d) => Math.max(d.mc50?.[1] ?? 0, d.cur, d.base ?? 0, d.target))) * 1.1
+    : undefined;
   const endAge = data[data.length - 1]!.age;
   const fireT = result.fireAge !== null ? result.fireAge - input.startAge : null;
   const fixedRetire = input.retireAge !== null && result.retireAge !== null && result.retireAge !== result.fireAge;
@@ -79,6 +100,10 @@ export function AssetTrajectoryChart({
           { label: '当前方案', color: 'var(--c-accent)', kind: 'line' },
           ...(showBaseline ? [{ label: '你现在的路线', color: 'var(--c-invest)', kind: 'dash' as const }] : []),
           ...(mode === 'scenarios' ? [{ label: '悲观 ~ 乐观（收益 ±2%）', color: 'var(--c-accent)', kind: 'band' as const }] : []),
+          ...(showMc ? [
+            { label: '50% 的路线落在这里', color: 'var(--c-accent)', kind: 'band' as const, opacity: 0.4 },
+            { label: '80% 的路线落在这里', color: 'var(--c-accent)', kind: 'band' as const, opacity: 0.18 },
+          ] : []),
           { label: '财务自由目标', color: 'var(--c-text-secondary)', kind: 'dot' },
         ]}
       />
@@ -97,13 +122,23 @@ export function AssetTrajectoryChart({
               tickFormatter={(v: number) => `${Math.round(v)}岁`} tickCount={8} allowDecimals={false}
               tick={AXIS} tickLine={false} axisLine={false} tickMargin={10}
             />
-            <YAxis tick={AXIS} tickFormatter={yenAxisTickCn} tickLine={false} axisLine={false} width={48} />
+            <YAxis
+              tick={AXIS} tickFormatter={yenAxisTickCn} tickLine={false} axisLine={false} width={48}
+              domain={yMax ? [0, niceCeil(yMax)] : undefined}
+              allowDataOverflow={!!yMax}
+            />
             <Tooltip
-              content={<TrajectoryTooltip mode={mode} showBaseline={showBaseline} startYear={new Date().getFullYear()} />}
+              content={<TrajectoryTooltip mode={showMc ? 'montecarlo' : mode === 'montecarlo' ? 'single' : mode} showBaseline={showBaseline} startYear={new Date().getFullYear()} />}
               cursor={{ stroke: 'var(--c-border-strong)', strokeWidth: 1 }}
             />
             {mode === 'scenarios' && (
               <Area type="monotone" dataKey="band" stroke="none" fill="var(--c-accent)" fillOpacity={0.13} isAnimationActive={false} activeDot={false} />
+            )}
+            {showMc && (
+              <>
+                <Area type="monotone" dataKey="mc80" stroke="none" fill="var(--c-accent)" fillOpacity={0.12} isAnimationActive={false} activeDot={false} />
+                <Area type="monotone" dataKey="mc50" stroke="none" fill="var(--c-accent)" fillOpacity={0.22} isAnimationActive={false} activeDot={false} />
+              </>
             )}
             <Line type="monotone" dataKey="target" stroke="var(--c-text-secondary)" strokeWidth={1.5} strokeDasharray="2 4" dot={false} activeDot={false} isAnimationActive={false} />
             {showBaseline && (
@@ -169,6 +204,11 @@ function TrajectoryTooltip({ active, payload, mode, showBaseline, startYear }: a
     ...(mode === 'scenarios' ? [
       { label: '乐观', value: p.opt, color: 'var(--c-text-muted)' },
       { label: '悲观', value: p.pess, color: 'var(--c-text-muted)' },
+    ] : []),
+    ...(mode === 'montecarlo' ? [
+      { label: '运气好（前 10%）', value: p.p90, color: 'var(--c-text-muted)' },
+      { label: '中位数', value: p.p50, color: 'var(--c-text-muted)' },
+      { label: '运气差（后 10%）', value: p.p10, color: 'var(--c-text-muted)' },
     ] : []),
     { label: '目标', value: p.target, color: 'var(--c-text-secondary)' },
   ];
@@ -264,7 +304,7 @@ function PrincipalTooltip({ active, payload, startYear }: any) {
   );
 }
 
-function ChartLegend({ items }: { items: { label: string; color: string; kind: 'line' | 'dash' | 'band' | 'dot' | 'block' }[] }) {
+function ChartLegend({ items }: { items: { label: string; color: string; kind: 'line' | 'dash' | 'band' | 'dot' | 'block'; opacity?: number }[] }) {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-2 text-[12px] text-notion-text-secondary">
       {items.map((it) => (
@@ -272,11 +312,60 @@ function ChartLegend({ items }: { items: { label: string; color: string; kind: '
           {it.kind === 'line' && <span className="w-4 h-[3px] rounded-full" style={{ background: it.color }} />}
           {it.kind === 'dash' && <span className="w-4 border-t-2 border-dashed" style={{ borderColor: it.color }} />}
           {it.kind === 'dot' && <span className="w-4 border-t-2 border-dotted" style={{ borderColor: it.color }} />}
-          {it.kind === 'band' && <span className="w-4 h-2.5 rounded-[2px]" style={{ background: it.color, opacity: 0.25 }} />}
+          {it.kind === 'band' && <span className="w-4 h-2.5 rounded-[2px]" style={{ background: it.color, opacity: it.opacity ?? 0.25 }} />}
           {it.kind === 'block' && <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: it.color }} />}
           {it.label}
         </span>
       ))}
+    </div>
+  );
+}
+
+/** 钱能撑多久：每个年龄还有钱的路线占比（随机模拟） */
+export function SurvivalChart({ input, mc, retireAge }: { input: SimInput; mc: MonteCarloResult; retireAge: number | null }) {
+  const data = mc.bands.map((b) => ({ age: Math.round(b.age * 100) / 100, alive: Math.round(b.alive * 1000) / 10 }));
+  const endAge = data[data.length - 1]!.age;
+  return (
+    <div className="h-52 sm:h-60 -mx-2">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="sim-grad-alive" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--c-success)" stopOpacity={0.3} />
+              <stop offset="100%" stopColor="var(--c-success)" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} stroke="var(--c-border)" />
+          <XAxis
+            dataKey="age" type="number" domain={[input.startAge, endAge]}
+            tickFormatter={(v: number) => `${Math.round(v)}岁`} tickCount={8} allowDecimals={false}
+            tick={AXIS} tickLine={false} axisLine={false} tickMargin={10}
+          />
+          <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={(v: number) => `${v}%`} tick={AXIS} tickLine={false} axisLine={false} width={40} />
+          <Tooltip
+            content={({ active, payload }: any) => {
+              const p = active && payload?.[0]?.payload;
+              if (!p) return null;
+              return (
+                <div className="rounded-[var(--radius-lg)] border border-[var(--c-border)] bg-[var(--c-bg-elev)] shadow-[var(--shadow-lg)] px-3 py-2 text-[12px]">
+                  <div className="text-[11px] text-notion-text-muted">{Math.floor(p.age)} 岁</div>
+                  <div className="text-notion-text">还有钱的概率 <b className="font-numeric">{p.alive}%</b></div>
+                </div>
+              );
+            }}
+            cursor={{ stroke: 'var(--c-border-strong)', strokeWidth: 1 }}
+          />
+          {retireAge !== null && (
+            <ReferenceLine
+              x={retireAge}
+              stroke="var(--c-text-secondary)"
+              strokeDasharray="4 4"
+              label={{ value: `${Math.floor(retireAge)}岁停止工作`, position: 'insideBottomLeft', fontSize: 10, fill: 'var(--c-text-secondary)' }}
+            />
+          )}
+          <Area type="stepAfter" dataKey="alive" stroke="var(--c-success)" strokeWidth={2} fill="url(#sim-grad-alive)" isAnimationActive={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   );
 }

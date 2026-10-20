@@ -4,10 +4,11 @@
  * 结构（先给答案，再给细节）：
  *   左：参数面板（5 个核心滑块常驻；高级参数折叠；每项都能「恢复为我的数据」）
  *   右：① 答案区（三句话 + 关键数字 + 与「你现在的路线」对比）
- *       ② 资产轨迹（单线 / 三情景，今天购买力 / 名义）
- *       ③ 反推目标（想在 X 岁自由 → 每月要投多少 / 最多能花多少）
- *       ④ 本金 vs 复利收益
- *       ⑤ 逐年明细表（可导出 CSV）
+ *       ② 资产轨迹（随机波动区间带 / 三情景 / 单线，今天购买力 / 名义）
+ *       ③ 钱能撑多久（随机模拟：每个年龄还有钱的概率）
+ *       ④ 退休年龄 × 月支出 成功率热力图（点格子可应用）
+ *       ⑤ 反推目标、本金 vs 复利收益、逐年明细表（可导出 CSV）
+ *   随机模拟和热力图在 Web Worker 里算（lib/useSimWorker.ts），固定种子，拖滑块时结果不乱跳。
  *
  * 参数存服务器 user_config.simulator_settings，只存改过的字段；没改的跟随真实数据自动更新。
  * 「你现在的路线」= 不带任何覆盖的基准，也就是首页财务自由卡看到的那条路线。
@@ -15,7 +16,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   simulate, simulateScenarios, solveMonthlyInvest, solveRetireSpend, computeLevers, applySimSettings, formatYen,
-  type SimEvent, type SimInput, type SimResult, type SimulatorSettings,
+  successGridAxes, MC_RUNS,
+  type SimEvent, type SimInput, type SimResult, type SimulatorSettings, type MonteCarloResult,
 } from '@cfp/shared';
 import { useStore } from '../lib/store';
 import { useSimBaseline, withSettings, yenCompact, formatMonths, yearAfterMonths, currentAge, type SimBaseline } from '../lib/simulator';
@@ -25,7 +27,9 @@ import { Icon } from '../components/Icon';
 import { MoneyInput } from '../components/MoneyInput';
 import { Collapsible } from '../components/FormKit';
 import { LoadingState } from '../components/States';
-import { AssetTrajectoryChart, PrincipalGainsChart, type TrajectoryMode } from '../components/simulator/SimCharts';
+import { AssetTrajectoryChart, PrincipalGainsChart, SurvivalChart, type TrajectoryMode } from '../components/simulator/SimCharts';
+import { SuccessHeatmap, pctText } from '../components/simulator/SimHeatmap';
+import { useMonteCarlo, useSuccessGrid } from '../lib/useSimWorker';
 import { SimTable } from '../components/simulator/SimTable';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -49,23 +53,27 @@ export default function SimulatorPage() {
   }, [config]);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const persist = (next: SimulatorSettings) => {
-    setOverrides(next);
+  // 用函数式更新：同一次点击里连续改两个参数（如热力图同时设退休年龄和月支出）不会互相覆盖
+  const persist = (update: (prev: SimulatorSettings) => SimulatorSettings) => {
+    setOverrides((prev) => {
+      const next = update(prev);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => {
+        saveConfig({ simulator_settings: Object.keys(next).length ? next : null })
+          .then(() => setSaveState('saved'))
+          .catch(() => setSaveState('error'));
+      }, 800);
+      return next;
+    });
     setSaveState('saving');
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      saveConfig({ simulator_settings: Object.keys(next).length ? next : null })
-        .then(() => setSaveState('saved'))
-        .catch(() => setSaveState('error'));
-    }, 800);
   };
-  const set = <K extends Key>(k: K, v: SimulatorSettings[K]) => persist({ ...overrides, [k]: v });
-  const reset = (k: Key) => {
-    const next = { ...overrides };
+  const set = <K extends Key>(k: K, v: SimulatorSettings[K]) => persist((prev) => ({ ...prev, [k]: v }));
+  const reset = (k: Key) => persist((prev) => {
+    const next = { ...prev };
     delete next[k];
-    persist(next);
-  };
-  const resetAll = () => persist({});
+    return next;
+  });
+  const resetAll = () => persist(() => ({}));
 
   if (!config || !baseline) return <LoadingState />;
 
@@ -109,7 +117,7 @@ function SimulatorBody({
   saveState: SaveState;
   onBirthYear: (y: number) => Promise<void>;
 }) {
-  const [mode, setMode] = useState<TrajectoryMode>('single');
+  const [mode, setMode] = useState<TrajectoryMode>('montecarlo');
   const [nominal, setNominal] = useState(false);
 
   const input = useMemo(() => withSettings(baseline, overrides), [baseline, overrides]);
@@ -118,6 +126,10 @@ function SimulatorBody({
   const baseResult = useMemo(() => simulate(baseline.input), [baseline]);
   const levers = useMemo(() => computeLevers(input), [input]);
   const hasOverrides = Object.keys(overrides).length > 0;
+  // 随机模拟 / 热力图在 Worker 里算（参数停顿后才算，只保留最新结果）
+  const mc = useMonteCarlo(input);
+  const gridAxes = useMemo(() => successGridAxes(input), [input]);
+  const grid = useSuccessGrid(input, gridAxes);
   const differs = hasOverrides && !sameTrajectory(result, baseResult);
 
   /** 只改这一项（其余保持你现在的数据）时，财务自由提前/推迟多少个月 */
@@ -151,11 +163,11 @@ function SimulatorBody({
 
       {/* 右：结果 */}
       <div className="order-1 lg:order-2 space-y-6 min-w-0">
-        <AnswerCard input={input} result={result} baseResult={baseResult} differs={differs} levers={levers} periods={baseline.periods} />
+        <AnswerCard input={input} result={result} baseResult={baseResult} differs={differs} levers={levers} periods={baseline.periods} mc={mc.data} />
 
         <Card title="资产轨迹">
           <div className="flex flex-wrap items-center gap-1 -mt-1 mb-3">
-            <Pills options={[{ v: 'single', l: '单线' }, { v: 'scenarios', l: '三情景' }]} value={mode} onChange={setMode} />
+            <Pills options={[{ v: 'montecarlo', l: '随机波动' }, { v: 'scenarios', l: '三情景' }, { v: 'single', l: '单线' }]} value={mode} onChange={setMode} />
             <span className="w-px h-4 bg-[var(--c-border)] mx-1" aria-hidden="true" />
             <Pills options={[{ v: false, l: '今天购买力' }, { v: true, l: '名义金额' }]} value={nominal} onChange={setNominal} />
           </div>
@@ -164,6 +176,7 @@ function SimulatorBody({
             result={result}
             baseline={baseResult}
             scenarios={scen}
+            mc={mc.data}
             mode={mode}
             nominal={nominal}
             showBaseline={differs}
@@ -172,7 +185,39 @@ function SimulatorBody({
           {mode === 'scenarios' && (
             <ScenarioSummary scen={scen} />
           )}
+          {mode === 'montecarlo' && (
+            <p className="text-[11px] text-notion-text-muted mt-3 leading-relaxed">
+              每年的投资收益在「年化 {input.annualReturnPct}% ± 波动率 {input.volatilityPct}%」之间随机，模拟 {MC_RUNS} 种未来；实线是收益每年都刚好 {input.annualReturnPct}% 的那条路线。最乐观的一部分路线超出图表上沿，没有画全。
+              {mc.pending && <span className="ml-1">（计算中…）</span>}
+            </p>
+          )}
         </Card>
+
+        {mc.data && (
+          <Card title="钱能撑多久">
+            <SurvivalSummary input={input} mc={mc.data} />
+            <SurvivalChart input={input} mc={mc.data} retireAge={result.retireAge} />
+          </Card>
+        )}
+
+        {grid.data && gridAxes.ages.length > 1 && (
+          <Card title="退休年龄 × 月支出 · 成功率">
+            <p className="text-[12px] text-notion-text-secondary mb-3 leading-relaxed">
+              在某个年龄停止工作、之后每月花这么多时，钱撑到 {Math.round(input.lifeExpectancy)} 岁的概率（随机模拟，其他参数不变）。
+            </p>
+            <SuccessHeatmap
+              grid={grid.data}
+              currentAge={result.retireAge}
+              currentSpend={input.retireSpendMonthly}
+              endAge={Math.round(input.lifeExpectancy)}
+              pending={grid.pending}
+              onPick={(age, spend) => {
+                set('retireAge', age);
+                set('retireSpendMonthly', spend);
+              }}
+            />
+          </Card>
+        )}
 
         <GoalSeekCard input={input} set={set} />
 
@@ -211,7 +256,7 @@ function deltaText(d: number): { text: string; good: boolean } | null {
 // ── 答案区 ─────────────────────────────────────────────────────
 
 function AnswerCard({
-  input, result, baseResult, differs, levers, periods,
+  input, result, baseResult, differs, levers, periods, mc,
 }: {
   input: SimInput;
   result: SimResult;
@@ -219,6 +264,7 @@ function AnswerCard({
   differs: boolean;
   levers: ReturnType<typeof computeLevers>;
   periods: number;
+  mc: MonteCarloResult | null;
 }) {
   const subject = differs ? '按这个方案' : periods > 1 ? `按近 ${periods} 期的节奏` : '按现在的节奏';
   const current = input.cash + input.invested;
@@ -231,7 +277,7 @@ function AnswerCard({
     return (
       <Card>
         <p className="text-[14px] text-notion-text-secondary leading-relaxed">
-          还没有支出数据，算不出财务自由目标。在左侧填「退休后月支出」，或先录入信用卡、账单、订阅等消费。
+          还没有支出数据，算不出财务自由目标。在参数面板里填「退休后月支出」，或先录入信用卡、账单、订阅等消费。
         </p>
       </Card>
     );
@@ -272,6 +318,20 @@ function AnswerCard({
             )}
           </p>
         )}
+        {mc && (
+          <p className="text-notion-text-secondary">
+            考虑市场涨跌（随机模拟 {mc.runs} 次），钱撑到 {Math.round(input.lifeExpectancy)} 岁的概率约{' '}
+            <b className={mc.successRate >= 0.8 ? 'text-notion-success' : 'text-notion-warning'}>{pctText(mc.successRate)}</b>
+            {result.fireMonth !== 0 && (
+              mc.fireAgeP10 !== null && mc.fireAgeP90 !== null ? (
+                <>；财务自由年龄有 80% 的可能落在 <b className="text-notion-text">{Math.floor(mc.fireAgeP10)}–{Math.floor(mc.fireAgeP90)} 岁</b></>
+              ) : (
+                <>；只有 {pctText(mc.fireRate)} 的路线能达到财务自由目标</>
+              )
+            )}
+            。
+          </p>
+        )}
         {lever && result.fireMonth !== 0 && (
           <p className="text-notion-text-secondary">
             最有效的杠杆：<b className="text-notion-text">{lever.label}</b>，
@@ -280,9 +340,15 @@ function AnswerCard({
         )}
       </div>
 
-      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4 mt-5 pt-5 border-t border-[var(--c-border)]">
+      <dl className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-x-4 gap-y-4 mt-5 pt-5 border-t border-[var(--c-border)]">
         <Kpi label="财务自由目标" value={yenCompact(result.target)} hint={`年支出 ${yenCompact(input.retireSpendMonthly * 12)} ÷ ${input.withdrawalRatePct}%`} />
         <Kpi label="当前资产" value={yenCompact(current)} hint={`完成 ${Math.round(progress * 10) / 10}%`} />
+        <Kpi
+          label="成功率"
+          value={mc ? pctText(mc.successRate) : '…'}
+          hint={`钱撑到 ${Math.round(input.lifeExpectancy)} 岁的概率`}
+          warn={!!mc && mc.successRate < 0.8}
+        />
         <Kpi label="资产峰值" value={yenCompact(result.peak)} hint={`${Math.floor(result.peakAge)} 岁`} />
         <Kpi
           label={result.depletedAge !== null ? '资产耗尽' : `${Math.round(input.lifeExpectancy)} 岁时剩余`}
@@ -305,6 +371,33 @@ function Kpi({ label, value, hint, warn }: { label: string; value: string; hint:
       <dt className="text-[12px] text-notion-text-secondary">{label}</dt>
       <dd className={`font-numeric font-semibold tabular-nums text-[20px] leading-tight mt-0.5 ${warn ? 'text-notion-warning' : 'text-notion-text'}`}>{value}</dd>
       <dd className="text-[11px] text-notion-text-muted truncate mt-0.5">{hint}</dd>
+    </div>
+  );
+}
+
+function SurvivalSummary({ input, mc }: { input: SimInput; mc: MonteCarloResult }) {
+  const at = (age: number) => {
+    const b = mc.bands.find((x) => x.age >= age) ?? mc.bands[mc.bands.length - 1]!;
+    return b.alive;
+  };
+  const end = Math.round(input.lifeExpectancy);
+  const marks = [70, 80, end].filter((a, i, arr) => a > input.startAge && a <= end && arr.indexOf(a) === i);
+  const firstRisk = mc.bands.find((b) => b.alive < 0.95);
+  return (
+    <div className="mb-3">
+      <div className="flex flex-wrap gap-x-6 gap-y-2">
+        {marks.map((a) => (
+          <div key={a}>
+            <div className="text-[11px] text-notion-text-muted">到 {a} 岁还有钱</div>
+            <div className={`font-numeric font-semibold text-[18px] tabular-nums ${at(a) >= 0.8 ? 'text-notion-text' : 'text-notion-warning'}`}>{pctText(at(a))}</div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[12px] text-notion-text-secondary mt-2 leading-relaxed">
+        {firstRisk
+          ? `从 ${Math.floor(firstRisk.age)} 岁起，开始有超过 5% 的路线把钱花光。`
+          : `${MC_RUNS} 种未来里，几乎所有路线都能撑到 ${end} 岁。`}
+      </p>
     </div>
   );
 }
@@ -385,7 +478,7 @@ function GoalSeekCard({ input, set }: { input: SimInput; set: <K extends Key>(k:
         />
       </div>
       <p className="text-[11px] text-notion-text-muted mt-3 leading-relaxed">
-        其他参数保持左侧的设置不变；按「资产 ≥ 年支出 ÷ 提取率」判断是否达成。
+        其他参数保持参数面板里的设置不变；按「资产 ≥ 年支出 ÷ 提取率」判断是否达成。
       </p>
     </Card>
   );
@@ -573,6 +666,7 @@ function AdvancedParams({ baseline, input, overrides, set, reset, onBirthYear }:
           disabled={baseline.realEstate <= 0}
           onChange={(v) => (v ? set('includeRealEstate', true) : reset('includeRealEstate'))}
         />
+        {num('volatilityPct', '收益波动率', { min: 0, max: 40, step: 1, unit: '%', base: b.volatilityPct, hint: '只影响随机模拟：全球股票约 15%，股债各半约 9%，债券约 5%' })}
         {num('feePct', '投资费率', { min: 0, max: 3, step: 0.05, unit: '%/年', base: b.feePct, hint: '信托报酬等，从收益里扣' })}
         {num('cashRatePct', '存款利率', { min: 0, max: 5, step: 0.05, unit: '%', base: b.cashRatePct })}
         {num('inflationPct', '通胀率', { min: 0, max: 10, step: 0.1, unit: '%', base: b.inflationPct, hint: '现金会按这个速度缩水；也用于「名义」金额换算' })}
