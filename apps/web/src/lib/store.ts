@@ -83,6 +83,8 @@ interface AppState {
   updateConfig: (data: Partial<Pick<UserConfig, 'pay_day' | 'snapshot_offsets' | 'weekend_shift'>>) => Promise<void>;
   /** 财务自由参数存服务器（user_config.fire_settings），并同步到本地 config，不整页重载 */
   saveFireSettings: (s: FireSettings | null) => Promise<void>;
+  /** 财富模拟器：出生年份 / 改过的参数，存服务器并同步到本地 config */
+  saveSimulatorConfig: (patch: Partial<Pick<UserConfig, 'birth_year' | 'simulator_settings'>>) => Promise<void>;
   recordSnapshot: (cycleId: string, offsetIndex: number, note?: string) => Promise<void>;
 
   // ===== v0.3 Actions =====
@@ -263,6 +265,12 @@ export const useStore = create<AppState>((set, get) => ({
     await apiPut('/config', { fire_settings: s });
     const cfg = get().config;
     if (cfg) set({ config: { ...cfg, fire_settings: s } });
+  },
+
+  async saveSimulatorConfig(patch) {
+    await apiPut('/config', patch);
+    const cfg = get().config;
+    if (cfg) set({ config: { ...cfg, ...patch } });
   },
 
   async recordSnapshot(cycleId, offsetIndex, note) {

@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS user_config (
   snapshot_offsets TEXT NOT NULL DEFAULT '[0,7,14,21]',  -- JSON 数组
   weekend_shift  INTEGER NOT NULL DEFAULT 0,             -- 扣款日遇周末顺延至周一（0=关 1=开）
   fire_settings  TEXT,                                   -- 财务自由参数 JSON（NULL=默认）
+  birth_year     INTEGER,                                -- 出生年份（财富模拟器；NULL=未填）
+  simulator_settings TEXT,                               -- 财富模拟器里改过的参数 JSON（NULL=全部跟随真实数据）
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL
 );

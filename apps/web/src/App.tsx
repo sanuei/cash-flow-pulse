@@ -20,6 +20,8 @@ import { getStoredTheme, applyTheme } from './lib/theme';
 
 // Trends 依赖 recharts（gzip ~105KB），懒加载以减小首屏 bundle
 const Trends = lazy(() => import('./pages/Trends').then((m) => ({ default: m.Trends })));
+// 财富模拟同样依赖 recharts，懒加载
+const SimulatorPage = lazy(() => import('./pages/SimulatorPage'));
 
 function App() {
   const authStatus = useStore((s) => s.authStatus);
@@ -167,6 +169,7 @@ function App() {
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/diagnosis" element={<DiagnosisPage />} />
           <Route path="/trends" element={<Suspense fallback={<LoadingState />}><Trends /></Suspense>} />
+          <Route path="/simulator" element={<Suspense fallback={<LoadingState />}><SimulatorPage /></Suspense>} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<Navigate to="/" replace />} />

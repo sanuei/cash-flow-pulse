@@ -830,3 +830,11 @@ html[data-theme="neon"] {
   --c-cat-violet:  #9085e9;
   --c-cat-other:   oklch(52% 0.01 70);
 }
+
+/* === 11. 财富模拟器滑块 === */
+.sim-range {
+  width: 100%;
+  height: 20px;
+  accent-color: var(--c-accent);
+  cursor: pointer;
+}

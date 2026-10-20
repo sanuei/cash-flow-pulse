@@ -7,6 +7,8 @@
  * 3. apps/web/src/types/*（前端状态）
  */
 
+import type { SimulatorSettings } from './simulator.js';
+
 // === 用户配置 ===
 export interface UserConfig {
   user_id: string;             // V1 固定 'default'
@@ -14,6 +16,8 @@ export interface UserConfig {
   snapshot_offsets: number[];  // 相对发薪日的天数偏移，如 [0, 7, 14, 21]
   weekend_shift: boolean;      // 扣款日遇周六/日时顺延至下一个工作日（周一）
   fire_settings?: FireSettings | null; // 财务自由参数；null = 默认值
+  birth_year?: number | null;          // 出生年份（财富模拟器用；null = 未填）
+  simulator_settings?: SimulatorSettings | null; // 财富模拟器里改过的参数；null = 全部跟随真实数据
   created_at: number;          // Unix ms
   updated_at: number;
 }

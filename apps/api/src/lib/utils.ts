@@ -1,3 +1,6 @@
+import { SimulatorSettingsSchema } from '@cfp/shared';
+import type { SimulatorSettings } from '@cfp/shared';
+
 /**
  * 通用工具函数
  *
@@ -29,4 +32,20 @@ export function parseFireSettings(raw: unknown): {
   } catch {
     return null;
   }
+}
+
+/** user_config.simulator_settings（TEXT JSON）→ 对象；空/损坏/不合法 → null（全部跟随真实数据） */
+export function parseSimulatorSettings(raw: unknown): SimulatorSettings | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  try {
+    const r = SimulatorSettingsSchema.safeParse(JSON.parse(raw));
+    return r.success ? (r.data as SimulatorSettings) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** user_config.birth_year → 合法年份或 null */
+export function parseBirthYear(raw: unknown): number | null {
+  return typeof raw === 'number' && Number.isInteger(raw) && raw >= 1900 && raw <= 2100 ? raw : null;
 }

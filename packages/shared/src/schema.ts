@@ -49,6 +49,38 @@ export const CreditCardInputSchema = z.object({
 
 export const CreditCardUpdateSchema = CreditCardInputSchema.partial();
 
+// === 财富模拟器参数（只存用户改过的字段）===
+const pct = (min: number, max: number) => z.number().min(min).max(max);
+export const SimEventSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().max(50),
+  age: z.number().min(0).max(120),
+  amount: z.number().nonnegative().max(1e12),
+  years: z.number().min(0).max(50),
+  kind: z.enum(['expense', 'income']),
+});
+export const SimulatorSettingsSchema = z.object({
+  lifeExpectancy: z.number().min(40).max(120),
+  monthlyIncome: z.number().nonnegative().max(1e10),
+  incomeGrowthPct: pct(-20, 30),
+  monthlyLivingCost: z.number().nonnegative().max(1e10),
+  monthlyInvest: z.number().nonnegative().max(1e10),
+  cashBufferMonths: z.number().min(0).max(120).nullable(),
+  retireSpendMonthly: z.number().nonnegative().max(1e10),
+  withdrawalRatePct: pct(0.5, 20),
+  annualReturnPct: pct(-20, 30),
+  feePct: pct(0, 10),
+  cashRatePct: pct(-5, 20),
+  inflationPct: pct(-5, 30),
+  taxPct: pct(0, 60),
+  retireAge: z.number().min(0).max(120).nullable(),
+  latestWorkAge: z.number().min(0).max(120),
+  pensionStartAge: z.number().min(0).max(120),
+  pensionMonthly: z.number().nonnegative().max(1e9),
+  includeRealEstate: z.boolean(),
+  events: z.array(SimEventSchema).max(30),
+}).partial();
+
 // === 用户配置 ===
 export const UserConfigUpdateSchema = z.object({
   pay_day: z.number().int().min(1).max(31).optional(),
@@ -63,6 +95,8 @@ export const UserConfigUpdateSchema = z.object({
     annualReturnPct: z.number().min(-50).max(100),
     annualSpendOverride: z.number().positive().nullable(),
   }).nullable().optional(),
+  birth_year: z.number().int().min(1900).max(2100).nullable().optional(),
+  simulator_settings: SimulatorSettingsSchema.nullable().optional(),
 });
 
 // === 快照 ===
@@ -90,6 +124,8 @@ export const ImportPayloadSchema = z.object({
       annualReturnPct: z.number(),
       annualSpendOverride: z.number().nullable(),
     }).nullable().optional(),
+    birth_year: z.number().int().nullable().optional(),
+    simulator_settings: SimulatorSettingsSchema.nullable().optional(),
   }),
   cash_sources: z.array(z.object({
     name: z.string(),

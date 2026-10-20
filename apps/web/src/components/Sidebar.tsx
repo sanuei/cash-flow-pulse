@@ -15,7 +15,7 @@ import type { CurrentUser } from '../lib/store';
 type NavItem = { to: string; label: string; icon: IconName };
 type NavSection = { title?: string; items: NavItem[] };
 
-// 分组：总览（独立）/ 账目（收支资产）/ 分析（诊断曲线）/ 设置（独立）
+// 分组：总览（独立）/ 账目（收支资产）/ 分析（诊断 / 曲线 / 财富模拟）/ 设置（独立）
 const NAV_SECTIONS: NavSection[] = [
   { items: [
     { to: '/', label: '总览', icon: 'home' },
@@ -29,6 +29,7 @@ const NAV_SECTIONS: NavSection[] = [
   { title: '分析', items: [
     { to: '/diagnosis',   label: '诊断', icon: 'gauge' },
     { to: '/trends',      label: '曲线', icon: 'chart' },
+    { to: '/simulator',   label: '模拟', icon: 'trending-up' },
   ] },
   { title: '系统', items: [
     { to: '/settings',    label: '设置', icon: 'settings' },

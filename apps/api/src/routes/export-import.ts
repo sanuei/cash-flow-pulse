@@ -9,7 +9,7 @@
 import { Hono } from 'hono';
 import { ImportPayloadSchema } from '@cfp/shared';
 import type { Env } from '../index';
-import { generateId, now, parseFireSettings } from '../lib/utils';
+import { generateId, now, parseFireSettings, parseSimulatorSettings, parseBirthYear } from '../lib/utils';
 
 export const exportImportRoutes = new Hono<{ Bindings: Env }>();
 
@@ -49,6 +49,8 @@ exportImportRoutes.get('/export', async (c) => {
       snapshot_offsets: config ? JSON.parse(config.snapshot_offsets) : [0, 7, 14, 21],
       weekend_shift: !!config?.weekend_shift,
       fire_settings: parseFireSettings(config?.fire_settings),
+      birth_year: parseBirthYear(config?.birth_year),
+      simulator_settings: parseSimulatorSettings(config?.simulator_settings),
     },
     cash_sources: (cash.results || []).map((r: any) => ({
       name: r.name,
@@ -202,6 +204,15 @@ exportImportRoutes.post('/import', async (c) => {
       await db
         .prepare('UPDATE user_config SET fire_settings = ? WHERE user_id = ?')
         .bind((config as any).fire_settings ? JSON.stringify((config as any).fire_settings) : null, userId)
+        .run();
+    }
+    if (config.birth_year !== undefined) {
+      await db.prepare('UPDATE user_config SET birth_year = ? WHERE user_id = ?').bind(config.birth_year ?? null, userId).run();
+    }
+    if (config.simulator_settings !== undefined) {
+      await db
+        .prepare('UPDATE user_config SET simulator_settings = ? WHERE user_id = ?')
+        .bind(config.simulator_settings ? JSON.stringify(config.simulator_settings) : null, userId)
         .run();
     }
 

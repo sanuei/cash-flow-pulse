@@ -12,7 +12,7 @@
 import { Hono } from 'hono';
 import { computeDashboardV2, computeDailyCashflow, addMonths, getCurrentCycle, diffDays, formatDate } from '@cfp/shared';
 import type { Env } from '../index';
-import { parseFireSettings } from '../lib/utils';
+import { parseFireSettings, parseSimulatorSettings, parseBirthYear } from '../lib/utils';
 
 export const dashboardRoute = new Hono<{ Bindings: Env }>();
 
@@ -62,6 +62,8 @@ dashboardRoute.get('/', async (c) => {
     snapshot_offsets: JSON.parse(config!.snapshot_offsets),
     weekend_shift: !!config!.weekend_shift,
     fire_settings: parseFireSettings(config!.fire_settings),
+    birth_year: parseBirthYear(config!.birth_year),
+    simulator_settings: parseSimulatorSettings(config!.simulator_settings),
     created_at: config!.created_at,
     updated_at: config!.updated_at,
   };

@@ -308,7 +308,7 @@ export function Overview() {
 
       {/* 财务自由（仅本期，有数据时）*/}
       {isCurrentCycle && !isNewUser && longTerm && (
-        <FireCard stats={longTerm} cashAssets={activeCalc.net_available + activeCalc.total_locked} />
+        <FireCard stats={longTerm} />
       )}
 
       {/* AI 财务诊断（仅本期，有数据时）*/}

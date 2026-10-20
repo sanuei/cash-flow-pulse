@@ -1,18 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
-import { computeFire, formatYen } from '@cfp/shared';
+import { Link } from 'react-router-dom';
+import { simulate, formatYen } from '@cfp/shared';
 import { Card } from './Card';
 import { Icon } from './Icon';
 import { MoneyInput } from './MoneyInput';
 import { DEFAULT_FIRE, takeLegacyFireSettings, clearLegacyFireSettings, type FireSettings, type LongTermStats } from '../lib/longTerm';
 import { useStore } from '../lib/store';
+import { useSimBaseline, formatMonths, yearAfterMonths } from '../lib/simulator';
 
 /**
- * 财务自由进度：
+ * 财务自由进度（与「财富模拟」页同一引擎 simulate()，用的就是模拟器里的「你现在的路线」）：
  *   目标 = 年支出 ÷ 安全提取率（4% 法则 → 年支出 × 25）
- *   当前 = 现金（扣除本期应付）+ 其他资产（股票基金/加密/房产等）
- *   预计 = 按近 N 期月均「收入 − 生活成本」持续投入 + 预期年化收益，逐月复利推演
+ *   当前 = 现金（扣除本期应付）+ 投资资产（股票基金/加密/其他；房产不计入——自住房不能按 4% 取出来花）
+ *   预计 = 每月定投按预期年化收益复利，其余结余留作现金（按通胀缩水），逐月推演
  */
-export function FireCard({ stats, cashAssets }: { stats: LongTermStats; cashAssets: number }) {
+export function FireCard({ stats }: { stats: LongTermStats }) {
+  const baseline = useSimBaseline();
   // 参数存在服务器（user_config.fire_settings），换设备也一致
   const serverSettings = useStore((s) => s.config?.fire_settings ?? null);
   const saveToServer = useStore((s) => s.saveFireSettings);
@@ -37,19 +40,35 @@ export function FireCard({ stats, cashAssets }: { stats: LongTermStats; cashAsse
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const { agg, otherAssetsTotal } = stats;
+  const { agg } = stats;
   const defaultAnnualSpend = agg.avgConsume * 12;
   const annualSpend = settings.annualSpendOverride ?? defaultAnnualSpend;
-  const monthlyContribution = agg.avgIncome - agg.avgConsume;
-  const currentAssets = cashAssets + otherAssetsTotal;
+  const cashAssets = baseline?.input.cash ?? 0;
+  const investedAssets = baseline?.input.invested ?? 0;
+  const currentAssets = cashAssets + investedAssets;
+  const monthlyInvest = baseline?.input.monthlyInvest ?? 0;
+  const surplusToCash = agg.avgIncome - agg.avgConsume - monthlyInvest;
+  const birthYear = baseline?.birthYear ?? null;
 
-  const fire = computeFire({
-    currentAssets,
-    annualSpend,
-    withdrawalRatePct: settings.withdrawalRatePct,
-    annualReturnPct: settings.annualReturnPct,
-    monthlyContribution,
-  });
+  // 用编辑中的参数（还没存到服务器也立即生效）；没填出生年份时不设工作年龄上限
+  const sim = baseline
+    ? simulate({
+        ...baseline.input,
+        withdrawalRatePct: settings.withdrawalRatePct,
+        annualReturnPct: settings.annualReturnPct,
+        retireSpendMonthly: annualSpend / 12,
+        ...(birthYear ? {} : { latestWorkAge: 999, lifeExpectancy: baseline.input.startAge + 100 }),
+      })
+    : null;
+  const target = sim?.target ?? 0;
+  const reached = sim?.fireMonth === 0;
+  const fire = {
+    target,
+    reached,
+    gap: Math.round(target - currentAssets),
+    progressPct: target > 0 ? Math.min(100, Math.max(0, Math.round((currentAssets / target) * 1000) / 10)) : 0,
+    monthsToGoal: sim?.fireMonth ?? null,
+  };
 
   // 输入框每次按键都会触发，停顿 600ms 后再存服务器
   const update = (patch: Partial<FireSettings>) => {
@@ -117,7 +136,7 @@ export function FireCard({ stats, cashAssets }: { stats: LongTermStats; cashAsse
             <Row
               label="当前资产"
               value={formatYen(currentAssets)}
-              hint={`现金 ${formatYen(cashAssets)}${otherAssetsTotal > 0 ? ` + 其他资产 ${formatYen(otherAssetsTotal)}` : ''}`}
+              hint={`现金 ${formatYen(cashAssets)}${investedAssets > 0 ? ` + 投资资产 ${formatYen(investedAssets)}` : ''}（房产不计入）`}
             />
           </dl>
 
@@ -127,16 +146,23 @@ export function FireCard({ stats, cashAssets }: { stats: LongTermStats; cashAsse
               <>按 {settings.withdrawalRatePct}% 提取率，资产已能覆盖年支出。</>
             ) : fire.monthsToGoal !== null ? (
               <>
-                按{period}平均每月净储蓄 <b className="text-notion-text font-semibold">{formatYen(monthlyContribution)}</b>
-                {`、年化 ${settings.annualReturnPct}%，预计 `}
-                <b className="text-[var(--c-accent-text)] font-semibold">{formatDuration(fire.monthsToGoal)}</b>
-                {` 后达成（约 ${targetYear(fire.monthsToGoal)} 年）。`}
+                按{period}平均每月定投 <b className="text-notion-text font-semibold">{formatYen(monthlyInvest)}</b>
+                {`（年化 ${settings.annualReturnPct}%）`}
+                {surplusToCash > 0 && <>、其余结余 {formatYen(surplusToCash)} 存为现金</>}
+                {'，预计 '}
+                <b className="text-[var(--c-accent-text)] font-semibold">{formatMonths(fire.monthsToGoal)}</b>
+                {` 后达成（约 ${yearAfterMonths(fire.monthsToGoal)} 年${sim?.fireAge != null && birthYear ? ` · ${Math.floor(sim.fireAge)} 岁` : ''}）。`}
               </>
             ) : (
               <>
-                按{period}平均每月净储蓄 {formatYen(monthlyContribution)}，100 年内无法达成。提高储蓄或降低年支出后再看看。
+                按{period}平均每月定投 {formatYen(monthlyInvest)}，
+                {birthYear ? `到 ${baseline?.input.latestWorkAge ?? 65} 岁仍达不到` : '100 年内无法达成'}。提高定投或降低年支出后再看看。
               </>
             )}
+            <Link to="/simulator" className="mt-2 flex w-fit items-center gap-0.5 font-semibold text-[var(--c-accent-text)] hover:underline">
+              详细模拟
+              <Icon name="chevron-right" size={13} />
+            </Link>
           </div>
         </>
       )}
@@ -199,17 +225,4 @@ function PctField({ label, value, onChange, hint }: { label: string; value: numb
       <p className="text-xs text-notion-text-muted mt-1">{hint}</p>
     </div>
   );
-}
-
-function formatDuration(months: number): string {
-  const y = Math.floor(months / 12);
-  const m = months % 12;
-  if (y === 0) return `${m} 个月`;
-  return m === 0 ? `${y} 年` : `${y} 年 ${m} 个月`;
-}
-
-function targetYear(months: number): number {
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
-  return d.getFullYear();
 }
