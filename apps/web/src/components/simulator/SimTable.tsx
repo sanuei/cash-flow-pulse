@@ -68,7 +68,7 @@ export function SimTable({ input, result, nominal }: { input: SimInput; result: 
         </button>
       </div>
       <div className="-mx-5 overflow-x-auto max-h-[520px] overflow-y-auto border-t border-[var(--c-border)]">
-        <table className="w-full text-[12px] font-numeric tabular-nums border-collapse">
+        <table className="w-full text-[12px] xl:text-[13px] font-numeric tabular-nums border-collapse">
           <thead className="sticky top-0 z-10 bg-[var(--c-bg-elev)]">
             <tr className="text-notion-text-muted">
               <th className="text-left font-semibold px-3 py-2 pl-5 whitespace-nowrap">年份</th>

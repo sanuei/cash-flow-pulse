@@ -36,6 +36,7 @@ import { PlanBar } from '../components/simulator/PlanBar';
 import { PlanCompare } from '../components/simulator/PlanCompare';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+const PANEL_KEY = 'cfp.simulator.panelCollapsed';
 type Key = keyof SimulatorSettings;
 
 export default function SimulatorPage() {
@@ -92,7 +93,7 @@ export default function SimulatorPage() {
   if (!config || !baseline) return <LoadingState />;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+    <div className="max-w-[1760px] mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <PageTitle
         icon="trending-up"
         title="财富模拟"
@@ -179,6 +180,14 @@ function SimulatorBody({
 }) {
   const [mode, setMode] = useState<TrajectoryMode>('montecarlo');
   const [nominal, setNominal] = useState(false);
+  // 桌面端可收起参数面板，把宽度全部让给图表（记在本机浏览器里）
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(PANEL_KEY) === '1'; } catch { return false; }
+  });
+  const toggleCollapsed = (v: boolean) => {
+    setCollapsed(v);
+    try { localStorage.setItem(PANEL_KEY, v ? '1' : '0'); } catch { /* 隐私模式等：只在本次生效 */ }
+  };
 
   const input = useMemo(() => withSettings(baseline, overrides), [baseline, overrides]);
   const scen = useMemo(() => simulateScenarios(input), [input]);
@@ -200,9 +209,26 @@ function SimulatorBody({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)] items-start">
+    <div
+      className={`grid gap-6 items-start ${
+        collapsed ? 'lg:grid-cols-[44px_minmax(0,1fr)]' : 'lg:grid-cols-[340px_minmax(0,1fr)] 2xl:grid-cols-[380px_minmax(0,1fr)]'
+      }`}
+    >
+      {/* 收起后：桌面端只留一条竖向按钮 */}
+      {collapsed && (
+        <button
+          type="button"
+          onClick={() => toggleCollapsed(false)}
+          className="hidden lg:flex order-1 lg:sticky lg:top-6 card w-11 py-4 flex-col items-center gap-2 text-notion-text-secondary hover:text-notion-text"
+          aria-label="展开参数面板"
+        >
+          <Icon name="settings" size={16} />
+          <span className="text-[12px] font-semibold [writing-mode:vertical-rl] tracking-widest">展开参数</span>
+          <Icon name="chevron-right" size={14} />
+        </button>
+      )}
       {/* 左：参数面板（手机端排在结果后面） */}
-      <aside className="order-2 lg:order-1 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto card p-5 space-y-5">
+      <aside className={`order-2 lg:order-1 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto card p-5 space-y-5 ${collapsed ? 'lg:hidden' : ''}`}>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-[15px] font-semibold text-notion-text flex items-center gap-2">
             <Icon name="settings" size={15} className="text-notion-text-secondary" />
@@ -213,6 +239,15 @@ function SimulatorBody({
             {hasOverrides && (
               <button onClick={resetAll} className="btn-ghost text-[12px]">全部恢复</button>
             )}
+            <button
+              type="button"
+              onClick={() => toggleCollapsed(true)}
+              className="hidden lg:flex btn-ghost !p-1.5 text-notion-text-muted hover:text-notion-text"
+              aria-label="收起参数面板"
+              title="收起参数，图表更宽"
+            >
+              <Icon name="chevron-right" size={15} className="rotate-180" />
+            </button>
           </div>
         </div>
 

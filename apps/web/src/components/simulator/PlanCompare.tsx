@@ -136,7 +136,7 @@ export function PlanCompare({
 
 // ── 叠加图 ─────────────────────────────────────────────────────
 
-const AXIS = { fontSize: 11, fill: 'var(--c-text-muted)' };
+const AXIS = { fontSize: 12, fill: 'var(--c-text-muted)' };
 
 function CompareChart({ computed }: { computed: Computed[] }) {
   const startAge = computed[0]!.input.startAge;
@@ -162,7 +162,7 @@ function CompareChart({ computed }: { computed: Computed[] }) {
           </span>
         ))}
       </div>
-      <div className="h-72 sm:h-96 -mx-2">
+      <div className="h-72 sm:h-96 xl:h-[480px] 2xl:h-[540px] -mx-2">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--c-border)" />

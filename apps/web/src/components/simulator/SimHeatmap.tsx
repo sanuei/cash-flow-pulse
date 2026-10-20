@@ -69,7 +69,7 @@ export function SuccessHeatmap({
                         onClick={() => onPick(age, spend)}
                         title={`${age} 岁退休、每月花 ${yenCompact(spend)}：钱撑到 ${endAge} 岁的概率 ${pctText(rate)}（点击应用）`}
                         aria-label={`${age} 岁退休，每月 ${yenCompact(spend)}，成功率 ${pctText(rate)}`}
-                        className={`w-full min-w-[46px] h-9 rounded-[6px] text-[12px] font-numeric font-semibold tabular-nums transition-transform hover:scale-[1.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--c-accent)] ${
+                        className={`w-full min-w-[46px] h-9 xl:h-11 rounded-[6px] text-[12px] xl:text-[13px] font-numeric font-semibold tabular-nums transition-transform hover:scale-[1.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--c-accent)] ${
                           current ? 'ring-2 ring-[var(--c-accent)] ring-offset-1 ring-offset-[var(--c-bg-elev)]' : ''
                         }`}
                         style={cellStyle(rate)}

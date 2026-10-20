@@ -45,7 +45,7 @@ function points(input: SimInput, r: SimResult) {
   return out;
 }
 
-const AXIS = { fontSize: 11, fill: 'var(--c-text-muted)' };
+const AXIS = { fontSize: 12, fill: 'var(--c-text-muted)' };
 
 export type TrajectoryMode = 'single' | 'scenarios' | 'montecarlo';
 
@@ -108,7 +108,7 @@ export function AssetTrajectoryChart({
           { label: '财务自由目标', color: 'var(--c-text-secondary)', kind: 'dot' },
         ]}
       />
-      <div className="h-72 sm:h-96 -mx-2">
+      <div className="h-72 sm:h-96 xl:h-[480px] 2xl:h-[540px] -mx-2">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
             <defs>
@@ -254,7 +254,7 @@ export function PrincipalGainsChart({ input, result, nominal }: { input: SimInpu
           { label: '复利收益', color: 'var(--c-cat-aqua)', kind: 'block' },
         ]}
       />
-      <div className="h-56 sm:h-64 -mx-2">
+      <div className="h-56 sm:h-64 xl:h-80 -mx-2">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--c-border)" />
@@ -327,7 +327,7 @@ export function SurvivalChart({ input, mc, retireAge }: { input: SimInput; mc: M
   const data = mc.bands.map((b) => ({ age: Math.round(b.age * 100) / 100, alive: Math.round(b.alive * 1000) / 10 }));
   const endAge = data[data.length - 1]!.age;
   return (
-    <div className="h-52 sm:h-60 -mx-2">
+    <div className="h-52 sm:h-60 xl:h-72 -mx-2">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
           <defs>
