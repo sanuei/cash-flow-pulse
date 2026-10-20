@@ -16,9 +16,12 @@
  */
 
 import { Hono } from 'hono';
-import { computeDashboardV2, formatDate, earliestDataDate, computeCycleHistory, aggregateCycles } from '@cfp/shared';
-import type { CycleStat, CycleAgg } from '@cfp/shared';
-import { generateId } from '../lib/utils';
+import {
+  computeDashboardV2, formatDate, earliestDataDate, computeCycleHistory, aggregateCycles,
+  buildSimBaseline, simInputFor, simulate,
+} from '@cfp/shared';
+import type { CycleStat, CycleAgg, SimInput, SimulatorSettings } from '@cfp/shared';
+import { generateId, parseFireSettings, parseSimulatorSettings, parseBirthYear } from '../lib/utils';
 import { FOUNDER_EMAIL } from '../lib/auth';
 import type { Env } from '../index';
 
@@ -125,7 +128,10 @@ aiRoutes.post('/diagnose', async (c) => {
   const agg = aggregateCycles(cycles);
 
   // ── 组装脱敏摘要（仅聚合数字，无任何名称）──
-  const summary = buildSummary(calc, agg, cycles, snapshotRows.results || [], otherAssetRows.results || []);
+  const summary = {
+    ...buildSummary(calc, agg, cycles, snapshotRows.results || [], otherAssetRows.results || []),
+    财务自由模拟: buildSimulationSummary(calc, agg, otherAssetRows.results || [], configRow),
+  };
 
   // ── 调 GLM ──
   let analysis: string;
@@ -316,6 +322,64 @@ function buildSummary(calc: Calc, agg: CycleAgg, cycles: CycleStat[], snapshots:
   };
 }
 
+// ── 财务自由模拟摘要：与「财富模拟」页同一引擎 ───────────────────
+// 只发聚合数字和「距今 N 年」这种相对时间：不发年龄 / 出生年份，也不发用户给方案起的名字。
+// 服务端只跑固定收益推算（约 1ms）；随机模拟（几十 ms CPU）不在这里跑，避免超出 Worker 的 CPU 时间限制。
+function buildSimulationSummary(calc: Calc, agg: CycleAgg, otherAssets: any[], configRow: any) {
+  const birthYear = parseBirthYear(configRow.birth_year);
+  const baseline = buildSimBaseline({
+    agg,
+    cash: calc.net_available + calc.total_locked,
+    otherAssets,
+    fire: parseFireSettings(configRow.fire_settings),
+    birthYear,
+  });
+  // 没填出生年份：不设工作年龄上限，只看「多少年后达成」（没有寿命终点）
+  const noAge = (i: SimInput): SimInput => (birthYear ? i : { ...i, latestWorkAge: 999, lifeExpectancy: i.startAge + 100 });
+
+  const describe = (input: SimInput) => {
+    const r = simulate(input);
+    return {
+      预计达成财务自由: r.fireMonth === 0 ? '已达成' : r.fireMonth !== null ? `约 ${Math.round((r.fireMonth / 12) * 10) / 10} 年后` : '模拟期内达不到',
+      停止工作距今年数: r.retireAge !== null ? Math.round((r.retireAge - input.startAge) * 10) / 10 : null,
+      资金耗尽距今年数: r.depletedAge !== null ? Math.round((r.depletedAge - input.startAge) * 10) / 10 : null,
+      模拟年数: birthYear ? Math.round(input.lifeExpectancy - input.startAge) : null,
+    };
+  };
+
+  const base = noAge(baseline.input);
+  const target = simulate(base).target;
+  if (target <= 0) return null;
+  const current = base.cash + base.invested;
+  const settings: SimulatorSettings | null = parseSimulatorSettings(configRow.simulator_settings);
+  const plan = settings && Object.keys(settings).length > 0 ? noAge(simInputFor(baseline, settings)) : null;
+
+  return {
+    说明: '系统按固定规则推算，金额均为今天的购买力；只有每月定投按预期收益复利，其余结余按现金计；房产不计入。仅供建议参考，不计入评分。',
+    目标金额: yen(target),
+    当前可投资资产: yen(current),
+    完成度_pct: pct(current, target),
+    按当前节奏: {
+      每月定投: yen(base.monthlyInvest),
+      退休后月支出: yen(base.retireSpendMonthly),
+      预期实际年化收益_pct: base.annualReturnPct,
+      安全提取率_pct: base.withdrawalRatePct,
+      ...describe(base),
+    },
+    // 用户在模拟器里正在用的方案（只发参数和结果，不发方案名）
+    用户模拟方案: plan
+      ? {
+          每月定投: yen(plan.monthlyInvest),
+          退休后月支出: yen(plan.retireSpendMonthly),
+          预期实际年化收益_pct: plan.annualReturnPct,
+          计划停止工作距今年数: plan.retireAge !== null ? Math.round((plan.retireAge - plan.startAge) * 10) / 10 : '达到目标即停止',
+          大事件数: plan.events.length,
+          ...describe(plan),
+        }
+      : null,
+  };
+}
+
 // ── 结构化健康指标（确定性，不依赖 AI；用于前端图表 + 历史存档）──
 // 比率类指标一律按区间合计计算（= 收入加权平均），不只看当月
 type Metric = {
@@ -430,6 +494,9 @@ async function callGLM(env: Env, summary: unknown): Promise<string> {
       + '可用于评论整体净值规模、资产配置是否过度集中于单一类别(如全部加密货币)。'
       + '但这些资产波动大、不能说取就取，【不算入】应急金覆盖月数或现金流健康评分——那两项只看净可用现金。'
       + '若该字段为 null 表示用户未记录其他资产，不要因此评价"资产单一"。',
+    '若摘要中含【财务自由模拟】(系统按固定规则推算的长期预测)，它【不计入评分】，只用于「行动建议」：'
+      + '可结合预计达成时间、资金是否会在模拟期内耗尽给出长期方向(如会耗尽时建议提高定投、推迟停止工作或降低退休后支出)；'
+      + '若含「用户模拟方案」，可简短点评该方案与当前节奏相比是否可行。该字段为 null 时不要提及。',
     '注意：每个维度的实际数值、标准、结论、目标缺口已由系统在图表中逐项展示，你【不要】再逐项复述数字，聚焦总体解读、跨维度的风险与综合建议。',
     '请用中文、Markdown 输出，结构如下：',
     '## 总体健康度\n首行必须是「评分：NN/100」(整数)，随后一到两句话结论（点明最拖后腿的 1-2 项）。',

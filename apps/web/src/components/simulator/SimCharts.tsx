@@ -39,7 +39,8 @@ function points(input: SimInput, r: SimResult) {
   const out = [{ t: 0, age: input.startAge, total: r.rows[0]?.startTotal ?? input.cash + input.invested, principal: input.cash + input.invested, gains: 0 }];
   for (const row of r.rows) {
     const t = Math.min(r.months, (row.year + 1) * 12) / 12;
-    out.push({ t, age: input.startAge + t, total: row.endTotal, principal: row.principal, gains: row.gains });
+    // 资产耗尽后画在 0（负数 = 支出没有着落的缺口，不是真的借钱）
+    out.push({ t, age: input.startAge + t, total: Math.max(0, row.endTotal), principal: row.principal, gains: row.gains });
   }
   return out;
 }
@@ -123,7 +124,7 @@ export function AssetTrajectoryChart({
               tick={AXIS} tickLine={false} axisLine={false} tickMargin={10}
             />
             <YAxis
-              tick={AXIS} tickFormatter={yenAxisTickCn} tickLine={false} axisLine={false} width={48}
+              tick={AXIS} tickFormatter={yenAxisTickCn} tickLine={false} axisLine={false} width={56}
               domain={yMax ? [0, niceCeil(yMax)] : undefined}
               allowDataOverflow={!!yMax}
             />
@@ -262,7 +263,7 @@ export function PrincipalGainsChart({ input, result, nominal }: { input: SimInpu
               tickFormatter={(v: number) => `${Math.round(v)}岁`} tickCount={8} allowDecimals={false}
               tick={AXIS} tickLine={false} axisLine={false} tickMargin={10}
             />
-            <YAxis tick={AXIS} tickFormatter={yenAxisTickCn} tickLine={false} axisLine={false} width={48} />
+            <YAxis tick={AXIS} tickFormatter={yenAxisTickCn} tickLine={false} axisLine={false} width={56} />
             <Tooltip content={<PrincipalTooltip startYear={new Date().getFullYear()} />} cursor={{ stroke: 'var(--c-border-strong)', strokeWidth: 1 }} />
             <Area type="monotone" dataKey="principal" stackId="a" stroke="var(--c-cat-blue)" strokeWidth={1.5} fill="var(--c-cat-blue)" fillOpacity={0.55} isAnimationActive={false} />
             <Area type="monotone" dataKey="gains" stackId="a" stroke="var(--c-cat-aqua)" strokeWidth={1.5} fill="var(--c-cat-aqua)" fillOpacity={0.55} isAnimationActive={false} />

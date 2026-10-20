@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS user_config (
   fire_settings  TEXT,                                   -- 财务自由参数 JSON（NULL=默认）
   birth_year     INTEGER,                                -- 出生年份（财富模拟器；NULL=未填）
   simulator_settings TEXT,                               -- 财富模拟器里改过的参数 JSON（NULL=全部跟随真实数据）
+  simulator_plans TEXT,                                  -- 财富模拟器：草稿 + 多个已保存方案 JSON（NULL=未使用）
   created_at     INTEGER NOT NULL,
   updated_at     INTEGER NOT NULL
 );

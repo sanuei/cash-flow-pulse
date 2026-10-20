@@ -8,7 +8,7 @@
 import { Hono } from 'hono';
 import { UserConfigUpdateSchema } from '@cfp/shared';
 import type { Env } from '../index';
-import { parseFireSettings, parseSimulatorSettings, parseBirthYear } from '../lib/utils';
+import { parseFireSettings, parseSimulatorSettings, parseSimulatorPlans, parseBirthYear } from '../lib/utils';
 
 // userId 改为 c.get('user').id（v1.0+ 多用户）
 
@@ -38,6 +38,7 @@ configRoute.get('/', async (c) => {
     fire_settings: parseFireSettings(row!.fire_settings),
     birth_year: parseBirthYear(row!.birth_year),
     simulator_settings: parseSimulatorSettings(row!.simulator_settings),
+    simulator_plans: parseSimulatorPlans(row!.simulator_plans),
     created_at: row!.created_at,
     updated_at: row!.updated_at,
   });
@@ -86,6 +87,10 @@ configRoute.put('/', async (c) => {
     if (parsed.data.simulator_settings !== undefined) {
       updates.push('simulator_settings = ?');
       values.push(parsed.data.simulator_settings === null ? null : JSON.stringify(parsed.data.simulator_settings));
+    }
+    if (parsed.data.simulator_plans !== undefined) {
+      updates.push('simulator_plans = ?');
+      values.push(parsed.data.simulator_plans === null ? null : JSON.stringify(parsed.data.simulator_plans));
     }
     updates.push('updated_at = ?');
     values.push(now);

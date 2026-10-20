@@ -53,3 +53,8 @@ export function useMonteCarlo(input: SimInput | null) {
 export function useSuccessGrid(input: SimInput | null, axes: { ages: number[]; spends: number[] } | null) {
   return useWorkerJob<import('@cfp/shared').SuccessGrid>(input && axes ? { kind: 'grid', input, axes } : null, 450);
 }
+
+/** 方案对比：每个方案各跑一次随机模拟（结果顺序与 inputs 一致） */
+export function useMonteCarloMany(inputs: SimInput[] | null) {
+  return useWorkerJob<import('@cfp/shared').MonteCarloResult[]>(inputs && inputs.length ? { kind: 'mcMany', inputs } : null, 300);
+}

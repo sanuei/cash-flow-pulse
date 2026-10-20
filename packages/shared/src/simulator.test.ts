@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   simulate, simulateScenarios, solveMonthlyInvest, solveRetireSpend, computeLevers, applySimSettings,
-  monteCarlo, successGrid, successGridAxes, SIM_DEFAULTS, type SimInput,
+  monteCarlo, successGrid, successGridAxes, buildSimBaseline, simInputFor, SIM_DEFAULTS, type SimInput,
 } from './simulator';
 
 const base: SimInput = {
@@ -201,5 +201,38 @@ describe('随机模拟', () => {
     const col = 1;
     expect(g.rates[last]![col]!).toBeLessThanOrEqual(g.rates[0]![col]!);
     expect(g.rates[0]![g.ages.length - 1]!).toBeGreaterThanOrEqual(g.rates[0]![0]!);
+  });
+});
+
+describe('基准（你现在的路线）', () => {
+  const b = buildSimBaseline({
+    agg: { n: 6, avgIncome: 450_000, avgConsume: 227_000, avgInvest: 100_000 },
+    cash: 1_800_000,
+    otherAssets: [
+      { category: 'stock', value: 3_200_000 },
+      { category: 'crypto', value: 600_000 },
+      { category: 'real_estate', value: 35_000_000 },
+    ],
+    fire: null,
+    birthYear: 1990,
+    today: new Date('2026-10-20T00:00:00'),
+  });
+
+  it('房产不计入投资资产，单独记下市值', () => {
+    expect(b.input.invested).toBe(3_800_000);
+    expect(b.realEstate).toBe(35_000_000);
+  });
+
+  it('年龄来自出生年份；没设财务自由参数时用 4% / 5%，退休后支出 = 月均生活成本', () => {
+    expect(b.input.startAge).toBe(36);
+    expect(b.input.withdrawalRatePct).toBe(4);
+    expect(b.input.annualReturnPct).toBe(5);
+    expect(b.input.retireSpendMonthly).toBe(227_000);
+  });
+
+  it('simInputFor：勾选「计入房产」才把房产加进投资资产', () => {
+    expect(simInputFor(b, {}).invested).toBe(3_800_000);
+    expect(simInputFor(b, { includeRealEstate: true }).invested).toBe(38_800_000);
+    expect(simInputFor(b, { monthlyInvest: 200_000 }).monthlyInvest).toBe(200_000);
   });
 });

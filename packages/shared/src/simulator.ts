@@ -553,3 +553,81 @@ export function successGrid(
   );
   return { ...axes, rates };
 }
+
+// ── 基准（你现在的路线）：真实数据 → SimInput ─────────────────
+// 前端模拟页、首页财务自由卡、后端 AI 诊断共用，保证三处数字一致。
+
+export type SimBaseline = {
+  /** 出生年份；null = 还没填 */
+  birthYear: number | null;
+  /** 基准参数（未叠加用户覆盖） */
+  input: SimInput;
+  /** 房产市值（只有勾选「计入房产」时才加进投资资产） */
+  realEstate: number;
+  /** 统计了几期（用于文案「近 N 期」） */
+  periods: number;
+};
+
+export function ageFromBirthYear(birthYear: number, today = new Date()): number {
+  return Math.max(0, today.getFullYear() - birthYear);
+}
+
+export function buildSimBaseline(p: {
+  /** 近 N 期平均：收入 / 生活成本（不含投资）/ 定投 */
+  agg: { n: number; avgIncome: number; avgConsume: number; avgInvest: number };
+  /** 现金 = 可用现金 + 锁定金额（已扣本期待还的信用卡） */
+  cash: number;
+  otherAssets: { category: string; value: number | null }[];
+  fire: { withdrawalRatePct: number; annualReturnPct: number; annualSpendOverride: number | null } | null;
+  birthYear: number | null;
+  today?: Date;
+}): SimBaseline {
+  const fire = p.fire ?? { withdrawalRatePct: 4, annualReturnPct: 5, annualSpendOverride: null };
+  let invested = 0;
+  let realEstate = 0;
+  for (const a of p.otherAssets) {
+    if (a.category === 'real_estate') realEstate += a.value ?? 0;
+    else invested += a.value ?? 0;
+  }
+  const input: SimInput = {
+    ...SIM_DEFAULTS,
+    startAge: p.birthYear ? ageFromBirthYear(p.birthYear, p.today) : 30,
+    cash: p.cash,
+    invested,
+    monthlyIncome: Math.round(p.agg.avgIncome),
+    monthlyLivingCost: Math.round(p.agg.avgConsume),
+    monthlyInvest: Math.round(p.agg.avgInvest),
+    retireSpendMonthly: Math.round(fire.annualSpendOverride ? fire.annualSpendOverride / 12 : p.agg.avgConsume),
+    withdrawalRatePct: fire.withdrawalRatePct,
+    annualReturnPct: fire.annualReturnPct,
+    events: [],
+  };
+  return { birthYear: p.birthYear, input, realEstate, periods: p.agg.n };
+}
+
+/** 基准 + 用户覆盖 → 实际模拟用的参数（含「计入房产」） */
+export function simInputFor(b: SimBaseline, s: SimulatorSettings | null | undefined): SimInput {
+  const out = applySimSettings(b.input, s);
+  if (s?.includeRealEstate) out.invested += b.realEstate;
+  return out;
+}
+
+// ── 多方案 ─────────────────────────────────────────────────────
+
+export type SimulatorPlan = {
+  id: string;
+  name: string;
+  settings: SimulatorSettings;
+  updated_at: number;
+};
+
+/** 存 user_config.simulator_plans：草稿 + 已保存的方案；active_id = 正在编辑的方案（null = 草稿） */
+export type SimulatorPlans = {
+  active_id: string | null;
+  draft: SimulatorSettings;
+  plans: SimulatorPlan[];
+};
+
+export const MAX_SIM_PLANS = 10;
+/** 方案对比里最多同时对比几个方案（另加灰色的「你现在的路线」）——3 色在深浅两种主题下都通过了色盲校验 */
+export const MAX_COMPARE = 3;

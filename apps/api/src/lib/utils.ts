@@ -1,5 +1,5 @@
-import { SimulatorSettingsSchema } from '@cfp/shared';
-import type { SimulatorSettings } from '@cfp/shared';
+import { SimulatorSettingsSchema, SimulatorPlansSchema } from '@cfp/shared';
+import type { SimulatorSettings, SimulatorPlans } from '@cfp/shared';
 
 /**
  * 通用工具函数
@@ -40,6 +40,17 @@ export function parseSimulatorSettings(raw: unknown): SimulatorSettings | null {
   try {
     const r = SimulatorSettingsSchema.safeParse(JSON.parse(raw));
     return r.success ? (r.data as SimulatorSettings) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** user_config.simulator_plans（TEXT JSON）→ 对象；空/损坏/不合法 → null */
+export function parseSimulatorPlans(raw: unknown): SimulatorPlans | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  try {
+    const r = SimulatorPlansSchema.safeParse(JSON.parse(raw));
+    return r.success ? (r.data as SimulatorPlans) : null;
   } catch {
     return null;
   }

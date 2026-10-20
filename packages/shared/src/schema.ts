@@ -82,6 +82,17 @@ export const SimulatorSettingsSchema = z.object({
   events: z.array(SimEventSchema).max(30),
 }).partial();
 
+export const SimulatorPlansSchema = z.object({
+  active_id: z.string().max(64).nullable(),
+  draft: SimulatorSettingsSchema,
+  plans: z.array(z.object({
+    id: z.string().min(1).max(64),
+    name: z.string().min(1).max(30),
+    settings: SimulatorSettingsSchema,
+    updated_at: z.number(),
+  })).max(10),
+});
+
 // === 用户配置 ===
 export const UserConfigUpdateSchema = z.object({
   pay_day: z.number().int().min(1).max(31).optional(),
@@ -98,6 +109,7 @@ export const UserConfigUpdateSchema = z.object({
   }).nullable().optional(),
   birth_year: z.number().int().min(1900).max(2100).nullable().optional(),
   simulator_settings: SimulatorSettingsSchema.nullable().optional(),
+  simulator_plans: SimulatorPlansSchema.nullable().optional(),
 });
 
 // === 快照 ===
@@ -127,6 +139,7 @@ export const ImportPayloadSchema = z.object({
     }).nullable().optional(),
     birth_year: z.number().int().nullable().optional(),
     simulator_settings: SimulatorSettingsSchema.nullable().optional(),
+    simulator_plans: SimulatorPlansSchema.nullable().optional(),
   }),
   cash_sources: z.array(z.object({
     name: z.string(),

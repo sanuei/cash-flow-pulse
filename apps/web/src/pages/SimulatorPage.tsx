@@ -18,6 +18,7 @@ import {
   simulate, simulateScenarios, solveMonthlyInvest, solveRetireSpend, computeLevers, applySimSettings, formatYen,
   successGridAxes, MC_RUNS,
   type SimEvent, type SimInput, type SimResult, type SimulatorSettings, type MonteCarloResult,
+  type SimulatorPlans, type SimulatorPlan,
 } from '@cfp/shared';
 import { useStore } from '../lib/store';
 import { useSimBaseline, withSettings, yenCompact, formatMonths, yearAfterMonths, currentAge, type SimBaseline } from '../lib/simulator';
@@ -31,6 +32,8 @@ import { AssetTrajectoryChart, PrincipalGainsChart, SurvivalChart, type Trajecto
 import { SuccessHeatmap, pctText } from '../components/simulator/SimHeatmap';
 import { useMonteCarlo, useSuccessGrid } from '../lib/useSimWorker';
 import { SimTable } from '../components/simulator/SimTable';
+import { PlanBar } from '../components/simulator/PlanBar';
+import { PlanCompare } from '../components/simulator/PlanCompare';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 type Key = keyof SimulatorSettings;
@@ -39,27 +42,36 @@ export default function SimulatorPage() {
   const config = useStore((s) => s.config);
   const saveConfig = useStore((s) => s.saveSimulatorConfig);
   const baseline = useSimBaseline();
+  const [view, setView] = useState<'sim' | 'compare'>('sim');
 
-  // 用户改过的参数；只在首次进入时从服务器读（之后以本地为准，自动保存）
-  const [overrides, setOverrides] = useState<SimulatorSettings>(() => config?.simulator_settings ?? {});
+  // 草稿 + 已保存方案；只在首次进入时从服务器读（之后以本地为准，自动保存）。
+  // 旧数据只有 simulator_settings → 当作草稿。
+  const initial = (): SimulatorPlans =>
+    config?.simulator_plans ?? { active_id: null, draft: config?.simulator_settings ?? {}, plans: [] };
+  const [state, setState] = useState<SimulatorPlans>(initial);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedRef = useRef(!!config);
   useEffect(() => {
     if (!loadedRef.current && config) {
       loadedRef.current = true;
-      setOverrides(config.simulator_settings ?? {});
+      setState(initial());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  // 用函数式更新：同一次点击里连续改两个参数（如热力图同时设退休年龄和月支出）不会互相覆盖
-  const persist = (update: (prev: SimulatorSettings) => SimulatorSettings) => {
-    setOverrides((prev) => {
+  const overrides = workingOf(state);
+
+  // 函数式更新：同一次点击里连续改两个参数（如热力图同时设退休年龄和月支出）不会互相覆盖。
+  // 每次都把「方案表」和「当前参数」一起存：simulator_settings 始终 = 正在编辑的那一份（AI 诊断读它）
+  const commit = (update: (prev: SimulatorPlans) => SimulatorPlans) => {
+    setState((prev) => {
       const next = update(prev);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
-        saveConfig({ simulator_settings: Object.keys(next).length ? next : null })
+        const working = workingOf(next);
+        saveConfig({ simulator_plans: next, simulator_settings: Object.keys(working).length ? working : null })
           .then(() => setSaveState('saved'))
           .catch(() => setSaveState('error'));
       }, 800);
@@ -67,6 +79,8 @@ export default function SimulatorPage() {
     });
     setSaveState('saving');
   };
+  const persist = (update: (prev: SimulatorSettings) => SimulatorSettings) =>
+    commit((prev) => withWorking(prev, update(workingOf(prev))));
   const set = <K extends Key>(k: K, v: SimulatorSettings[K]) => persist((prev) => ({ ...prev, [k]: v }));
   const reset = (k: Key) => persist((prev) => {
     const next = { ...prev };
@@ -87,21 +101,67 @@ export default function SimulatorPage() {
       {baseline.birthYear === null ? (
         <BirthYearPrompt onSave={(y) => saveConfig({ birth_year: y })} />
       ) : (
-        <SimulatorBody
-          baseline={baseline}
-          overrides={overrides}
-          set={set}
-          reset={reset}
-          resetAll={resetAll}
-          saveState={saveState}
-          onBirthYear={(y) => saveConfig({ birth_year: y })}
-        />
+        <>
+          <PlanBar
+            state={state}
+            view={view}
+            onView={setView}
+            onSelect={(id) => commit((prev) => ({ ...prev, active_id: id }))}
+            onSaveAs={(name) => commit((prev) => {
+              const plan: SimulatorPlan = { id: newId(), name, settings: workingOf(prev), updated_at: Date.now() };
+              return { ...prev, active_id: plan.id, plans: [...prev.plans, plan] };
+            })}
+            onRename={(id, name) => commit((prev) => ({ ...prev, plans: prev.plans.map((p) => (p.id === id ? { ...p, name } : p)) }))}
+            onDelete={(id) => commit((prev) => ({
+              ...prev,
+              active_id: prev.active_id === id ? null : prev.active_id,
+              plans: prev.plans.filter((p) => p.id !== id),
+            }))}
+          />
+          {view === 'sim' ? (
+            <SimulatorBody
+              baseline={baseline}
+              overrides={overrides}
+              set={set}
+              reset={reset}
+              resetAll={resetAll}
+              saveState={saveState}
+              onBirthYear={(y) => saveConfig({ birth_year: y })}
+            />
+          ) : (
+            <PlanCompare
+              baseline={baseline}
+              state={state}
+              onOpen={(id) => {
+                commit((prev) => ({ ...prev, active_id: id }));
+                setView('sim');
+              }}
+            />
+          )}
+        </>
       )}
       <p className="text-[11px] text-notion-text-muted leading-relaxed">
         模拟结果只是按固定假设的推算，不构成投资建议。实际收益每年都会波动，越远的年份误差越大。
       </p>
     </div>
   );
+}
+
+/** 正在编辑的那一份参数：选中的方案，或草稿 */
+function workingOf(s: SimulatorPlans): SimulatorSettings {
+  return (s.active_id && s.plans.find((p) => p.id === s.active_id)?.settings) || (s.active_id ? {} : s.draft);
+}
+
+/** 把新的参数写回正在编辑的那一份 */
+function withWorking(s: SimulatorPlans, settings: SimulatorSettings): SimulatorPlans {
+  if (s.active_id && s.plans.some((p) => p.id === s.active_id)) {
+    return { ...s, plans: s.plans.map((p) => (p.id === s.active_id ? { ...p, settings, updated_at: Date.now() } : p)) };
+  }
+  return { ...s, active_id: null, draft: settings };
+}
+
+function newId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `p${Date.now()}`;
 }
 
 // ── 主体 ───────────────────────────────────────────────────────

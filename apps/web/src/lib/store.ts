@@ -83,8 +83,8 @@ interface AppState {
   updateConfig: (data: Partial<Pick<UserConfig, 'pay_day' | 'snapshot_offsets' | 'weekend_shift'>>) => Promise<void>;
   /** 财务自由参数存服务器（user_config.fire_settings），并同步到本地 config，不整页重载 */
   saveFireSettings: (s: FireSettings | null) => Promise<void>;
-  /** 财富模拟器：出生年份 / 改过的参数，存服务器并同步到本地 config */
-  saveSimulatorConfig: (patch: Partial<Pick<UserConfig, 'birth_year' | 'simulator_settings'>>) => Promise<void>;
+  /** 财富模拟器：出生年份 / 当前参数 / 多方案，存服务器并同步到本地 config */
+  saveSimulatorConfig: (patch: Partial<Pick<UserConfig, 'birth_year' | 'simulator_settings' | 'simulator_plans'>>) => Promise<void>;
   recordSnapshot: (cycleId: string, offsetIndex: number, note?: string) => Promise<void>;
 
   // ===== v0.3 Actions =====

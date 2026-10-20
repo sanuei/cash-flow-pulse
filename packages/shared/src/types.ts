@@ -7,7 +7,7 @@
  * 3. apps/web/src/types/*（前端状态）
  */
 
-import type { SimulatorSettings } from './simulator.js';
+import type { SimulatorSettings, SimulatorPlans } from './simulator.js';
 
 // === 用户配置 ===
 export interface UserConfig {
@@ -18,6 +18,7 @@ export interface UserConfig {
   fire_settings?: FireSettings | null; // 财务自由参数；null = 默认值
   birth_year?: number | null;          // 出生年份（财富模拟器用；null = 未填）
   simulator_settings?: SimulatorSettings | null; // 财富模拟器里改过的参数；null = 全部跟随真实数据
+  simulator_plans?: SimulatorPlans | null;       // 草稿 + 已保存的多个方案；null = 还没用过多方案
   created_at: number;          // Unix ms
   updated_at: number;
 }
