@@ -32,6 +32,10 @@ type DashboardCalcV2 = DashboardCalc & {
   total_expense: number;
   total_income: number;
   net_flow: number;
+  // 已到账、未记入现金余额的收入（已计入 net_available）；旧后端没有这些字段
+  pending_income?: number;
+  pending_income_items?: UpcomingIncomeItem[];
+  balance_as_of?: string | null;
 };
 
 // dashboard API 完整响应（含周期切换新字段）
@@ -304,6 +308,17 @@ export function Overview() {
             {formatYen(activeCalc.net_available)}
           </span>
         </div>
+        {/* 已到账但还没记进余额的收入：已计入上面的数字，提示去更新余额（更新后自动不再重复计入） */}
+        {isCurrentCycle && (activeCalc as DashboardCalcV2).pending_income! > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] text-notion-text-muted">
+            <span>
+              含已到账、未记入余额的收入
+              <span className="font-numeric text-notion-success"> +{formatYen((activeCalc as DashboardCalcV2).pending_income!)}</span>
+              {(activeCalc as DashboardCalcV2).balance_as_of && <>（余额更新于 {(activeCalc as DashboardCalcV2).balance_as_of!.slice(5)}）</>}
+            </span>
+            <Link to="/assets" className="font-medium text-[var(--c-accent-text)] hover:text-[var(--c-accent)]">更新余额 ›</Link>
+          </div>
+        )}
       </section>
 
       {/* 财务自由（仅本期，有数据时）*/}

@@ -870,6 +870,40 @@ export function sumIncomeInCycle(
   return { total, items };
 }
 
+/**
+ * 现金余额的「截至日」：现金账户最后一次更新那天（本地零点）。没有账户 → null。
+ */
+export function balanceAsOfDate(cashSources: Pick<CashSource, 'updated_at'>[]): Date | null {
+  const ts = cashSources.map((c) => c.updated_at).filter((t) => typeof t === 'number' && t > 0);
+  if (ts.length === 0) return null;
+  const d = new Date(Math.max(...ts));
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * 已到账、但还没记进现金余额的收入：到账日 ≤ 今天，且晚于余额最后更新那天。
+ *
+ * 净可用现金以用户手填的账户余额为准；收入到账后如果还没去改余额，这笔钱在余额里不存在，
+ * 但它已经是真实可用的现金 → 计入。用户更新余额后，截至日变成更新那天，这笔收入
+ * 自动不再重复计入。到账日在今天之后的收入仍然不算（钱没到就不当可用）。
+ */
+export function pendingIncomeInCycle(
+  incomes: RecurringIncome[],
+  cashSources: Pick<CashSource, 'updated_at'>[],
+  today: Date,
+  cycleStart: Date,
+  cycleEnd: Date,
+): { total: number; items: UpcomingIncomeItem[]; asOf: Date | null } {
+  const asOf = balanceAsOfDate(cashSources);
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const { items } = sumIncomeInCycle(incomes, cycleStart, cycleEnd);
+  const pending = items.filter((it) => {
+    const d = parseDate(it.pay_date);
+    return d <= todayMidnight && (asOf === null || d > asOf);
+  });
+  return { total: pending.reduce((s, it) => s + it.amount, 0), items: pending, asOf };
+}
+
 // ============================================================
 // v0.3 新增：升级版 computeDashboard（向后兼容）
 // ============================================================
@@ -906,6 +940,11 @@ export function computeDashboardV2(
   total_expense: number;
   total_income: number;
   net_flow: number;
+  /** 已到账、未记入现金余额的收入（已计入 net_available） */
+  pending_income: number;
+  pending_income_items: UpcomingIncomeItem[];
+  /** 现金余额最后更新日（YYYY-MM-DD）；没有现金账户为 null */
+  balance_as_of: string | null;
 } {
   // 1. 调用 V1（保持完全向后兼容）
   const v1 = computeDashboard(today, config, cashSources, creditCards, snapshots);
@@ -1079,7 +1118,8 @@ export function computeDashboardV2(
   //   已过期的支出(6/10 房租)不重复扣
   //   例(6/28): 现金 271,774 - 信用卡 146,298 - 投资(12天 daily)18,816 = 106,660
   //             106,660 / 12 = ¥8,888/天
-  //   注: 收入(income)只用于 UI 展示,不参与日均计算
+  //   收入：只计「已到账、但还没记进现金余额」的那部分（见 pendingIncomeInCycle）；
+  //         未来才到账的收入不计入——钱没到就不当可用
   const safeDays = Math.max(1, v1.days_to_payday);
 
   // 计算"未来应付"(today ~ cycleEnd)
@@ -1107,7 +1147,8 @@ export function computeDashboardV2(
   }, 0);
 
   const futureExpense = futureCreditCards + futureBills + futureSubs + futureInv + futureOneOff;
-  const netAvailable = v1.total_net_cash - futureExpense;
+  const pending = pendingIncomeInCycle(incomes, cashSources, today, cycleStart, cycleEnd);
+  const netAvailable = v1.total_net_cash + pending.total - futureExpense;
   const dailyBudget = Math.max(0, Math.floor(netAvailable / safeDays));
 
   // netFlow 仍按收入-支出算(整月 totalExpense,用于收支图 / 本期收入明细卡)
@@ -1139,6 +1180,9 @@ export function computeDashboardV2(
     // 覆盖 V1 的 net_available 和 daily_budget（用 V2 公式重算）
     net_available: netAvailable,
     daily_budget: dailyBudget,
+    pending_income: pending.total,
+    pending_income_items: pending.items,
+    balance_as_of: pending.asOf ? formatDate(pending.asOf) : null,
   };
 }
 
@@ -1245,10 +1289,11 @@ export function computeDailyCashflow(
   history: CashflowHistoryPoint[] = [],  // 真实快照（任意日期范围，今天及以后的会被忽略）
 ): CashflowResult {
   const todayMs = cashflowMidMs(today);
-  // 今天锚点：真实可用现金（未扣未来项）
-  const anchor = cashSources.reduce((s, c) => s + c.balance - c.locked_amount, 0);
-
   const cycle0 = getCurrentCycle(today, config.pay_day);
+  // 今天锚点：真实可用现金（未扣未来项）+ 已到账但还没记进余额的收入（与 net_available 同口径）
+  const anchor = cashSources.reduce((s, c) => s + c.balance - c.locked_amount, 0)
+    + pendingIncomeInCycle(incomes, cashSources, today, cycle0.start_date, cycle0.end_date).total;
+
   const points: CashflowPoint[] = [];
   let carry = 0;                       // 上一期末的预测余额（链式递推起点）
   let lastEnd = cycle0.end_date_str;
