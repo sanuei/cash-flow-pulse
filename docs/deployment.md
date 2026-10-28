@@ -64,6 +64,10 @@ pnpm exec wrangler rollback <version-id>
 
 ## 一次性迁移：Pages → 统一 Worker
 
+> **状态（2026-10-28）**：阶段 A–C 已完成，`cashflow.soniclab.cc` 由统一 Worker 提供，推送 `main` 自动部署
+> （首次自动部署：commit `9355537` → version `4b08646d`）。Pages 的 Git 连接已断开；阶段 D 的删除 Pages 项目待办。
+> 以下保留作记录，重建环境时可参考。
+
 原架构是 Pages 托管前端 + Worker Route 接管 `cashflow.soniclab.cc/api/*`。按下面顺序迁移，**只有阶段 B 有短暂不可用**。
 
 ### 阶段 A — 在 workers.dev 上验证（生产零影响）
