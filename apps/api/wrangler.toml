@@ -25,15 +25,11 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = ["/api/*"]
 
-# 自定义域名
-# 迁移过渡期：先只接管 /api/*（前端仍由 Pages 提供），在 workers.dev 上验证完整站点后，
-# 再按 docs/deployment.md「切换域名」一节改成：
-#   [[routes]]
-#   pattern = "cashflow.soniclab.cc"
-#   custom_domain = true
+# 自定义域名：整个 cashflow.soniclab.cc 都由这个 Worker 提供（前端 + /api）
+# Cloudflare 会自动创建 DNS 记录和证书。主机名上不能已有 CNAME，否则部署会报冲突。
 [[routes]]
-pattern = "cashflow.soniclab.cc/api/*"
-zone_name = "soniclab.cc"
+pattern = "cashflow.soniclab.cc"
+custom_domain = true
 
 # D1 数据库绑定
 # 首次部署前需要先创建 D1 实例：
