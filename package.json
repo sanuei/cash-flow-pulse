@@ -9,8 +9,8 @@
     "dev:api": "pnpm --filter @cfp/api dev",
     "dev:web": "pnpm --filter @cfp/web dev",
     "build": "pnpm -r run build",
-    "deploy:api": "pnpm --filter @cfp/api deploy",
-    "deploy:web": "pnpm --filter @cfp/web deploy",
+    "deploy": "pnpm --filter @cfp/api run deploy",
+    "deploy:api": "pnpm run deploy",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test"
   },

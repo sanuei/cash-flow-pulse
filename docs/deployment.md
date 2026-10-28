@@ -1,235 +1,157 @@
 # Cash Flow Pulse — 部署指南
 
-> Cloudflare 全家桶部署：Workers (API) + D1 (数据库) + Pages (前端)，全部免费额度内。
+> 一个 Cloudflare Worker 同时托管前端 SPA 和 API，推送到 `main` 自动部署。
 
-## 架构总览
+## 架构
 
 ```
-                                cash.soniclab.cc
-                                       │
-                                       ▼
-                          ┌──────────────────────────┐
-                          │  soniclab-router Worker  │
-                          │  (Cash Flow Pulse 代理)   │
-                          └──────────┬───────────────┘
-                                     │
-                    ┌────────────────┼────────────────┐
-                    │ /api/*                          │ 其他/*
-                    ▼                                  ▼
-        ┌──────────────────┐               ┌──────────────────┐
-        │  Workers API     │               │  Pages           │
-        │  (Hono + D1)     │               │  (React 静态)     │
-        └────────┬─────────┘               └──────────────────┘
-                 │
-                 ▼
-        ┌──────────────────┐
-        │  D1 (SQLite)     │
-        │  cash-flow-pulse-db │
-        └──────────────────┘
+                    cashflow.soniclab.cc
+                            │
+                            ▼
+          ┌───────────────────────────────────┐
+          │  Worker: cash-flow-pulse-api      │
+          │                                   │
+          │  /api/*  ──► Hono（apps/api）     │──► D1: cash-flow-pulse-db
+          │  其他    ──► 静态资源（apps/web/dist）│
+          │             未命中 → index.html    │
+          │                                   │
+          │  cron 0 15 * * * ──► 每日快照      │
+          └───────────────────────────────────┘
 ```
 
-- **Pages**：托管 Vite 打包后的静态文件（HTML/JS/CSS）
-- **Workers API**：运行 Hono 路由 + 调用 D1
-- **D1**：SQLite 兼容数据库，5GB 免费存储
-- **soniclab-router**：在 `cash.soniclab.cc` 提供 `/api/*` → API 反代，其他 → Pages 静态资源
+全部配置在 [`apps/api/wrangler.toml`](../apps/api/wrangler.toml)：
+
+| 配置 | 作用 |
+|------|------|
+| `[assets] directory = "../web/dist"` | Vite 产物作为静态资源一起上传 |
+| `not_found_handling = "single-page-application"` | `/settings`、`/incomes` 等前端路由回退到 `index.html` |
+| `run_worker_first = ["/api/*"]` | `/api/*` 一律交给 Hono。**不能删**，否则 API 请求也会被回退成 `index.html` |
+| `[[d1_databases]]` / `[triggers]` | D1 绑定、每日快照 cron |
+
+前端与 API 同源，所以 session cookie 用 `SameSite=Lax`，前端请求不需要 CORS。
 
 ---
 
-## 🚀 一键部署（推荐）
+## 日常部署
 
-### 前置条件
-1. Cloudflare 账号
-2. wrangler CLI（`brew install wrangler` 或 `pnpm add -g wrangler`）
-3. **登录**：`wrangler login`（会打开浏览器授权）
+**推送到 `main` 即可。** Workers Builds 会自动执行：
 
-### 一条命令搞定
+1. `pnpm install --frozen-lockfile`
+2. `pnpm run deploy` → 先 `pnpm --filter @cfp/web build`，再 `wrangler deploy`（前端 + API 一次原子上传）
+
+PR / 其他分支会生成 preview URL，不影响生产。
+
+### 本地手动部署（应急用）
 
 ```bash
-cd ~/Desktop/网页项目/apps/cash-flow-pulse
-./scripts/deploy.sh
+pnpm run deploy
 ```
 
-脚本会自动完成：
-1. ✅ 检查登录状态 + 安装依赖
-2. ✅ 创建 D1 数据库（首次）并初始化 8 张表 schema
-3. ✅ 部署 Workers API，验证 health endpoint
-4. ✅ 构建前端 + 部署到 Pages（创建项目如不存在）
-5. ✅ 部署 soniclab-router（注入 CFP_API_HOST env）
-6. ✅ DNS 检查（首次会提示配置）
+> ⚠️ 只能在**和 `origin/main` 同步**的 checkout 里执行。部署的是本地文件，落后的目录会把线上回滚。
+> 不要直接在 `apps/api` 里跑裸 `wrangler deploy`：它不会先构建前端，会把旧的 `dist` 一起推上去。
 
-**环境变量**：
-- `SKIP_DNS=1` — 跳过 DNS 检查（已配过时用）
-- `SKIP_ROUTER=1` — 跳过 router 部署（router 已存在时用）
-
----
-
-## 📋 手动部署（逐步）
-
-如果脚本卡在某步想手动跑，下面是分步流程。
-
-### 1️⃣ D1 数据库
+### 回滚
 
 ```bash
 cd apps/api
-wrangler d1 create cash-flow-pulse-db
+pnpm exec wrangler deployments list
+pnpm exec wrangler rollback <version-id>
 ```
 
-把输出的 `database_id` 填到 `apps/api/wrangler.toml`：
-```toml
-[[d1_databases]]
-binding = "DB"
-database_name = "cash-flow-pulse-db"
-database_id = "填入 ID"
-```
+前端和 API 是同一个版本，一起回滚。D1 数据不受影响。
 
-初始化 schema：
-```bash
-wrangler d1 execute cash-flow-pulse-db --file=./src/db/schema.sql --remote
-```
+---
 
-### 2️⃣ Workers API
+## 一次性迁移：Pages → 统一 Worker
+
+原架构是 Pages 托管前端 + Worker Route 接管 `cashflow.soniclab.cc/api/*`。按下面顺序迁移，**只有阶段 B 有短暂不可用**。
+
+### 阶段 A — 在 workers.dev 上验证（生产零影响）
+
+此时 `wrangler.toml` 的路由仍是 `cashflow.soniclab.cc/api/*`，前端仍由 Pages 提供。
+
+1. 部署一次：`pnpm run deploy`（或在阶段 C 连好 Git 后推送触发）
+2. 打开 `https://cash-flow-pulse-api.<subdomain>.workers.dev`，确认：
+   - `/` 显示登录页，左上角 logo 正常
+   - `/settings` 直接刷新不 404
+   - `/api/health` 返回 JSON
+   - （workers.dev 上无法完成 Google 登录 —— 回调地址只登记了正式域名，这是预期的）
+
+### 阶段 B — 切换域名（约几十秒不可用）
+
+Worker 的 Custom Domain 不能建在已有 CNAME 的主机名上，所以必须先删再加：
+
+1. **Workers & Pages → `cash-flow-pulse`（Pages 项目）→ 自定义域** → 删除 `cashflow.soniclab.cc`
+2. **soniclab.cc → DNS → 记录** → 如果还有 `cashflow` 的 CNAME 记录，删除它
+3. 把 `apps/api/wrangler.toml` 的路由改成：
+   ```toml
+   [[routes]]
+   pattern = "cashflow.soniclab.cc"
+   custom_domain = true
+   ```
+   然后 `pnpm run deploy`（wrangler 会自动创建 DNS 记录和证书）
+4. 验证：
+   ```bash
+   curl -sI https://cashflow.soniclab.cc/ | head -1           # 200
+   curl -s  https://cashflow.soniclab.cc/api/health           # {"status":"ok",...}
+   ```
+   浏览器里完整走一次 Google 登录。
+5. **Worker → 设置 → 域和路由**：确认旧的 `cashflow.soniclab.cc/api/*` Route 已经不在（wrangler 会按配置同步；还在就手动删除）
+
+> 浏览器里旧的 Service Worker 仍会先用缓存的前端，下一次加载时会自动更新，不影响使用。
+
+### 阶段 C — 连接 Git（推送即部署）
+
+**Workers & Pages → `cash-flow-pulse-api` → 设置 → 构建 → 连接**：
+
+| 项 | 值 |
+|----|----|
+| Git 仓库 | `sanuei/cash-flow-pulse` |
+| 生产分支 | `main` |
+| 根目录 | `apps/api` |
+| 构建命令 | `pnpm install --frozen-lockfile` |
+| 部署命令 | `pnpm run deploy` |
+| 构建变量 | `SKIP_DEPENDENCY_INSTALL` = `1` |
+
+- `SKIP_DEPENDENCY_INSTALL=1`：根目录是 `apps/api`，而 lockfile 在仓库根。关掉自动安装、由构建命令自己跑 `pnpm install`，避免构建环境误用 npm（npm 不认识 `workspace:*`）。
+- pnpm 版本取自仓库根 `package.json` 的 `"packageManager": "pnpm@11.7.0"`。
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` 是 Worker 的运行时 Secret，部署不会覆盖，无需在构建里配置。
+
+### 阶段 D — 清理
+
+线上稳定运行几天后：
+
+1. **Pages 项目 `cash-flow-pulse` → 设置 → 构建** → 断开 Git（否则每次推送它还会白跑一次构建）
+2. 确认不再需要回退后，删除 Pages 项目：`pnpm --filter @cfp/api exec wrangler pages project delete cash-flow-pulse`
+3. 可选：`ALLOWED_ORIGIN` 里的 `cash-flow-pulse.pages.dev`、`cash.soniclab.cc` 可以删掉
+
+---
+
+## D1 数据库
 
 ```bash
 cd apps/api
-wrangler deploy
-# 输出: https://cash-flow-pulse-api.<subdomain>.workers.dev
-```
 
-**记下这个 URL**，前端的 CORS 白名单已经包含 `https://cash.soniclab.cc` 和 `https://cash-flow-pulse.pages.dev`。
+# 表结构变更：迁移 SQL 放在 src/db/migrate_*.sql，先迁移、再合并代码
+pnpm exec wrangler d1 execute cash-flow-pulse-db --remote --file=./src/db/migrate_xxx.sql
 
-验证：
-```bash
-curl https://cash-flow-pulse-api.<subdomain>.workers.dev/api/health
-# → {"status":"ok","timestamp":...}
-```
-
-### 3️⃣ Pages 前端
-
-```bash
-cd apps/web
-pnpm build
-wrangler pages deploy dist --project-name=cash-flow-pulse --branch=main --commit-dirty=true
-```
-
-**首次部署**：`wrangler pages project create cash-flow-pulse --production-branch=main`
-
-部署后访问：`https://cash-flow-pulse.pages.dev`
-
-### 4️⃣ soniclab-router（cash.soniclab.cc 代理）
-
-修改 `_infrastructure/soniclab-router/wrangler.toml`：
-```toml
-routes = [
-  { pattern = "www.soniclab.cc/*", zone_name = "soniclab.cc" },
-  { pattern = "soniclab.cc/*", zone_name = "soniclab.cc" },
-  { pattern = "cash.soniclab.cc/*", zone_name = "soniclab.cc" }  # 新增
-]
-```
-
-修改 `_infrastructure/soniclab-router/src/index.ts` 已包含 cash.soniclab.cc 分支（v0.8.1+ 已加）。
-
-部署：
-```bash
-cd ../_infrastructure/soniclab-router
-# 注入 CFP_API_HOST env（关键！）
-# 方式 A: 写到 wrangler.toml
-# 方式 B: wrangler secret put CFP_API_HOST
-wrangler deploy
-```
-
-### 5️⃣ DNS 配置（首次）
-
-1. **Cloudflare Dashboard** → **Workers & Pages** → **soniclab-router** → **Settings** → **Triggers**
-2. 添加 Route：
-   - Pattern: `cash.soniclab.cc/*`
-   - Zone: `soniclab.cc`
-3. **或者**（DNS 方式）：Dashboard → **soniclab.cc** → **DNS** → 添加：
-   - Type: `CNAME`
-   - Name: `cash`
-   - Target: `soniclab-router.<subdomain>.workers.dev`
-   - Proxied: ✓
-
-DNS 生效时间：1-5 分钟。
-
----
-
-## 🔍 端到端验证
-
-DNS 生效后：
-
-```bash
-# 1. 健康检查（通过 soniclab-router 代理）
-curl https://cash.soniclab.cc/api/health
-# → {"status":"ok","timestamp":...}
-
-# 2. 浏览器访问
-open https://cash.soniclab.cc
-```
-
-应该看到：
-- ✅ 主页加载，无 JS 错误
-- ✅ 仪表盘渲染（首次无数据：净现金 ¥0，活跃卡应还 ¥0）
-- ✅ 录入一张快照 → API 调用成功 → 列表显示
-
----
-
-## 🛠 故障排除
-
-### Q: 主页空白？
-A: 浏览器 DevTools → Network 检查：
-1. `cash.soniclab.cc/` 200 但 JS 404？ → Pages 部署失败，重新跑 step 3
-2. `/api/*` 502？ → Workers 没起来，去 Workers Dashboard 看 Logs
-3. `/api/*` CORS 错？ → 检查 `ALLOWED_ORIGIN` 是否包含 `https://cash.soniclab.cc`
-
-### Q: API 500？
-A: Workers → `cash-flow-pulse-api` → Logs：
-- `database_id 没填对` → 重新填 wrangler.toml 再 deploy
-- `no such table` → schema.sql 没跑，重新跑 step 1
-
-### Q: soniclab-router 404？
-A: 检查：
-1. 路由规则是否包含 `cash.soniclab.cc/*`
-2. `CFP_API_HOST` env 是否正确（用 `wrangler secret list` 验证）
-3. Workers API 自身 URL 是否能直接访问
-
-### Q: 如何回滚？
-```bash
-wrangler rollback [version-id]
-wrangler deployments list
-```
-
-### Q: 数据备份？
-```bash
-# 前端：设置 → 导出 JSON
-# 命令行：
-wrangler d1 export cash-flow-pulse-db --output=backup.sql
+# 备份
+pnpm exec wrangler d1 export cash-flow-pulse-db --remote --output=backup.sql
 ```
 
 ---
 
-## 💰 成本（Cloudflare 免费额度）
+## 故障排除
 
-| 服务 | 免费额度 | 预期用量 |
-|------|---------|---------|
-| Workers Requests | 100,000 / 天 | < 100 / 天 |
-| D1 Reads | 5,000,000 / 天 | < 100 / 天 |
-| D1 Writes | 100,000 / 天 | < 10 / 天 |
-| D1 Storage | 5 GB | < 1 MB |
-| Pages Builds | 500 / 月 | < 10 / 月 |
-| soniclab-router | 100k req/day | < 100/day |
+| 现象 | 原因 / 处理 |
+|------|------------|
+| 构建成功但全站 404 / 空白 | `apps/web/dist` 没构建出来。检查部署命令是不是 `pnpm run deploy`（不是裸 `wrangler deploy`） |
+| `/api/*` 返回 HTML | `run_worker_first` 被删了或 wrangler < 4.20 |
+| `/settings` 刷新 404 | `not_found_handling` 不是 `single-page-application` |
+| 登录后又回到 `/login` | 检查 `vite.config.ts` 的 `navigateFallbackDenylist` 是否包含 `/^\/api\//`（Service Worker 不能拦截 `/api/auth/*` 导航） |
+| 部署报 `assets.directory ... does not exist` | 没先构建前端，用 `pnpm run deploy` |
+| 阶段 B 报 custom domain 冲突 | DNS 里还有 `cashflow` 的 CNAME，删掉后重试 |
 
-**结论**：单用户场景下，**完全免费**。
+## 成本
 
----
-
-## 🔄 更新日志
-
-### v0.9 — 一键部署脚本（2026-06-21）
-- 新增 `scripts/deploy.sh`：D1 + Workers + Pages + Router 一条命令搞定
-- 新增 soniclab-router 的 `cash.soniclab.cc` 路由支持
-- 拆分代码 chunk（react/recharts/icons 单独），bundle 减小 ~30%
-- CORS 白名单扩展到 4 个源（dev × 2 + prod × 2）
-
-### v0.8.1 — 部署指南初版
-- 3 步手动部署（D1 → Workers → Pages）
-- 故障排除 FAQ
+单用户场景下全部在免费额度内。静态资源请求不计入 Workers 请求数；`/api/*` 才计数（免费 10 万次/天）。

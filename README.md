@@ -68,11 +68,8 @@ cd apps/web && npx vite build
 
 详见 [`docs/deployment.md`](./docs/deployment.md)。
 
-简而言之：
-1. `wrangler d1 create cash-flow-pulse-db` → 填入 `database_id`
-2. `wrangler d1 execute cash-flow-pulse-db --file=./src/db/schema.sql --remote`
-3. `pnpm deploy:api` → 部署 Workers
-4. Cloudflare Pages 连接 GitHub 仓库，配置 build 输出 `apps/web/dist`
+简而言之：前端和 API 是同一个 Worker（`apps/api/wrangler.toml`，静态资源 + Hono），
+**推送到 `main` 由 Workers Builds 自动部署**。应急时在与 `origin/main` 同步的目录里运行 `pnpm run deploy`。
 
 ## 许可证
 

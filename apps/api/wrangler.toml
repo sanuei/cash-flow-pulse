@@ -8,9 +8,29 @@ workers_dev = true
 [triggers]
 crons = ["0 15 * * *"]
 
-# 让 cashflow.soniclab.cc/api/* 也由这个 Worker 处理
-# CF Workers Route 优先级高于 Pages，不会影响前端 SPA 路由
-# 这样 redirect_uri 可以用 cashflow.soniclab.cc，Google consent 显示自定义域名
+# ============================================================
+# 前端静态资源（Workers Static Assets）
+# ============================================================
+# 这个 Worker 同时托管 SPA 和 API，取代原来的 Pages 项目：
+#   - directory：Vite 产物，相对本文件 = apps/web/dist（部署前必须先构建，
+#     所以 package.json 的 deploy 脚本会先跑 web build）
+#   - not_found_handling=single-page-application：未命中资源的请求返回 index.html，
+#     React Router 的 /incomes、/settings 等前端路由才能直接访问
+#   - run_worker_first=["/api/*"]：必须显式声明，否则上一条会把 /api/* 也回退成
+#     index.html，请求永远到不了 Hono（需要 wrangler >= 4.20）
+# 静态资源请求不计入 Workers 请求计费。
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+# 自定义域名
+# 迁移过渡期：先只接管 /api/*（前端仍由 Pages 提供），在 workers.dev 上验证完整站点后，
+# 再按 docs/deployment.md「切换域名」一节改成：
+#   [[routes]]
+#   pattern = "cashflow.soniclab.cc"
+#   custom_domain = true
 [[routes]]
 pattern = "cashflow.soniclab.cc/api/*"
 zone_name = "soniclab.cc"
