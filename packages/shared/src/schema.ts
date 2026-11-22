@@ -311,3 +311,17 @@ export type BillInput = z.infer<typeof BillInputSchema>;
 export type IncomeInput = z.infer<typeof IncomeInputSchema>;
 export type SubscriptionInput = z.infer<typeof SubscriptionInputSchema>;
 export type OneOffExpenseInput = z.infer<typeof OneOffExpenseInputSchema>;
+// === 持仓（自动估值）===
+export const HoldingInputSchema = z.object({
+  asset_id: z.string().min(1),
+  kind: z.enum(['market', 'jp_fund', 'cn_fund', 'manual']),
+  symbol: z.string().max(20).default(''),
+  name: z.string().max(100).optional(),          // manual 必填；其余以行情源名称为准
+  quantity: z.number().nonnegative('数量不能为负'),
+  bucket: z.string().max(40).nullable().optional(),
+});
+export const HoldingUpdateSchema = z.object({
+  quantity: z.number().nonnegative().optional(),
+  name: z.string().max(100).optional(),
+  bucket: z.string().max(40).nullable().optional(),
+});

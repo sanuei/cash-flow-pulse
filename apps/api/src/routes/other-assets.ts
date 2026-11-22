@@ -94,5 +94,7 @@ otherAssetRoutes.delete('/:id', async (c) => {
     .run();
 
   if (result.meta.changes === 0) return c.json({ error: 'Not Found' }, 404);
+  // 资产下的持仓一起删
+  await c.env.DB.prepare('DELETE FROM holdings WHERE asset_id = ? AND user_id = ?').bind(id, userId).run();
   return c.json({ ok: true });
 });

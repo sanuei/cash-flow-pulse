@@ -22,6 +22,11 @@ import { incomeRoutes } from './routes/incomes';
 import { subscriptionRoutes } from './routes/subscriptions';
 import { oneOffRoutes } from './routes/one_off';
 import { otherAssetRoutes } from './routes/other-assets';
+import { holdingRoutes } from './routes/holdings';
+import { refreshHoldings, recordAssetHistory } from './lib/quotes';
+
+// 与 wrangler.toml [triggers] crons 对应
+const DAILY_SNAPSHOT_CRON = '0 15 * * *';
 import { adminRoutes } from './routes/admin';
 // v1.0 新增
 import { authRoutes } from './routes/auth';
@@ -80,6 +85,7 @@ app.route('/api/incomes', incomeRoutes);
 app.route('/api/subscriptions', subscriptionRoutes);
 app.route('/api/one-off', oneOffRoutes);
 app.route('/api/other-assets', otherAssetRoutes);
+app.route('/api/holdings', holdingRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/ai', aiRoutes);
 
@@ -179,7 +185,24 @@ async function runDailySnapshot(env: Env): Promise<void> {
 
 export default {
   fetch: app.fetch,
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runDailySnapshot(env));
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    if (event.cron === DAILY_SNAPSHOT_CRON) {
+      ctx.waitUntil(runDailySnapshot(env));
+      return;
+    }
+    // 每小时：刷新股票/基金行情 → 重算持仓资产价值 → 记录今天的资产（首页资产走势）
+    ctx.waitUntil((async () => {
+      try {
+        const r = await refreshHoldings(env.DB);
+        console.log(`[cron] quotes refreshed: ${r.fetched}`);
+      } catch (e) {
+        console.error('[cron] quote refresh failed:', e);
+      }
+      try {
+        await recordAssetHistory(env.DB);
+      } catch (e) {
+        console.error('[cron] asset history failed:', e);
+      }
+    })());
   },
 };

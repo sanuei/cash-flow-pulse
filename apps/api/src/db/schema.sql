@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS user_config (
   snapshot_offsets TEXT NOT NULL DEFAULT '[0,7,14,21]',  -- JSON 数组
   weekend_shift  INTEGER NOT NULL DEFAULT 0,             -- 扣款日遇周末顺延至周一（0=关 1=开）
   fire_settings  TEXT,                                   -- 财务自由参数 JSON（NULL=默认）
+  allocation_targets TEXT,                               -- 资金配置目标 JSON（NULL=未设置）
   birth_year     INTEGER,                                -- 出生年份（财富模拟器；NULL=未填）
   simulator_settings TEXT,                               -- 财富模拟器里改过的参数 JSON（NULL=全部跟随真实数据）
   simulator_plans TEXT,                                  -- 财富模拟器：草稿 + 多个已保存方案 JSON（NULL=未使用）
@@ -241,3 +242,49 @@ CREATE TABLE IF NOT EXISTS stripe_subscriptions (
   updated_at           INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_stripe_subs_user ON stripe_subscriptions(user_id);
+
+-- ============================================================
+-- 持仓自动估值 / 资产走势（见 migrate_holdings_quotes.sql）
+-- ============================================================
+
+-- 持仓：挂在某个「其他资产」（如 PayPay証券 账户）下面；有持仓的资产，价值由行情自动计算
+CREATE TABLE IF NOT EXISTS holdings (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL,
+  asset_id    TEXT NOT NULL,                 -- other_assets.id
+  kind        TEXT NOT NULL CHECK (kind IN ('market','jp_fund','cn_fund','manual')),
+  symbol      TEXT NOT NULL DEFAULT '',      -- Yahoo 代码 / 協会コード / 6 位基金代码；manual 为空
+  name        TEXT NOT NULL DEFAULT '',
+  quantity    REAL NOT NULL CHECK (quantity >= 0),  -- 股数 / 口数 / 份额；manual 为日元金额
+  bucket      TEXT,                          -- 资金配置类别 key（见 user_config.allocation_targets），可空
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_holdings_user ON holdings(user_id);
+CREATE INDEX IF NOT EXISTS idx_holdings_asset ON holdings(asset_id);
+
+-- 行情缓存（全局共享，不含用户数据）；汇率 kind='fx'，symbol 如 USDJPY=X
+CREATE TABLE IF NOT EXISTS quotes (
+  kind        TEXT NOT NULL,
+  symbol      TEXT NOT NULL,
+  name        TEXT,
+  price       REAL,
+  currency    TEXT,
+  price_date  TEXT,
+  fetched_at  INTEGER NOT NULL,
+  error       TEXT,
+  PRIMARY KEY (kind, symbol)
+);
+
+-- 每日资产记录（首页资产走势）：现金（净可用）、投资（股票/基金/加密）、其他（房产等）
+CREATE TABLE IF NOT EXISTS asset_history (
+  user_id     TEXT NOT NULL,
+  date        TEXT NOT NULL,                 -- YYYY-MM-DD（日本时间）
+  cash        REAL NOT NULL DEFAULT 0,
+  invest      REAL NOT NULL DEFAULT 0,
+  other       REAL NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, date)
+);
+

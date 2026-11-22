@@ -186,6 +186,7 @@ exportImportRoutes.post('/import', async (c) => {
       await db.batch([
         db.prepare('DELETE FROM snapshots WHERE user_id = ?').bind(userId),
         db.prepare('DELETE FROM other_assets WHERE user_id = ?').bind(userId),
+        db.prepare('DELETE FROM holdings WHERE user_id = ?').bind(userId),  // 持仓挂在旧资产 id 上，一起清掉
         db.prepare('DELETE FROM one_off_expenses WHERE user_id = ?').bind(userId),
         db.prepare('DELETE FROM subscriptions WHERE user_id = ?').bind(userId),
         db.prepare('DELETE FROM recurring_incomes WHERE user_id = ?').bind(userId),

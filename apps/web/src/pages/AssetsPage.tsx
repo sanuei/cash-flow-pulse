@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../lib/store';
 import { useToast } from '../lib/toast';
 import { SearchBar } from '../components/SearchBar';
@@ -8,6 +8,7 @@ import { Money } from '../components/Money';
 import { Icon, type IconName } from '../components/Icon';
 import { CashForm } from '../components/CashForm';
 import { OtherAssetForm } from '../components/OtherAssetForm';
+import { HoldingsPanel } from '../components/HoldingsPanel';
 import { PageTitle } from '../components/PageTitle';
 import { formatYen } from '@cfp/shared';
 import type { CashSource, OtherAsset, AssetCategory } from '@cfp/shared';
@@ -28,6 +29,9 @@ const CATEGORY_LABEL: Record<AssetCategory, string> = {
 export function AssetsPage() {
   const cashSourcesAll = useStore((s) => s.cashSources);
   const otherAssetsAll = useStore((s) => s.otherAssets);
+  const holdings = useStore((s) => s.holdings);
+  const loadHoldings = useStore((s) => s.loadHoldings);
+  useEffect(() => { loadHoldings().catch(() => {}); }, [loadHoldings]);
   const loadDashboard = useStore((s) => s.loadDashboard);
   const deleteCash = useStore((s) => s.deleteCash);
   const deleteOtherAsset = useStore((s) => s.deleteOtherAsset);
@@ -175,22 +179,37 @@ export function AssetsPage() {
           addLabel: '添加资产',
         }}
         formTitle={(e) => (e ? '编辑资产' : '新增资产')}
-        renderForm={(editing, close) => (
-          <OtherAssetForm
-            initial={
-              editing
-                ? { name: editing.name, category: editing.category, value: editing.value, note: editing.note }
-                : undefined
-            }
-            onSubmit={async (data) => {
-              if (editing) await useStore.getState().updateOtherAsset(editing.id, data);
-              else await useStore.getState().addOtherAsset(data);
-              await loadDashboard();
-              close();
-            }}
-            onCancel={close}
-          />
-        )}
+        renderForm={(editing, close) => {
+          // 已有资产：上面是持仓（按行情自动估值，改动即时保存），下面是名称/类别等基本信息
+          const autoValued = !!editing && holdings.some((h) => h.asset_id === editing.id);
+          const current = editing ? otherAssets.find((a) => a.id === editing.id) ?? editing : undefined;
+          return (
+            <div className="space-y-5">
+              {editing && (editing.category === 'stock' || editing.category === 'crypto' || autoValued) && (
+                <div className="pb-5 border-b border-[var(--c-border)]">
+                  <HoldingsPanel assetId={editing.id} />
+                </div>
+              )}
+              <OtherAssetForm
+                autoValued={autoValued}
+                initial={
+                  current
+                    ? { name: current.name, category: current.category, value: current.value, note: current.note }
+                    : undefined
+                }
+                onSubmit={async (data) => {
+                  // 自动估值的资产不提交 value，避免用表单里的旧值覆盖行情算出来的值
+                  const payload = autoValued ? { name: data.name, category: data.category, note: data.note } : data;
+                  if (editing) await useStore.getState().updateOtherAsset(editing.id, payload);
+                  else await useStore.getState().addOtherAsset(data);
+                  await loadDashboard();
+                  close();
+                }}
+                onCancel={close}
+              />
+            </div>
+          );
+        }}
         footer={
           otherAssets.length > 0 ? (
             <div className="flex items-center justify-between text-[12px]">
@@ -209,7 +228,11 @@ export function AssetsPage() {
               icon={CATEGORY_ICON[a.category]}
               tone="accent"
               title={a.name}
-              subtitle={`${CATEGORY_LABEL[a.category]}${a.note ? ' · ' + a.note : ''}`}
+              subtitle={(() => {
+                const n = holdings.filter((h) => h.asset_id === a.id).length;
+                const auto = n > 0 ? ` · ${n} 个持仓 · 自动估值` : (a.category === 'stock' || a.category === 'crypto') ? ' · 编辑可添加持仓自动估值' : '';
+                return `${CATEGORY_LABEL[a.category]}${auto}${a.note ? ' · ' + a.note : ''}`;
+              })()}
               money={<Money amount={a.value} size="md" sign="neutral" />}
               onEdit={() => openEdit(a)}
               onDelete={() =>

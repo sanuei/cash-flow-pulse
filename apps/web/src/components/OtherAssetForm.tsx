@@ -20,8 +20,11 @@ export function OtherAssetForm({
   initial,
   onSubmit,
   onCancel,
+  autoValued = false,
 }: {
   initial?: FormData;
+  /** 有持仓时价值按行情自动计算，不在这里手填 */
+  autoValued?: boolean;
   onSubmit: (data: FormData) => Promise<void>;
   onCancel?: () => void;
 }) {
@@ -57,7 +60,14 @@ export function OtherAssetForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <HeroAmount label="当前价值" value={value} onChange={setValue} tone="accent" />
+      {autoValued ? (
+        <div className="text-center">
+          <div className="text-[12px] font-medium text-notion-text-muted mb-1">当前价值（按持仓自动计算）</div>
+          <div className="font-display font-semibold text-[32px] text-[var(--c-accent-text)]">¥{Math.round(value).toLocaleString('en-US')}</div>
+        </div>
+      ) : (
+        <HeroAmount label="当前价值" value={value} onChange={setValue} tone="accent" />
+      )}
 
       <Field label="类别">
         <Segmented options={CATEGORY_OPTIONS} value={category} onChange={setCategory} />
@@ -73,7 +83,7 @@ export function OtherAssetForm({
       </Field>
 
       <Collapsible>
-        <Field label="备注（可选）" hint="价值需要手动更新，不会自动获取实时行情">
+        <Field label="备注（可选）" hint={autoValued ? '价值由上方持仓按行情自动计算' : '没有添加持仓时，价值需要手动更新'}>
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如 持仓/成本备注" />
         </Field>
       </Collapsible>

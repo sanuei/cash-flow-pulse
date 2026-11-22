@@ -21,7 +21,7 @@ import type {
   OtherAsset,
   DashboardCalc,
   UpcomingExpenses,
-  UpcomingIncomes, FireSettings } from '@cfp/shared';
+  UpcomingIncomes, FireSettings, Holding, Quote } from '@cfp/shared';
 // v0.3: 计算结果使用 V2 类型（包含 upcoming_expenses/incomes）
 type DashboardCalcV2 = DashboardCalc & {
   prompt: SnapshotPrompt | null;
@@ -58,6 +58,10 @@ interface AppState {
   subscriptions: Subscription[];
   oneOffs: OneOffExpense[];
   otherAssets: OtherAsset[];
+  // 持仓自动估值（资产页按需加载）
+  holdings: Holding[];
+  quotes: Quote[];
+  fx: Record<string, number>;
 
   // ===== 计算结果 =====
   calc: DashboardCalcV2 | null;
@@ -112,6 +116,8 @@ interface AppState {
   updateOtherAsset: (id: string, data: Partial<OtherAsset>) => Promise<void>;
   deleteOtherAsset: (id: string) => Promise<void>;
 
+  loadHoldings: () => Promise<void>;
+
   // ===== Auth Actions (v1.0+) =====
   checkSession: () => Promise<void>;
   logout: () => Promise<void>;
@@ -131,6 +137,9 @@ export const useStore = create<AppState>((set, get) => ({
   subscriptions: [],
   oneOffs: [],
   otherAssets: [],
+  holdings: [],
+  quotes: [],
+  fx: {},
   // ===== 计算 =====
   calc: null,
   prompt: null,
@@ -348,6 +357,11 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   // ===== Actions: Other assets (其他资产，不参与快照计算，无需 autoSnapshot) =====
+  async loadHoldings() {
+    const d = await apiGet<{ holdings: Holding[]; quotes: Quote[]; fx: Record<string, number> }>('/holdings');
+    set({ holdings: d.holdings, quotes: d.quotes, fx: d.fx });
+  },
+
   async addOtherAsset(data) {
     await apiPost('/other-assets', data);
   },
