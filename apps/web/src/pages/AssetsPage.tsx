@@ -9,6 +9,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { CashForm } from '../components/CashForm';
 import { OtherAssetForm } from '../components/OtherAssetForm';
 import { HoldingsPanel } from '../components/HoldingsPanel';
+import { AssetStructureCard } from '../components/AssetStructureCard';
 import { PageTitle } from '../components/PageTitle';
 import { formatYen } from '@cfp/shared';
 import type { CashSource, OtherAsset, AssetCategory } from '@cfp/shared';
@@ -67,6 +68,9 @@ export function AssetsPage() {
             : undefined
         }
       />
+      {/* 资产结构：按类型 / 地区 / 集中度（搜索时隐藏，避免和筛选结果混淆）*/}
+      {!query && <AssetStructureCard />}
+
       <SearchBar value={query} onChange={setQuery} placeholder="搜索资产..." />
 
       {/* 现金来源（v1.6 从收入页迁至独立「资产」页）*/}

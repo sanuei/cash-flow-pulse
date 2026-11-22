@@ -6,3 +6,4 @@ export * from './planning.js';
 export * from './simulator.js';
 export * from './quotes.js';
 export * from './allocation.js';
+export * from './structure.js';

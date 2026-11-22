@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS quotes (
   price       REAL,
   currency    TEXT,
   price_date  TEXT,
+  instrument_type TEXT,                      -- 品种：EQUITY / ETF / CRYPTOCURRENCY / FUND（用于资产结构分析）
   fetched_at  INTEGER NOT NULL,
   error       TEXT,
   PRIMARY KEY (kind, symbol)

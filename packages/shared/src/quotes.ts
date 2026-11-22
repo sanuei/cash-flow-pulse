@@ -37,11 +37,12 @@ export interface Quote {
   price: number | null;      // 最近一次成功的价格（失败时保留上次值）
   currency: string | null;   // 价格币种（ISO，如 USD / JPY / CNY）
   price_date: string | null; // 行情对应日期 YYYY-MM-DD（基金为净值日）
+  instrument_type: string | null; // 品种：EQUITY / ETF / CRYPTOCURRENCY / MUTUALFUND / FUND（日本投信、中国基金）
   fetched_at: number;        // 最近一次尝试抓取的时间（ms）
   error: string | null;      // 最近一次抓取失败原因；成功为 null
 }
 
-export type ParsedQuote = { price: number; currency: string; name: string | null; priceDate: string | null };
+export type ParsedQuote = { price: number; currency: string; name: string | null; priceDate: string | null; instrumentType: string | null };
 
 const toNum = (s: unknown): number => {
   const n = typeof s === 'number' ? s : Number(String(s ?? '').replace(/,/g, ''));
@@ -73,6 +74,7 @@ export function parseYahooChart(json: any): ParsedQuote {
     currency: currency.toUpperCase(),
     name: meta.longName || meta.shortName || null,
     priceDate: isoDateFromUnix(meta.regularMarketTime, typeof meta.gmtoffset === 'number' ? meta.gmtoffset : 0),
+    instrumentType: typeof meta.instrumentType === 'string' ? meta.instrumentType : null,
   };
 }
 
@@ -95,6 +97,7 @@ export function parseYahooJpFundPage(html: string, code: string, today = new Dat
     currency: 'JPY',
     name: m[2]!.replace(/&amp;/g, '&') || null,
     priceDate: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    instrumentType: 'FUND',
   };
 }
 
@@ -102,7 +105,7 @@ export function parseYahooJpFundPage(html: string, code: string, today = new Dat
 export function parseEastmoneyNav(json: any): ParsedQuote {
   const row = json?.Data?.LSJZList?.[0];
   if (!row) throw new Error('找不到该基金代码');
-  return { price: toNum(row.DWJZ), currency: 'CNY', name: null, priceDate: typeof row.FSRQ === 'string' ? row.FSRQ : null };
+  return { price: toNum(row.DWJZ), currency: 'CNY', name: null, priceDate: typeof row.FSRQ === 'string' ? row.FSRQ : null, instrumentType: 'FUND' };
 }
 
 /** 币种 → Yahoo 汇率代码（日元不需要） */

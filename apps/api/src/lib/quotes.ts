@@ -113,19 +113,23 @@ export async function upsertQuote(db: D1Database, kind: HoldingKind | 'fx', symb
   let row: Quote;
   try {
     const q = await fetchQuote(kind, symbol);
-    row = { kind, symbol, name: q.name ?? prev?.name ?? null, price: q.price, currency: q.currency, price_date: q.priceDate, fetched_at: ts, error: null };
+    row = {
+      kind, symbol, name: q.name ?? prev?.name ?? null, price: q.price, currency: q.currency, price_date: q.priceDate,
+      instrument_type: q.instrumentType ?? prev?.instrument_type ?? null, fetched_at: ts, error: null,
+    };
   } catch (e: any) {
     row = {
       kind, symbol, name: prev?.name ?? null, price: prev?.price ?? null, currency: prev?.currency ?? null,
-      price_date: prev?.price_date ?? null, fetched_at: ts, error: String(e?.message || e).slice(0, 200),
+      price_date: prev?.price_date ?? null, instrument_type: prev?.instrument_type ?? null,
+      fetched_at: ts, error: String(e?.message || e).slice(0, 200),
     };
   }
   await db.prepare(
-    `INSERT INTO quotes (kind, symbol, name, price, currency, price_date, fetched_at, error)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO quotes (kind, symbol, name, price, currency, price_date, instrument_type, fetched_at, error)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(kind, symbol) DO UPDATE SET name=excluded.name, price=excluded.price, currency=excluded.currency,
-       price_date=excluded.price_date, fetched_at=excluded.fetched_at, error=excluded.error`,
-  ).bind(row.kind, row.symbol, row.name, row.price, row.currency, row.price_date, row.fetched_at, row.error).run();
+       price_date=excluded.price_date, instrument_type=excluded.instrument_type, fetched_at=excluded.fetched_at, error=excluded.error`,
+  ).bind(row.kind, row.symbol, row.name, row.price, row.currency, row.price_date, row.instrument_type, row.fetched_at, row.error).run();
   return row;
 }
 
