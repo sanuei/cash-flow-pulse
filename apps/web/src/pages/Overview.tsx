@@ -188,6 +188,9 @@ export function Overview() {
     // 桌面端: max-w-6xl + sm:py-8 留更多垂直空间,信息密度更高
     <div className="max-w-3xl sm:max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-5 stagger">
 
+      {/* 资产走势放最上面（总资产 = 现金 + 投资；仅本期视图）*/}
+      {isCurrentCycle && !isNewUser && <AssetTrendCard />}
+
       {/* Hero + 每期生活成本：移动端上下堆叠，桌面端左右并排 */}
       <div className={`grid gap-5 ${showCostBars ? 'lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : ''}`}>
       {/* Hero — 只讲一件事：现金能撑几个月。强调色只用在大数字和进度条上 */}
@@ -303,9 +306,6 @@ export function Overview() {
         </Card>
       )}
       </div>
-
-      {/* 资产走势（总资产 = 现金 + 投资；仅本期视图）*/}
-      {isCurrentCycle && !isNewUser && <AssetTrendCard />}
 
       {/* 闲置资金建议：超出 6 个月应急金的现金按目标配置比例分（仅本期）*/}
       {isCurrentCycle && !isNewUser && livingCost > 0 && (
