@@ -92,7 +92,7 @@ export function IdleCashAdviceCard({ cash, monthlyLivingCost }: { cash: number; 
           <div className="text-[11px] text-notion-text-muted">
             {investable ? `超出 ${DEFAULT_EMERGENCY_MONTHS} 个月应急金、可以拿去投资` : `距 ${DEFAULT_EMERGENCY_MONTHS} 个月应急金还差`}
           </div>
-          <div className={`font-display font-semibold text-[28px] leading-tight ${investable ? 'text-[var(--c-accent-text)]' : 'text-notion-text'}`}>
+          <div className={`font-numeric font-semibold text-[26px] leading-tight text-notion-text`}>
             {formatYen(Math.abs(advice.idle))}
           </div>
         </div>

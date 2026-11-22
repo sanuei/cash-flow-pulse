@@ -32,37 +32,37 @@ export function RunwayGauge({ months, monthlyCost, cash }: { months: number | nu
 
   return (
     <div>
-      <div className="relative h-2.5 rounded-[var(--radius-pill)] bg-[var(--c-bg-alt)]">
+      <div className="relative h-1.5 rounded-[var(--radius-pill)] bg-[var(--c-bg-alt)]">
         <div
-          className="absolute inset-y-0 left-0 rounded-[var(--radius-pill)] transition-[width] duration-[var(--dur-deliberate)] ease-[var(--ease-out-expo)]"
-          style={{ width: `${fill}%`, background: 'linear-gradient(90deg, var(--c-accent) 0%, var(--c-accent-hover) 100%)' }}
+          className="absolute inset-y-0 left-0 rounded-[var(--radius-pill)] bg-[var(--c-accent)] transition-[width] duration-[var(--dur-deliberate)] ease-[var(--ease-out-expo)]"
+          style={{ width: `${fill}%` }}
         />
         {LEVELS.map((l) => (
           <div
             key={l.at}
-            className="absolute -top-1 -bottom-1 w-[2px] rounded-full bg-[var(--c-text-secondary)] opacity-70"
-            style={{ left: `calc(${pct(l.at)}% - 1px)` }}
+            className="absolute -top-[3px] -bottom-[3px] w-px bg-[var(--c-text-muted)]"
+            style={{ left: `${pct(l.at)}%` }}
             aria-hidden="true"
           />
         ))}
       </div>
-      {/* 基准线标签：对齐到刻度位置 */}
-      <div className="relative h-4 mt-1.5 text-[10.5px] text-notion-text-muted">
+      {/* 刻度：只写数字，含义放在下方状态行 */}
+      <div className="relative h-4 mt-1.5 font-numeric text-[10.5px] text-notion-text-muted">
         <span className="absolute left-0">0</span>
         {LEVELS.map((l) => (
-          <span key={l.at} className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: `${pct(l.at)}%` }}>
-            {l.label}
-          </span>
+          <span key={l.at} className="absolute -translate-x-1/2" style={{ left: `${pct(l.at)}%` }}>{l.at}</span>
         ))}
-        <span className="absolute right-0">{max}</span>
+        <span className="absolute right-0">{max} 个月</span>
       </div>
       {status && (
-        <div className="mt-2 flex items-center gap-1.5 text-[12px]">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px]">
           <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: status.color }} aria-hidden="true" />
-          <span className="font-semibold" style={{ color: status.color }}>{status.text}</span>
-          {next && gapToNext > 0 && (
-            <span className="text-notion-text-muted">· 距 {next.at} 个月还差 {formatYen(gapToNext)}</span>
-          )}
+          <span className="font-medium text-notion-text">{status.text}</span>
+          <span className="text-notion-text-muted">
+            {next && gapToNext > 0
+              ? <>· 距 {next.at} 个月还差 <span className="font-numeric">{formatYen(gapToNext)}</span></>
+              : <>· 3 个月达标，6 个月充足</>}
+          </span>
         </div>
       )}
     </div>
@@ -77,47 +77,50 @@ export function LivingCostBars({ cycles, highlight }: { cycles: CycleStat[]; hig
   const focusId = highlight && cycles.some((c) => c.cycle_id === highlight) ? highlight : cycles[cycles.length - 1]!.cycle_id;
   const focus = cycles.find((c) => c.cycle_id === focusId)!;
   const diff = avg > 0 ? Math.round(((focus.consume - avg) / avg) * 100) : 0;
-  const H = 96; // 柱区高度 px
+  const H = 84; // 柱区高度 px
 
   return (
     <div>
-      <div className="flex items-baseline justify-between gap-3 mb-3">
-        <span className="text-[12px] font-semibold text-notion-text-secondary">每期生活成本</span>
-        <span className="text-[11px] text-notion-text-muted">
-          {focus.cycle_id} <span className="font-numeric text-notion-text">{formatYen(focus.consume)}</span>
-          {cycles.length > 1 && (
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[15px] font-semibold tracking-tight-section text-notion-text">每期生活成本</h2>
+        {cycles.length > 1 && (
+          <span className="text-[11.5px] text-notion-text-muted">均值 <span className="font-numeric">{formatYen(Math.round(avg))}</span></span>
+        )}
+      </div>
+      {/* 读数：当前期金额 + 相对均值 */}
+      <div className="mt-2 mb-4 flex items-baseline gap-2">
+        <span className="font-numeric text-[20px] font-semibold text-notion-text">{formatYen(focus.consume)}</span>
+        <span className="text-[11.5px] text-notion-text-muted">
+          {focus.cycle_id}
+          {cycles.length > 1 && diff !== 0 && (
             <span style={{ color: diff > 0 ? 'var(--c-warning)' : 'var(--c-success)' }}>
-              {' '}{diff > 0 ? '↑' : diff < 0 ? '↓' : ''}{Math.abs(diff)}% vs 均值
+              {' '}{diff > 0 ? '↑' : '↓'}{Math.abs(diff)}%
             </span>
           )}
         </span>
       </div>
 
       <div className="relative" style={{ height: H }}>
-        {/* 平均线 */}
+        {/* 平均线（数值写在标题行，不在图上标注，避免和柱子重叠） */}
         {cycles.length > 1 && (
           <div
-            className="absolute left-0 right-0 border-t border-dashed border-[var(--c-text-muted)] opacity-60"
+            className="absolute left-0 right-0 border-t border-dashed border-[var(--c-text-muted)] opacity-50 z-10 pointer-events-none"
             style={{ bottom: (avg / max) * H }}
             aria-hidden="true"
-          >
-            <span className="absolute right-0 -top-4 text-[10px] text-notion-text-muted font-numeric">
-              均 {formatYen(Math.round(avg))}
-            </span>
-          </div>
+          />
         )}
-        <div className="absolute inset-0 flex items-end gap-1.5 sm:gap-2" role="img"
+        <div className="absolute inset-0 flex items-end" role="img"
           aria-label={cycles.map((c) => `${c.cycle_id} ${formatYen(c.consume)}`).join('，')}>
           {cycles.map((c) => {
             const isFocus = c.cycle_id === focusId;
             return (
-              <div key={c.cycle_id} className="flex-1 h-full flex items-end group" title={`${c.cycle_id} 生活成本 ${formatYen(c.consume)}`}>
+              <div key={c.cycle_id} className="flex-1 h-full flex items-end justify-center" title={`${c.cycle_id} 生活成本 ${formatYen(c.consume)}`}>
                 <div
-                  className="w-full rounded-t-[4px] transition-[height,opacity] duration-[var(--dur-medium)] ease-[var(--ease-out-expo)] group-hover:opacity-100"
+                  className="w-full max-w-[26px] rounded-t-[3px] transition-[height] duration-[var(--dur-medium)] ease-[var(--ease-out-expo)]"
                   style={{
                     height: `${Math.max(2, (c.consume / max) * 100)}%`,
-                    background: isFocus ? 'var(--c-accent)' : 'var(--c-text-muted)',
-                    opacity: isFocus ? 1 : 0.35,
+                    background: isFocus ? 'var(--c-text)' : 'var(--c-text-muted)',
+                    opacity: isFocus ? 0.85 : 0.25,
                   }}
                 />
               </div>
@@ -125,11 +128,11 @@ export function LivingCostBars({ cycles, highlight }: { cycles: CycleStat[]; hig
           })}
         </div>
       </div>
-      <div className="flex gap-1.5 sm:gap-2 mt-1.5">
+      <div className="flex mt-2 border-t border-[var(--c-border)] pt-1.5">
         {cycles.map((c) => (
           <span
             key={c.cycle_id}
-            className={`flex-1 text-center text-[10.5px] font-numeric ${c.cycle_id === focusId ? 'text-[var(--c-accent-text)] font-semibold' : 'text-notion-text-muted'}`}
+            className={`flex-1 text-center text-[10.5px] font-numeric ${c.cycle_id === focusId ? 'text-notion-text font-semibold' : 'text-notion-text-muted'}`}
           >
             {Number(c.cycle_id.slice(5))}月
           </span>

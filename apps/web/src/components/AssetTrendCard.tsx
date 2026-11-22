@@ -88,7 +88,7 @@ export function AssetTrendCard() {
           <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 mb-3">
             <div>
               <div className="text-[11px] text-notion-text-muted">总资产 · {view.last!.date.slice(5).replace('-', '/')}</div>
-              <div className="font-display font-semibold text-[28px] leading-tight text-notion-text">{formatYen(Math.round(view.last!.total))}</div>
+              <div className="font-numeric font-semibold text-[26px] leading-tight text-notion-text">{formatYen(Math.round(view.last!.total))}</div>
             </div>
             {view.change !== null && (
               <div className="text-right text-[13px] font-numeric font-semibold" style={{ color: view.change >= 0 ? 'var(--c-success)' : 'var(--c-warning)' }}>

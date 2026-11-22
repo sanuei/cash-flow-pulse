@@ -155,6 +155,7 @@ export function Overview() {
   const livingCost = longTerm?.agg.avgConsume ?? 0;
   const runway = runwayMonths(activeCalc.net_available, livingCost);
   const livingPeriod = longTerm && longTerm.agg.n > 1 ? `近 ${longTerm.agg.n} 期平均` : '本期';
+  const showCostBars = !!longTerm && longTerm.cycles.length > 0 && livingCost > 0;
 
   // 周期进度（本期已过百分比）
   const cycleLen = activeCalc.current_cycle_day + activeCalc.days_to_payday;
@@ -187,44 +188,54 @@ export function Overview() {
     // 桌面端: max-w-6xl + sm:py-8 留更多垂直空间,信息密度更高
     <div className="max-w-3xl sm:max-w-6xl mx-auto px-4 sm:px-8 py-6 sm:py-8 space-y-5 stagger">
 
-      {/* Hero — 磨砂玻璃面板（深色字 + 单一强调色点缀，无大色块） */}
-      <section className="hero-glass px-5 pt-4 pb-5">
+      {/* Hero + 每期生活成本：移动端上下堆叠，桌面端左右并排 */}
+      <div className={`grid gap-5 ${showCostBars ? 'lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : ''}`}>
+      {/* Hero — 只讲一件事：现金能撑几个月。强调色只用在大数字和进度条上 */}
+      <section className="hero-glass px-5 pt-3.5 pb-5">
 
-        {/* 周期导航栏 */}
-        <div className="flex items-center justify-between mb-4">
+        {/* 周期导航：无底色箭头；发薪倒计时放在周期下方 */}
+        <div className="flex items-center justify-between -mx-1.5 mb-5">
           <button
             onClick={() => { setCycleOffset(o => o - 1); setExpensesExpanded(false); setIncomesExpanded(false); }}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--c-bg-alt)] hover:bg-[var(--c-bg-elev)] transition-colors text-notion-text-secondary"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-notion-text-muted hover:text-notion-text hover:bg-[var(--c-bg-alt)] transition-colors"
             aria-label="上一期"
           >
-            <Icon name="chevron-right" size={15} className="rotate-180" />
+            <Icon name="chevron-right" size={16} className="rotate-180" />
           </button>
 
-          <div className="flex items-center gap-2">
-            {cycleLoading
-              ? <Icon name="loading" size={14} className="animate-spin text-notion-text-muted" />
-              : <span className="font-numeric text-[14px] font-semibold text-notion-text">
-                  {displayCycleId || '加载中'}
-                </span>
-            }
-            {isPredicted && <span className="badge text-[10px] px-2 py-0.5">预测</span>}
-            {snapshotBased && <span className="badge-muted badge text-[10px] px-2 py-0.5">快照</span>}
-            {cycleOffset !== 0 && (
-              <button
-                onClick={() => { setCycleOffset(0); setExpensesExpanded(false); setIncomesExpanded(false); }}
-                className="text-[11px] font-semibold text-[var(--c-accent-text)] hover:text-[var(--c-accent)] bg-[var(--c-accent-soft)] rounded-[var(--radius-pill)] px-2.5 py-0.5 transition-colors"
-              >
-                回本期
-              </button>
-            )}
+          <div className="flex flex-col items-center leading-tight">
+            <div className="flex items-center gap-2">
+              {cycleLoading
+                ? <Icon name="loading" size={14} className="animate-spin text-notion-text-muted" />
+                : <span className="text-[14px] font-semibold text-notion-text">
+                    {displayCycleId || '加载中'}
+                  </span>
+              }
+              {isPredicted && <span className="badge-muted badge text-[10px] px-2 py-0.5">预测</span>}
+              {snapshotBased && <span className="badge-muted badge text-[10px] px-2 py-0.5">快照</span>}
+              {cycleOffset !== 0 && (
+                <button
+                  onClick={() => { setCycleOffset(0); setExpensesExpanded(false); setIncomesExpanded(false); }}
+                  className="text-[11px] font-medium text-notion-text-secondary hover:text-notion-text bg-[var(--c-bg-alt)] rounded-[var(--radius-pill)] px-2.5 py-0.5 transition-colors"
+                >
+                  回本期
+                </button>
+              )}
+            </div>
+            <span className="font-numeric text-[11px] text-notion-text-muted mt-1">
+              {isCurrentCycle
+                ? <>距发薪 {activeCalc.days_to_payday} 天 · {activeCalc.next_payday_date.slice(5).replace('-', '/')}</>
+                : <>{cycleMeta?.cycle_start} — {cycleMeta?.cycle_end}</>
+              }
+            </span>
           </div>
 
           <button
             onClick={() => { setCycleOffset(o => o + 1); setExpensesExpanded(false); setIncomesExpanded(false); }}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--c-bg-alt)] hover:bg-[var(--c-bg-elev)] transition-colors text-notion-text-secondary"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-notion-text-muted hover:text-notion-text hover:bg-[var(--c-bg-alt)] transition-colors"
             aria-label="下一期"
           >
-            <Icon name="chevron-right" size={15} />
+            <Icon name="chevron-right" size={16} />
           </button>
         </div>
 
@@ -235,80 +246,42 @@ export function Overview() {
           </div>
         )}
 
-        {/* 主体：桌面端左右两栏（左：可支撑月数 + 基准线刻度；右：每期生活成本柱图），移动端上下堆叠 */}
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10 lg:items-end">
-          <div>
-            <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-caps font-semibold text-[var(--c-accent-text)] bg-[var(--c-accent-soft)] rounded-[var(--radius-pill)] px-3 py-1 mb-3">
-              {isPredicted ? '预计现金可支撑' : '现金可支撑'}
-            </div>
-            <div className="mb-1">
-              <span
-                className="font-numeric font-display font-semibold text-[44px] sm:text-[56px] leading-[1.05] tracking-tight-display"
-                style={{
-                  backgroundImage: 'linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent-hover) 100%)',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  color: 'transparent',
-                }}
-              >
-                {runway === null ? '—' : runway.toFixed(1)}
-              </span>
-              <span className="text-[16px] sm:text-[18px] text-notion-text-secondary font-normal ml-1.5">
-                个月
-              </span>
-            </div>
-            <div className="text-[13px] text-notion-text-secondary mb-4">
-              {livingCost > 0
-                ? <>月均生活成本 <b className="text-notion-text font-semibold">{formatYen(livingCost)}</b>（{livingPeriod}，不含投资）</>
-                : <>录入信用卡、账单、订阅等消费后显示</>
-              }
-            </div>
-            {livingCost > 0 && (
-              <RunwayGauge months={runway} monthlyCost={livingCost} cash={activeCalc.net_available} />
-            )}
-          </div>
-
-          {longTerm && longTerm.cycles.length > 0 && livingCost > 0 && (
-            <div className="lg:pl-10 lg:border-l lg:border-[var(--c-border)]">
-              <LivingCostBars cycles={longTerm.cycles} highlight={displayCycleId} />
-            </div>
-          )}
+        {/* 主数字：现金可支撑月数（全页唯一的衬线大字） */}
+        <div className="text-[12.5px] font-medium text-notion-text-secondary">
+          {isPredicted ? '预计现金可支撑' : '现金可支撑'}
+        </div>
+        <div className="mt-1 flex items-baseline gap-1.5">
+          <span
+            className="font-semibold text-[56px] sm:text-[64px] leading-none tracking-tight-display text-[var(--c-accent)]"
+            style={{ fontFamily: 'var(--font-display)', fontVariantNumeric: 'lining-nums tabular-nums' }}
+          >
+            {runway === null ? '—' : runway.toFixed(1)}
+          </span>
+          <span className="text-[16px] text-notion-text-secondary">个月</span>
         </div>
 
-        <div className="text-[12px] text-notion-text-muted mt-4">
-          {isCurrentCycle
-            ? <>距发薪日（{activeCalc.next_payday_date}）还有 {activeCalc.days_to_payday} 天</>
-            : <>{cycleMeta?.cycle_start} — {cycleMeta?.cycle_end}</>
-          }
-        </div>
+        {livingCost > 0
+          ? <div className="mt-5"><RunwayGauge months={runway} monthlyCost={livingCost} cash={activeCalc.net_available} /></div>
+          : <p className="mt-2 text-[13px] text-notion-text-secondary">录入信用卡、账单、订阅等消费后显示</p>
+        }
 
-        {/* 净可用现金 */}
-        <div className="mt-4 pt-3 border-t border-[var(--c-border)] flex items-baseline justify-between">
-          <span className="flex items-baseline gap-2">
-            <span className="text-[12px] text-notion-text-secondary">{isPredicted ? '预计结余' : '净可用现金'}</span>
+        {/* 两个支撑数字：净可用现金 ÷ 月均生活成本 */}
+        <div className="mt-5 pt-4 border-t border-[var(--c-border)] grid grid-cols-2">
+          <div className="pr-4">
+            <div className="text-[11.5px] text-notion-text-muted">{isPredicted ? '预计结余' : '净可用现金'}</div>
+            <div className="font-numeric text-[19px] font-semibold text-notion-text mt-0.5">{formatYen(activeCalc.net_available)}</div>
             {!isPredicted && (
-              <Link
-                to="/assets"
-                className="group inline-flex items-center gap-0.5 text-[11px] font-medium text-[var(--c-accent-text)] hover:text-[var(--c-accent)] transition-colors"
-              >
-                <span>管理现金</span>
-                <Icon name="chevron-right" size={12} className="transition-transform group-hover:translate-x-0.5" />
+              <Link to="/assets" className="group inline-flex items-center gap-0.5 mt-0.5 text-[11.5px] text-notion-text-muted hover:text-notion-text transition-colors">
+                管理现金
+                <Icon name="chevron-right" size={11} className="transition-transform group-hover:translate-x-0.5" />
               </Link>
             )}
-          </span>
-          <span
-            className="font-display font-semibold text-[20px] tabular-nums"
-            style={{
-              backgroundImage: 'linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent-hover) 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              color: 'transparent',
-            }}
-          >
-            {formatYen(activeCalc.net_available)}
-          </span>
+          </div>
+          <div className="pl-4 border-l border-[var(--c-border)]">
+            <div className="text-[11.5px] text-notion-text-muted">月均生活成本</div>
+            <div className="font-numeric text-[19px] font-semibold text-notion-text mt-0.5">{livingCost > 0 ? formatYen(livingCost) : '—'}</div>
+            <div className="mt-0.5 text-[11.5px] text-notion-text-muted">{livingPeriod} · 不含投资</div>
+          </div>
         </div>
         {/* 已到账但还没记进余额的收入：已计入上面的数字，提示去更新余额（更新后自动不再重复计入） */}
         {isCurrentCycle && (activeCalc as DashboardCalcV2).pending_income! > 0 && (
@@ -318,10 +291,18 @@ export function Overview() {
               <span className="font-numeric text-notion-success"> +{formatYen((activeCalc as DashboardCalcV2).pending_income!)}</span>
               {(activeCalc as DashboardCalcV2).balance_as_of && <>（余额更新于 {(activeCalc as DashboardCalcV2).balance_as_of!.slice(5)}）</>}
             </span>
-            <Link to="/assets" className="font-medium text-[var(--c-accent-text)] hover:text-[var(--c-accent)]">更新余额 ›</Link>
+            <Link to="/assets" className="font-medium text-notion-text-secondary hover:text-notion-text underline underline-offset-2 decoration-[var(--c-border)]">更新余额 ›</Link>
           </div>
         )}
       </section>
+
+      {/* 每期生活成本：从 Hero 拆出来单独一张卡 */}
+      {showCostBars && longTerm && (
+        <Card className="flex flex-col justify-center">
+          <LivingCostBars cycles={longTerm.cycles} highlight={displayCycleId} />
+        </Card>
+      )}
+      </div>
 
       {/* 资产走势（总资产 = 现金 + 投资；仅本期视图）*/}
       {isCurrentCycle && !isNewUser && <AssetTrendCard />}
@@ -739,7 +720,7 @@ function PaceCard({
         /* ── 逐日可用现金曲线（本期：过去实线+未来虚线；未来期：整期预测虚线）── */
         <div>
           <div className="flex items-baseline gap-1.5 mb-2">
-            <span className="font-display font-semibold text-[22px] font-numeric text-notion-text">
+            <span className="font-numeric font-semibold text-[22px] text-notion-text">
               {formatYen(currentNetAvailable)}
             </span>
             <span className="text-[12px] text-notion-text-muted">{predicted ? '预计期末结余' : '今日可用现金'}</span>

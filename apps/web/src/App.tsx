@@ -268,8 +268,8 @@ export default App;
 
 /**
  * 移动端中间的「资产」入口：凸出导航栏的圆形主按钮（与其他 Tab 区分）
- *   - 常态：珊瑚橙实心圆 + 白色图标，外圈一道与导航栏同色的描边，看起来是「嵌」在栏上
- *   - 选中：加发光阴影、圆略放大，文字变强调色
+ *   - 常态：浅色圆 + 强调色图标，外圈一道与导航栏同色的描边，看起来是「嵌」在栏上
+ *   - 选中：填充强调色 + 发光阴影、圆略放大，文字变强调色
  */
 function NavTabCenter({ to, icon, label }: { to: string; icon: IconName; label: string }) {
   return (
@@ -282,10 +282,11 @@ function NavTabCenter({ to, icon, label }: { to: string; icon: IconName; label: 
             className={`
               absolute left-1/2 -translate-x-1/2 -top-[28px]
               flex items-center justify-center w-[50px] h-[50px] rounded-full
-              bg-[var(--c-accent)] text-[var(--c-text-on-accent)]
               ring-[5px] ring-[var(--c-bg)]
               transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
-              ${isActive ? 'shadow-[var(--glow-accent)] scale-105' : 'shadow-[var(--shadow-md)]'}
+              ${isActive
+                ? 'bg-[var(--c-accent)] text-[var(--c-text-on-accent)] shadow-[var(--glow-accent)] scale-105'
+                : 'bg-[var(--c-bg-elev)] text-[var(--c-accent-text)] border border-[var(--c-border)] shadow-[var(--shadow-md)]'}
             `}
           >
             <Icon name={icon} size={24} strokeWidth={isActive ? 2.25 : 2} />

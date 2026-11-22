@@ -220,9 +220,9 @@ body {
   font-synthesis-weight: none;
 }
 
-/* 衬线数字 — 用于金额、统计。Fraunces 的 tabular-nums 数字更"印刷感" */
+/* 数字 — 金额、统计、坐标轴统一用正文字体的等宽数字（衬线只留给首页主数字等少数大标题）*/
 .font-numeric {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-feature-settings: 'tnum', 'lnum', 'cv11';
   font-variant-numeric: tabular-nums lining-nums;
   font-optical-sizing: auto;

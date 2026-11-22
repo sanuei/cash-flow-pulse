@@ -12,14 +12,14 @@ export function AiDiagnosis() {
       className="
         fixed z-40 right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))]
         sm:right-6 sm:bottom-6
-        inline-flex items-center gap-2 pl-3.5 pr-4 py-3 rounded-[var(--radius-pill)]
-        bg-[var(--c-accent)] text-[#0a0a0a] shadow-[var(--shadow-lg)]
-        hover:brightness-105 active:scale-95
-        transition-[transform,filter] duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+        inline-flex items-center gap-1.5 h-10 pl-3 pr-3.5 rounded-[var(--radius-pill)]
+        bg-[var(--c-bg-elev)] text-notion-text border border-[var(--c-border)] shadow-[var(--shadow-md)]
+        hover:border-[var(--c-border-strong,var(--c-border))] active:scale-95
+        transition-[transform,border-color] duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
       "
     >
-      <Icon name="gauge" size={17} strokeWidth={1.9} />
-      <span className="text-[13px] font-semibold">AI 诊断</span>
+      <Icon name="sparkle" size={15} strokeWidth={1.9} className="text-[var(--c-accent)]" />
+      <span className="text-[12.5px] font-semibold">AI 诊断</span>
     </Link>,
     document.body,
   );
