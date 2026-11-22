@@ -263,7 +263,7 @@ export function Settings() {
           })}
         </div>
         <p className="mt-3 text-xs text-[var(--c-text-muted)]">
-          主题立即生效并持久保存。深色主题不跟随系统模式；霓虹绿为强制暗黑。
+          主题立即生效并持久保存。「原生」跟随系统浅色/深色；其余主题固定，霓虹绿、炭墨为深色。
         </p>
       </Card>
 

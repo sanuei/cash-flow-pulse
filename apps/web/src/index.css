@@ -440,11 +440,15 @@ body {
     filter: invert(0);
     transition: filter var(--dur-base) var(--ease-out-expo);
   }
-  /* dark/violet/neon 主题(深色背景)反色 */
+  /* dark/neon 主题(深色背景)反色；原生主题跟随系统深色时也反色 */
   html[data-theme="dark"] .logo-themed,
-  html[data-theme="violet"] .logo-themed,
   html[data-theme="neon"] .logo-themed {
     filter: invert(1) brightness(1.4);
+  }
+  @media (prefers-color-scheme: dark) {
+    html[data-theme="system"] .logo-themed {
+      filter: invert(1) brightness(1.4);
+    }
   }
 
   /* Stagger — 用 CSS 自定义属性控制延迟（避免每行一个 inline style） */
@@ -540,7 +544,8 @@ input[type='number'] {
 /* ============================================================================
    配色哲学（v1.3 参考编辑/复古品牌设计重调）：
    暖奶油 / 灰米底色 + 克制有质感的强调色（降饱和，去霓虹）。
-   亮色三主题共享暖米底，仅换强调色相；深色两主题：炭墨 + 午夜蓝（深蓝底+奶油金）。
+   亮色三主题共享暖米底，仅换强调色相；深色：炭墨、霓虹绿；
+   「原生」为中性灰 + 系统蓝，跟随系统浅色/深色（iOS 风格）。
    ============================================================================ */
 
 /* ── 奶油橙（默认）— 暖灰米底 + 番茄珊瑚 ─────────────────────────────────── */
@@ -683,41 +688,6 @@ html[data-theme="dark"] .hero-gradient {
     linear-gradient(140deg, oklch(50% 0.13 45) 0%, oklch(42% 0.13 38) 55%, oklch(35% 0.11 32) 100%);
 }
 
-/* ── 午夜蓝 — 深蓝底 + 奶油金（Cambí 风，强制深色）──────────────────────── */
-html[data-theme="violet"] {
-  color-scheme: dark;
-  --c-bg:             oklch(26% 0.055 264);
-  --c-bg-alt:         oklch(30% 0.055 264);
-  --c-bg-elev:        oklch(33% 0.05 264);
-  --c-bg-dark:        oklch(20% 0.045 264);
-  --c-text:           oklch(93% 0.014 85);
-  --c-text-secondary: oklch(75% 0.02 250);
-  --c-text-muted:     oklch(57% 0.025 256);
-  --c-text-on-accent: oklch(25% 0.05 264);
-  --c-border:         oklch(37% 0.04 264);
-  --c-border-strong:  oklch(45% 0.045 264);
-  --c-accent:         oklch(83% 0.085 80);
-  --c-accent-hover:   oklch(88% 0.08 82);
-  --c-accent-soft:    oklch(34% 0.05 250);
-  --c-accent-text:    oklch(85% 0.085 82);
-  --c-success:        oklch(74% 0.12 150);
-  --c-success-soft:   oklch(32% 0.05 160);
-  --c-warning:        oklch(74% 0.13 45);
-  --c-warning-soft:   oklch(33% 0.05 40);
-  --c-invest:         oklch(68% 0.13 248);
-  --shadow-xs: 0 1px 2px oklch(10% 0.03 264 / 0.35);
-  --shadow-sm: 0 2px 6px oklch(10% 0.03 264 / 0.4), 0 1px 2px oklch(10% 0.03 264 / 0.3);
-  --shadow-md: 0 4px 12px oklch(10% 0.03 264 / 0.45), 0 2px 4px oklch(10% 0.03 264 / 0.35);
-  --shadow-lg: 0 12px 32px oklch(10% 0.03 264 / 0.55), 0 4px 8px oklch(10% 0.03 264 / 0.4);
-  --shadow-xl: 0 24px 60px oklch(10% 0.03 264 / 0.65), 0 8px 16px oklch(10% 0.03 264 / 0.45);
-  --glow-accent: 0 8px 20px -6px oklch(83% 0.085 80 / 0.35);
-}
-html[data-theme="violet"] .hero-gradient {
-  background:
-    radial-gradient(120% 130% at 82% 6%, oklch(50% 0.1 270) 0%, transparent 54%),
-    linear-gradient(140deg, oklch(42% 0.1 264) 0%, oklch(35% 0.09 266) 52%, oklch(29% 0.07 268) 100%);
-}
-
 /* ============================================================================
    10. 磨砂玻璃系统（v1.4）
    - 背景色晕 --c-wash-*：仅取当前主题强调色一种色相（color-mix 自动适配 5 主题）
@@ -738,8 +708,7 @@ html[data-theme="green"] {
 }
 
 /* 深色两主题：高不透明度玻璃（减少橙色晕穿透），色晕极克制 */
-html[data-theme="dark"],
-html[data-theme="violet"] {
+html[data-theme="dark"] {
   --c-glass-bg:     color-mix(in srgb, var(--c-bg-elev) 88%, transparent);
   --c-glass-strong: color-mix(in srgb, var(--c-bg-elev) 94%, transparent);
   --c-glass-border: rgba(255, 255, 255, 0.08);
@@ -820,7 +789,6 @@ html[data-theme="green"] {
   }
 }
 html[data-theme="dark"],
-html[data-theme="violet"],
 html[data-theme="neon"] {
   --c-cat-blue:    #3987e5;
   --c-cat-orange:  #d95926;
@@ -837,4 +805,99 @@ html[data-theme="neon"] {
   height: 20px;
   accent-color: var(--c-accent);
   cursor: pointer;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   12. 原生 — 中性灰底 + 白卡片 + 系统蓝，跟随系统浅色/深色（iOS 原生风格）
+   不用磨砂色晕、不用衬线：系统字体（SF Pro / 苹方），阴影极轻，靠留白和分隔线分层。
+   ═══════════════════════════════════════════════════════════════════════════ */
+html[data-theme="system"] {
+  color-scheme: light;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif;
+  --font-body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif;
+  --c-bg:             #f2f2f7;
+  --c-bg-alt:         #e9e9ee;
+  --c-bg-elev:        #ffffff;
+  --c-bg-dark:        #1c1c1e;
+  --c-text:           #000000;
+  --c-text-secondary: #6e6e73;
+  --c-text-muted:     #8e8e93;
+  --c-text-on-accent: #ffffff;
+  --c-border:         #e3e3e8;
+  --c-border-strong:  #c7c7cc;
+  --c-accent:         #007aff;
+  --c-accent-hover:   #0062cc;
+  --c-accent-soft:    #e5f0ff;
+  --c-accent-text:    #0066d6;
+  --c-success:        #248a3d;
+  --c-success-soft:   #e6f6ea;
+  --c-warning:        #e0342b;
+  --c-warning-soft:   #fdecec;
+  --c-invest:         #5856d6;
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 16px 44px rgba(0, 0, 0, 0.14);
+  --glow-accent: 0 6px 16px -4px rgba(0, 122, 255, 0.35);
+  --c-glass-bg:     var(--c-bg-elev);
+  --c-glass-strong: var(--c-bg-elev);
+  --c-glass-border: transparent;
+  --c-wash-1: transparent;
+  --c-wash-2: transparent;
+  --c-cat-blue:    #2a78d6;
+  --c-cat-orange:  #eb6834;
+  --c-cat-aqua:    #1baf7a;
+  --c-cat-yellow:  #eda100;
+  --c-cat-magenta: #e87ba4;
+  --c-cat-violet:  #4a3aa7;
+  --c-cat-other:   #aeaeb2;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-theme="system"] {
+    color-scheme: dark;
+    --c-bg:             #000000;
+    --c-bg-alt:         #2c2c2e;
+    --c-bg-elev:        #1c1c1e;
+    --c-bg-dark:        #000000;
+    --c-text:           #ffffff;
+    --c-text-secondary: #aeaeb2;
+    --c-text-muted:     #7c7c80;
+    --c-text-on-accent: #ffffff;
+    --c-border:         #38383a;
+    --c-border-strong:  #48484a;
+    --c-accent:         #0a84ff;
+    --c-accent-hover:   #409cff;
+    --c-accent-soft:    #0f2a47;
+    --c-accent-text:    #409cff;
+    --c-success:        #30d158;
+    --c-success-soft:   #0f3319;
+    --c-warning:        #ff453a;
+    --c-warning-soft:   #3a1512;
+    --c-invest:         #7d7aff;
+    --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.55);
+    --shadow-xl: 0 20px 52px rgba(0, 0, 0, 0.65);
+    --glow-accent: 0 6px 16px -4px rgba(10, 132, 255, 0.45);
+    --c-glass-border: rgba(255, 255, 255, 0.04);
+    --c-cat-blue:    #3987e5;
+    --c-cat-orange:  #d95926;
+    --c-cat-aqua:    #199e70;
+    --c-cat-yellow:  #c98500;
+    --c-cat-magenta: #d55181;
+    --c-cat-violet:  #9085e9;
+    --c-cat-other:   #636366;
+  }
+}
+/* Tailwind 的 font-display 工具类写死了 Fraunces：原生主题改用系统字体 */
+html[data-theme="system"] .font-display { font-family: var(--font-display); }
+html[data-theme="system"] .hero-gradient {
+  background: linear-gradient(140deg, #0a84ff 0%, #007aff 55%, #0062cc 100%);
+}
+/* 顶栏：iOS 导航栏式半透明（oklch 混透明会偏出一点暖色，这里直接给中性值） */
+html[data-theme="system"] .glass { background: rgba(249, 249, 249, 0.82); }
+@media (prefers-color-scheme: dark) {
+  html[data-theme="system"] .glass { background: rgba(22, 22, 24, 0.82); }
 }
