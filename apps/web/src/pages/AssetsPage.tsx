@@ -48,27 +48,14 @@ export function AssetsPage() {
     .filter((a) => !pendingDeletes.includes(a.id))
     .filter((a) => match(a.name));
 
-  const netAvailable = cashSourcesAll
-    .filter((cs) => !pendingDeletes.includes(cs.id))
-    .reduce((s, c) => s + c.balance - c.locked_amount, 0);
-  const otherAssetsTotal = otherAssetsAll
-    .filter((a) => !pendingDeletes.includes(a.id))
-    .reduce((s, a) => s + a.value, 0);
-  const netWorth = netAvailable + otherAssetsTotal;
-
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
       <PageTitle
         icon="cash"
         title="资产"
         subtitle="现金账户 · 股票基金 · 加密货币 · 房产等"
-        total={
-          cashSourcesAll.length > 0 || otherAssetsAll.length > 0
-            ? { label: '总资产', value: formatYen(netWorth) }
-            : undefined
-        }
       />
-      {/* 资产结构：按类型 / 地区 / 集中度（搜索时隐藏，避免和筛选结果混淆）*/}
+      {/* 资产结构：按类型 / 地区 / 集中度（总资产在卡片里，页头不再重复；搜索时隐藏，避免和筛选结果混淆）*/}
       {!query && <AssetStructureCard />}
 
       <SearchBar value={query} onChange={setQuery} placeholder="搜索资产..." />

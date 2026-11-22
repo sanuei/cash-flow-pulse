@@ -176,7 +176,7 @@ function App() {
         </Routes>
       </main>
 
-      {/* 底部 Tab（移动端：4 个主要页面） — 实色背景 + 顶边阴影
+      {/* 底部 Tab（移动端：4 个主要页面 + 中间凸起的「资产」） — 实色背景 + 顶边阴影
           正常流(flex-shrink-0),作为列最后一项贴容器真实底部,不用 fixed。
           paddingBottom = safe-area:home 指示条留白;height 含 safe-area 故整条贴到屏幕边 */}
       <nav
@@ -188,6 +188,7 @@ function App() {
       >
         <NavTabMobile to="/" icon="home" label="总览" />
         <NavTabMobile to="/incomes" icon="income" label="收入" />
+        <NavTabCenter to="/assets" icon="wallet" label="资产" />
         <NavTabMobile to="/investments" icon="investment" label="投资" />
         <NavTabMobile to="/expenses" icon="bill" label="消费" />
       </nav>
@@ -264,3 +265,40 @@ function NavTabMobile({ to, icon, label }: { to: string; icon: IconName; label: 
 }
 
 export default App;
+
+/**
+ * 移动端中间的「资产」入口：凸出导航栏的圆形主按钮（与其他 Tab 区分）
+ *   - 常态：珊瑚橙实心圆 + 白色图标，外圈一道与导航栏同色的描边，看起来是「嵌」在栏上
+ *   - 选中：加发光阴影、圆略放大，文字变强调色
+ */
+function NavTabCenter({ to, icon, label }: { to: string; icon: IconName; label: string }) {
+  return (
+    <NavLink to={to} end aria-label={label} className="h-full">
+      {({ isActive }) => (
+        <span className="relative flex flex-col items-center justify-center gap-1 h-full w-16 active:scale-95 transition-transform duration-[var(--dur-base)]">
+          {/* 占位：高度与其他 Tab 的图标药丸一致，保证文字基线对齐 */}
+          <span aria-hidden="true" className="h-[29px]" />
+          <span
+            className={`
+              absolute left-1/2 -translate-x-1/2 -top-[28px]
+              flex items-center justify-center w-[50px] h-[50px] rounded-full
+              bg-[var(--c-accent)] text-[var(--c-text-on-accent)]
+              ring-[5px] ring-[var(--c-bg)]
+              transition-all duration-[var(--dur-base)] ease-[var(--ease-out-expo)]
+              ${isActive ? 'shadow-[var(--glow-accent)] scale-105' : 'shadow-[var(--shadow-md)]'}
+            `}
+          >
+            <Icon name={icon} size={24} strokeWidth={isActive ? 2.25 : 2} />
+          </span>
+          <span
+            className={`text-[11px] font-medium ${
+              isActive ? 'text-[var(--c-accent-text)]' : 'text-[var(--c-text-muted)]'
+            }`}
+          >
+            {label}
+          </span>
+        </span>
+      )}
+    </NavLink>
+  );
+}
