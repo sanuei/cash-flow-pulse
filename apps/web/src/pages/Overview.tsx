@@ -9,6 +9,8 @@ import { DonutBreakdown, type DonutItem } from '../components/DonutBreakdown';
 import { AiDiagnosis } from '../components/AiDiagnosis';
 import { CashFlowChart } from '../components/CashFlowChart';
 import { FireCard } from '../components/FireCard';
+import { AssetTrendCard } from '../components/AssetTrendCard';
+import { IdleCashAdviceCard } from '../components/IdleCashAdviceCard';
 import { RunwayGauge, LivingCostBars } from '../components/RunwayCharts';
 import { useLongTermStats } from '../lib/longTerm';
 import { apiGet } from '../lib/api';
@@ -320,6 +322,14 @@ export function Overview() {
           </div>
         )}
       </section>
+
+      {/* 资产走势（总资产 = 现金 + 投资；仅本期视图）*/}
+      {isCurrentCycle && !isNewUser && <AssetTrendCard />}
+
+      {/* 闲置资金建议：超出 6 个月应急金的现金按目标配置比例分（仅本期）*/}
+      {isCurrentCycle && !isNewUser && livingCost > 0 && (
+        <IdleCashAdviceCard cash={activeCalc.net_available} monthlyLivingCost={livingCost} />
+      )}
 
       {/* 财务自由（仅本期，有数据时）*/}
       {isCurrentCycle && !isNewUser && longTerm && (

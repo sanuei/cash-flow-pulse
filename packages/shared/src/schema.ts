@@ -110,6 +110,11 @@ export const UserConfigUpdateSchema = z.object({
   birth_year: z.number().int().min(1900).max(2100).nullable().optional(),
   simulator_settings: SimulatorSettingsSchema.nullable().optional(),
   simulator_plans: SimulatorPlansSchema.nullable().optional(),
+  allocation_targets: z.array(z.object({
+    key: z.string().min(1).max(40),
+    label: z.string().min(1).max(40),
+    pct: z.number().min(0).max(100),
+  })).max(12).nullable().optional(),
 });
 
 // === 快照 ===

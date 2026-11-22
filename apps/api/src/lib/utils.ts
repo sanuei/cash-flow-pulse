@@ -60,3 +60,18 @@ export function parseSimulatorPlans(raw: unknown): SimulatorPlans | null {
 export function parseBirthYear(raw: unknown): number | null {
   return typeof raw === 'number' && Number.isInteger(raw) && raw >= 1900 && raw <= 2100 ? raw : null;
 }
+
+/** user_config.allocation_targets（TEXT JSON）→ 数组；空/损坏 → null */
+export function parseAllocationTargets(raw: unknown): { key: string; label: string; pct: number }[] | null {
+  if (typeof raw !== 'string' || !raw) return null;
+  try {
+    const p = JSON.parse(raw);
+    if (!Array.isArray(p)) return null;
+    const out = p
+      .filter((t) => t && typeof t.key === 'string' && typeof t.label === 'string' && typeof t.pct === 'number')
+      .map((t) => ({ key: t.key, label: t.label, pct: t.pct }));
+    return out.length ? out : null;
+  } catch {
+    return null;
+  }
+}

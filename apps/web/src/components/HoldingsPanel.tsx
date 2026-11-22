@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatYen, holdingValueJpy, quoteKey } from '@cfp/shared';
+import { formatYen, holdingValueJpy, quoteKey, DEFAULT_ALLOCATION_TARGETS } from '@cfp/shared';
 import type { Holding, HoldingKind, Quote } from '@cfp/shared';
 import { useStore } from '../lib/store';
 import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api';
@@ -136,6 +136,11 @@ export function HoldingsPanel({ assetId }: { assetId: string }) {
 function HoldingRow({ h, q, value, onChanged, onError }: {
   h: Holding; q?: Quote; value: number | null; onChanged: () => Promise<void>; onError: (m: string | null) => void;
 }) {
+  const targets = useStore((s) => s.config?.allocation_targets) ?? DEFAULT_ALLOCATION_TARGETS;
+  const setBucket = async (bucket: string) => {
+    try { await apiPut(`/holdings/${h.id}`, { bucket: bucket || null }); await onChanged(); }
+    catch (e) { onError((e as Error).message); }
+  };
   const [editing, setEditing] = useState(false);
   const [qty, setQty] = useState(String(h.quantity));
   const [busy, setBusy] = useState(false);
@@ -167,6 +172,15 @@ function HoldingRow({ h, q, value, onChanged, onError }: {
           <div className="text-[11px] text-notion-text-muted truncate">
             {h.kind === 'manual' ? '手动金额' : <>{h.symbol} · {fmtQty(h.quantity)}{unit} · {priceText(h.kind, q)}</>}
           </div>
+          <select
+            className="mt-1 text-[11px] bg-transparent border border-[var(--c-border)] rounded-[var(--radius-sm)] px-1.5 py-0.5 text-notion-text-secondary max-w-full"
+            value={h.bucket ?? ''}
+            onChange={(e) => setBucket(e.target.value)}
+            aria-label="配置类别"
+          >
+            <option value="">配置类别：未分类</option>
+            {targets.map((t) => <option key={t.key} value={t.key}>配置类别：{t.label}</option>)}
+          </select>
           {q?.error && (
             <div className="text-[11px] text-notion-warning truncate" title={q.error}>行情更新失败（显示上次价格）：{q.error}</div>
           )}

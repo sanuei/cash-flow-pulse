@@ -21,7 +21,9 @@ import {
   buildSimBaseline, simInputFor, simulate,
 } from '@cfp/shared';
 import type { CycleStat, CycleAgg, SimInput, SimulatorSettings } from '@cfp/shared';
-import { generateId, parseFireSettings, parseSimulatorSettings, parseBirthYear } from '../lib/utils';
+import { computeIdleCashAdvice, holdingValueJpy, quoteKey, DEFAULT_ALLOCATION_TARGETS, DEFAULT_EMERGENCY_MONTHS } from '@cfp/shared';
+import { generateId, parseFireSettings, parseSimulatorSettings, parseBirthYear, parseAllocationTargets } from '../lib/utils';
+import { fxRates } from '../lib/quotes';
 import { FOUNDER_EMAIL } from '../lib/auth';
 import type { Env } from '../index';
 
@@ -131,6 +133,7 @@ aiRoutes.post('/diagnose', async (c) => {
   const summary = {
     ...buildSummary(calc, agg, cycles, snapshotRows.results || [], otherAssetRows.results || []),
     财务自由模拟: buildSimulationSummary(calc, agg, otherAssetRows.results || [], configRow),
+    闲置资金与目标配置: await buildIdleCashSummary(db, userId, calc, agg, configRow),
   };
 
   // ── 调 GLM ──
@@ -322,6 +325,41 @@ function buildSummary(calc: Calc, agg: CycleAgg, cycles: CycleStat[], snapshots:
   };
 }
 
+// ── 闲置资金与目标配置：与首页「闲置资金建议」同一算法 ─────────────────
+// 只发金额、比例和用户自己定义的配置类别名（如「美股指数基金」），不发账户/持仓名称
+async function buildIdleCashSummary(db: D1Database, userId: string, calc: Calc, agg: CycleAgg, configRow: any) {
+  if (!(agg.avgConsume > 0)) return null;
+  try {
+    const [hRows, qRows] = await Promise.all([
+      db.prepare('SELECT kind, symbol, quantity, bucket FROM holdings WHERE user_id = ?').bind(userId).all<any>(),
+      db.prepare("SELECT * FROM quotes WHERE (kind, symbol) IN (SELECT DISTINCT kind, symbol FROM holdings WHERE user_id = ?) OR kind = 'fx'").bind(userId).all<any>(),
+    ]);
+    const quotes = new Map((qRows.results || []).map((q: any) => [quoteKey(q.kind, q.symbol), q]));
+    const fx = fxRates(quotes);
+    const targets = parseAllocationTargets(configRow.allocation_targets) ?? DEFAULT_ALLOCATION_TARGETS;
+    const byBucket: Record<string, number> = {};
+    for (const h of hRows.results || []) {
+      if (h.kind === 'manual' && !h.bucket) continue;
+      const v = holdingValueJpy(h, quotes.get(quoteKey(h.kind, h.symbol)), fx);
+      if (v == null) continue;
+      const k = h.bucket && targets.some((t) => t.key === h.bucket) ? h.bucket : '';
+      byBucket[k] = (byBucket[k] ?? 0) + v;
+    }
+    const a = computeIdleCashAdvice({ cash: calc.net_available, monthlyLivingCost: agg.avgConsume, targets, currentByBucket: byBucket });
+    return {
+      应急金月数: DEFAULT_EMERGENCY_MONTHS,
+      应急金线: a.emergencyTarget,
+      闲置资金: a.idle, // 负数 = 距应急金线还差多少
+      用户目标配置: a.lines.map((l) => ({
+        类别: l.label, 目标占比_pct: l.targetPct, 当前占比_pct: l.currentPct, 当前市值: l.current, 本次建议投入: l.suggest,
+      })),
+      未分类持仓市值: a.unassigned,
+    };
+  } catch {
+    return null; // 持仓表不存在等：不影响诊断
+  }
+}
+
 // ── 财务自由模拟摘要：与「财富模拟」页同一引擎 ───────────────────
 // 只发聚合数字和「距今 N 年」这种相对时间：不发年龄 / 出生年份，也不发用户给方案起的名字。
 // 服务端只跑固定收益推算（约 1ms）；随机模拟（几十 ms CPU）不在这里跑，避免超出 Worker 的 CPU 时间限制。
@@ -497,6 +535,10 @@ async function callGLM(env: Env, summary: unknown): Promise<string> {
     '若摘要中含【财务自由模拟】(系统按固定规则推算的长期预测)，它【不计入评分】，只用于「行动建议」：'
       + '可结合预计达成时间、资金是否会在模拟期内耗尽给出长期方向(如会耗尽时建议提高定投、推迟停止工作或降低退休后支出)；'
       + '若含「用户模拟方案」，可简短点评该方案与当前节奏相比是否可行。该字段为 null 时不要提及。',
+    '若摘要中含【闲置资金与目标配置】：闲置资金 > 0 表示现金已超出应急金线，可在「行动建议」里建议把这部分按「用户目标配置」投入，'
+      + '直接引用「本次建议投入」的金额（系统已按「先补离目标最远的类别、只买不卖」算好，不要自己重新分配）；'
+      + '若某类别当前占比明显高于目标（如单一个股集中度高），可提示集中度风险。只依据用户自己设定的类别，【不要】推荐具体的新股票或基金。'
+      + '闲置资金 ≤ 0 时说明应急金还差多少、暂不建议加大投资。该字段为 null 时不要提及。',
     '注意：每个维度的实际数值、标准、结论、目标缺口已由系统在图表中逐项展示，你【不要】再逐项复述数字，聚焦总体解读、跨维度的风险与综合建议。',
     '请用中文、Markdown 输出，结构如下：',
     '## 总体健康度\n首行必须是「评分：NN/100」(整数)，随后一到两句话结论（点明最拖后腿的 1-2 项）。',

@@ -8,7 +8,7 @@
 import { Hono } from 'hono';
 import { UserConfigUpdateSchema } from '@cfp/shared';
 import type { Env } from '../index';
-import { parseFireSettings, parseSimulatorSettings, parseSimulatorPlans, parseBirthYear } from '../lib/utils';
+import { parseFireSettings, parseSimulatorSettings, parseSimulatorPlans, parseBirthYear, parseAllocationTargets } from '../lib/utils';
 
 // userId 改为 c.get('user').id（v1.0+ 多用户）
 
@@ -36,6 +36,7 @@ configRoute.get('/', async (c) => {
     snapshot_offsets: JSON.parse(row!.snapshot_offsets),
     weekend_shift: !!row!.weekend_shift,
     fire_settings: parseFireSettings(row!.fire_settings),
+    allocation_targets: parseAllocationTargets(row!.allocation_targets),
     birth_year: parseBirthYear(row!.birth_year),
     simulator_settings: parseSimulatorSettings(row!.simulator_settings),
     simulator_plans: parseSimulatorPlans(row!.simulator_plans),
@@ -75,6 +76,10 @@ configRoute.put('/', async (c) => {
     if (parsed.data.weekend_shift !== undefined) {
       updates.push('weekend_shift = ?');
       values.push(parsed.data.weekend_shift ? 1 : 0);
+    }
+    if (parsed.data.allocation_targets !== undefined) {
+      updates.push('allocation_targets = ?');
+      values.push(parsed.data.allocation_targets === null ? null : JSON.stringify(parsed.data.allocation_targets));
     }
     if (parsed.data.fire_settings !== undefined) {
       updates.push('fire_settings = ?');

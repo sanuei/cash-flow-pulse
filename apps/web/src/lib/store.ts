@@ -117,6 +117,8 @@ interface AppState {
   deleteOtherAsset: (id: string) => Promise<void>;
 
   loadHoldings: () => Promise<void>;
+  /** 资金配置目标存服务器（user_config.allocation_targets），并同步到本地 config */
+  saveAllocationTargets: (t: { key: string; label: string; pct: number }[] | null) => Promise<void>;
 
   // ===== Auth Actions (v1.0+) =====
   checkSession: () => Promise<void>;
@@ -357,6 +359,12 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   // ===== Actions: Other assets (其他资产，不参与快照计算，无需 autoSnapshot) =====
+  async saveAllocationTargets(t) {
+    await apiPut('/config', { allocation_targets: t });
+    const cfg = get().config;
+    if (cfg) set({ config: { ...cfg, allocation_targets: t } });
+  },
+
   async loadHoldings() {
     const d = await apiGet<{ holdings: Holding[]; quotes: Quote[]; fx: Record<string, number> }>('/holdings');
     set({ holdings: d.holdings, quotes: d.quotes, fx: d.fx });
