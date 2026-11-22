@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { analyzeAssetStructure, formatYen, quoteKey, type StructureSlice } from '@cfp/shared';
+import { analyzeAssetStructure, formatYen, quoteKey, sumReturns, type StructureSlice } from '@cfp/shared';
 import { Card } from './Card';
 import { Icon } from './Icon';
+import { ReturnText } from './ReturnText';
 import { useStore } from '../lib/store';
 
 /**
@@ -48,6 +49,11 @@ export function AssetStructureCard() {
     quotes: new Map(quotes.map((q) => [quoteKey(q.kind, q.symbol), q])),
   }), [cashSources, otherAssets, holdings, quotes, fx]);
 
+  const ret = useMemo(
+    () => sumReturns(holdings, new Map(quotes.map((q) => [quoteKey(q.kind, q.symbol), q])), fx),
+    [holdings, quotes, fx],
+  );
+
   if (st.total <= 0) return null;
   const investPct = Math.round((st.invest / st.total) * 1000) / 10;
 
@@ -81,7 +87,8 @@ export function AssetStructureCard() {
           <div className="font-display font-semibold text-[28px] leading-tight text-notion-text">{formatYen(st.total)}</div>
         </div>
         <div className="text-right text-[12px] text-notion-text-muted">
-          投资 <span className="font-numeric text-notion-text-secondary">{formatYen(st.invest)}</span>（{investPct}%）
+          <div>投资 <span className="font-numeric text-notion-text-secondary">{formatYen(st.invest)}</span>（{investPct}%）</div>
+          {ret.count > 0 && <div className="mt-0.5">持仓收益 <ReturnText gain={ret.gain} pct={ret.pct} /></div>}
         </div>
       </div>
 

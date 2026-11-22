@@ -324,9 +324,13 @@ export const HoldingInputSchema = z.object({
   name: z.string().max(100).optional(),          // manual 必填；其余以行情源名称为准
   quantity: z.number().nonnegative('数量不能为负'),
   bucket: z.string().max(40).nullable().optional(),
+  cost_basis: z.number().nonnegative('成本不能为负').nullable().optional(),   // 总成本（买入花了多少）
+  cost_currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(),       // 成本币种，空 = JPY
 });
 export const HoldingUpdateSchema = z.object({
   quantity: z.number().nonnegative().optional(),
   name: z.string().max(100).optional(),
   bucket: z.string().max(40).nullable().optional(),
+  cost_basis: z.number().nonnegative().nullable().optional(),
+  cost_currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(),
 });

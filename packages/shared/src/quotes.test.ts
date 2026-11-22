@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseYahooChart, parseYahooJpFundPage, parseEastmoneyNav, holdingValueJpy, valueHoldings, quoteKey, fxSymbol } from './quotes';
+import { parseYahooChart, parseYahooJpFundPage, parseEastmoneyNav, holdingValueJpy, valueHoldings, quoteKey, fxSymbol, holdingReturn, sumReturns } from './quotes';
 import { yahooChartTsla, eastmoneyLsjz018043, yahooJpFund03311187 } from './__fixtures__/quotes';
 
 describe('行情解析（真实响应样本）', () => {
@@ -77,5 +77,52 @@ describe('折算日元', () => {
   it('fxSymbol', () => {
     expect(fxSymbol('usd')).toBe('USDJPY=X');
     expect(fxSymbol('JPY')).toBeNull();
+  });
+});
+
+describe('holdingReturn / sumReturns', () => {
+  const fx = { USD: 150 };
+  const usd = { price: 345.82, currency: 'USD' };
+  const jpy = { price: 42207, currency: 'JPY' };
+
+  it('日元成本：含汇率损益', () => {
+    // 0.1 股 × 345.82 USD × 150 = 5187.3 円；成本 4,000 円
+    const r = holdingReturn({ kind: 'market', quantity: 0.1, cost_basis: 4000, cost_currency: null }, usd, fx)!;
+    expect(r.value).toBeCloseTo(5187.3, 1);
+    expect(r.gain).toBeCloseTo(1187.3, 1);
+    expect(r.pct).toBeCloseTo(29.68, 1);
+  });
+
+  it('外币成本：收益率按外币算，金额按现汇折日元', () => {
+    // moomoo：4 股，均价 169.54 → 成本 678.16 USD
+    const r = holdingReturn({ kind: 'market', quantity: 4, cost_basis: 678.16, cost_currency: 'USD' }, usd, fx)!;
+    expect(r.pct).toBeCloseTo(((1383.28 - 678.16) / 678.16) * 100, 4);
+    expect(r.gain).toBeCloseTo((1383.28 - 678.16) * 150, 4);
+    expect(r.cost).toBeCloseTo(678.16 * 150, 4);
+  });
+
+  it('日本投信按每 1 万口计价', () => {
+    const r = holdingReturn({ kind: 'jp_fund', quantity: 236164, cost_basis: 800000, cost_currency: 'JPY' }, jpy, fx)!;
+    expect(r.value).toBeCloseTo(236164 / 10000 * 42207, 4);
+  });
+
+  it('没填成本 / manual / 币种不匹配 → null', () => {
+    expect(holdingReturn({ kind: 'market', quantity: 1, cost_basis: null }, usd, fx)).toBeNull();
+    expect(holdingReturn({ kind: 'manual', quantity: 1000, cost_basis: 1000 }, undefined, fx)).toBeNull();
+    expect(holdingReturn({ kind: 'market', quantity: 1, cost_basis: 100, cost_currency: 'EUR' }, usd, fx)).toBeNull();
+  });
+
+  it('合计只统计填了成本的持仓', () => {
+    const quotes = new Map([['market:TSLA', usd], ['jp_fund:03311187', jpy]]);
+    const s = sumReturns([
+      { kind: 'market', symbol: 'TSLA', quantity: 0.1, cost_basis: 4000 },
+      { kind: 'jp_fund', symbol: '03311187', quantity: 10000, cost_basis: null },
+      { kind: 'manual', symbol: '', quantity: 5000, cost_basis: null },
+    ], quotes, fx);
+    expect(s.count).toBe(1);
+    expect(s.missing).toBe(1);
+    expect(s.cost).toBe(4000);
+    expect(s.pct).toBeCloseTo(29.68, 1);
+    expect(s.total).toBeCloseTo(5187.3 + 42207, 1);
   });
 });

@@ -11,7 +11,8 @@ import { OtherAssetForm } from '../components/OtherAssetForm';
 import { HoldingsPanel } from '../components/HoldingsPanel';
 import { AssetStructureCard } from '../components/AssetStructureCard';
 import { PageTitle } from '../components/PageTitle';
-import { formatYen } from '@cfp/shared';
+import { formatYen, sumReturns, quoteKey } from '@cfp/shared';
+import { ReturnText } from '../components/ReturnText';
 import type { CashSource, OtherAsset, AssetCategory } from '@cfp/shared';
 
 const CATEGORY_ICON: Record<AssetCategory, IconName> = {
@@ -31,6 +32,10 @@ export function AssetsPage() {
   const cashSourcesAll = useStore((s) => s.cashSources);
   const otherAssetsAll = useStore((s) => s.otherAssets);
   const holdings = useStore((s) => s.holdings);
+  const quotes = useStore((s) => s.quotes);
+  const fx = useStore((s) => s.fx);
+  const quoteMap = new Map(quotes.map((q) => [quoteKey(q.kind, q.symbol), q]));
+  const assetReturn = (assetId: string) => sumReturns(holdings.filter((h) => h.asset_id === assetId), quoteMap, fx);
   const loadHoldings = useStore((s) => s.loadHoldings);
   useEffect(() => { loadHoldings().catch(() => {}); }, [loadHoldings]);
   const loadDashboard = useStore((s) => s.loadDashboard);
@@ -202,14 +207,27 @@ export function AssetsPage() {
           );
         }}
         footer={
-          otherAssets.length > 0 ? (
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="font-semibold text-notion-text-secondary">合计</span>
-              <span className="font-numeric font-semibold text-[15px] text-notion-text">
-                {formatYen(otherAssets.reduce((s, a) => s + a.value, 0))}
-              </span>
-            </div>
-          ) : null
+          otherAssets.length > 0 ? (() => {
+            const r = sumReturns(holdings.filter((h) => otherAssets.some((a) => a.id === h.asset_id)), quoteMap, fx);
+            return (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="font-semibold text-notion-text-secondary">合计</span>
+                  <span className="font-numeric font-semibold text-[15px] text-notion-text">
+                    {formatYen(otherAssets.reduce((s, a) => s + a.value, 0))}
+                  </span>
+                </div>
+                {r.count > 0 && (
+                  <div className="flex items-center justify-between text-[11.5px]">
+                    <span className="text-notion-text-muted">
+                      持仓收益{r.missing > 0 ? `（${r.missing} 个持仓未填成本，未计入）` : ''}
+                    </span>
+                    <ReturnText gain={r.gain} pct={r.pct} />
+                  </div>
+                )}
+              </div>
+            );
+          })() : null
         }
       >
         {(openEdit) =>
@@ -221,10 +239,19 @@ export function AssetsPage() {
               title={a.name}
               subtitle={(() => {
                 const n = holdings.filter((h) => h.asset_id === a.id).length;
-                const auto = n > 0 ? ` · ${n} 个持仓 · 自动估值` : (a.category === 'stock' || a.category === 'crypto') ? ' · 编辑可添加持仓自动估值' : '';
+                const miss = n > 0 ? assetReturn(a.id).missing : 0;
+                const auto = n > 0 ? ` · ${n} 个持仓 · 自动估值${miss > 0 ? ` · ${miss} 个未填成本` : ''}` : (a.category === 'stock' || a.category === 'crypto') ? ' · 编辑可添加持仓自动估值' : '';
                 return `${CATEGORY_LABEL[a.category]}${auto}${a.note ? ' · ' + a.note : ''}`;
               })()}
-              money={<Money amount={a.value} size="md" sign="neutral" />}
+              money={(() => {
+                const r = assetReturn(a.id);
+                return (
+                  <div>
+                    <Money amount={a.value} size="md" sign="neutral" />
+                    {r.count > 0 && <div className="text-[11px] mt-0.5"><ReturnText gain={r.gain} pct={r.pct} /></div>}
+                  </div>
+                );
+              })()}
               onEdit={() => openEdit(a)}
               onDelete={() =>
                 softDelete({

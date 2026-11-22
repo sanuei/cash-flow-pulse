@@ -5,7 +5,7 @@
  * GET    /search?kind&q    搜索代码（market: Yahoo；cn_fund: 天天基金）
  * GET    /lookup?kind&symbol  按代码取一次行情（添加前确认名称和价格）
  * POST   /                 添加持仓（先抓行情校验代码，再写入，并重算所属资产价值）
- * PUT    /:id              改数量 / 名称 / 配置类别
+ * PUT    /:id              改数量 / 名称 / 配置类别 / 成本
  * DELETE /:id
  * POST   /refresh          手动刷新本人持仓行情
  */
@@ -18,6 +18,9 @@ import {
 } from '../lib/quotes';
 
 export const holdingRoutes = new Hono<{ Bindings: Env }>();
+
+/** 成本币种：日元存 NULL（默认），外币存 ISO 代码 */
+const costCurrency = (c: string | null | undefined) => (!c || c.toUpperCase() === 'JPY' ? null : c.toUpperCase());
 
 async function userQuotes(db: D1Database, userId: string) {
   const rows = await db.prepare(
@@ -100,11 +103,18 @@ holdingRoutes.post('/', async (c) => {
   const ts = now();
   const maxOrder = await db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM holdings WHERE asset_id = ?').bind(d.asset_id).first<any>();
   await db.prepare(
-    `INSERT INTO holdings (id, user_id, asset_id, kind, symbol, name, quantity, bucket, sort_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(id, userId, d.asset_id, d.kind, symbol, name, d.quantity, d.bucket ?? null, (maxOrder?.m ?? -1) + 1, ts, ts).run();
+    `INSERT INTO holdings (id, user_id, asset_id, kind, symbol, name, quantity, bucket, cost_basis, cost_currency, sort_order, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    id, userId, d.asset_id, d.kind, symbol, name, d.quantity, d.bucket ?? null,
+    d.kind === 'manual' ? null : d.cost_basis ?? null, d.kind === 'manual' ? null : costCurrency(d.cost_currency),
+    (maxOrder?.m ?? -1) + 1, ts, ts,
+  ).run();
   await revalueAssets(db, undefined, undefined, d.asset_id);
-  return c.json({ id, user_id: userId, asset_id: d.asset_id, kind: d.kind, symbol, name, quantity: d.quantity, bucket: d.bucket ?? null }, 201);
+  return c.json({
+    id, user_id: userId, asset_id: d.asset_id, kind: d.kind, symbol, name, quantity: d.quantity, bucket: d.bucket ?? null,
+    cost_basis: d.kind === 'manual' ? null : d.cost_basis ?? null, cost_currency: d.kind === 'manual' ? null : costCurrency(d.cost_currency),
+  }, 201);
 });
 
 holdingRoutes.put('/:id', async (c) => {
@@ -120,6 +130,8 @@ holdingRoutes.put('/:id', async (c) => {
   if (parsed.data.quantity !== undefined) { updates.push('quantity = ?'); values.push(parsed.data.quantity); }
   if (parsed.data.name !== undefined) { updates.push('name = ?'); values.push(parsed.data.name); }
   if (parsed.data.bucket !== undefined) { updates.push('bucket = ?'); values.push(parsed.data.bucket); }
+  if (parsed.data.cost_basis !== undefined) { updates.push('cost_basis = ?'); values.push(parsed.data.cost_basis); }
+  if (parsed.data.cost_currency !== undefined) { updates.push('cost_currency = ?'); values.push(costCurrency(parsed.data.cost_currency)); }
   updates.push('updated_at = ?'); values.push(now());
   await c.env.DB.prepare(`UPDATE holdings SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).bind(...values, id, userId).run();
   await revalueAssets(c.env.DB, undefined, undefined, row.asset_id);

@@ -257,6 +257,8 @@ CREATE TABLE IF NOT EXISTS holdings (
   name        TEXT NOT NULL DEFAULT '',
   quantity    REAL NOT NULL CHECK (quantity >= 0),  -- 股数 / 口数 / 份额；manual 为日元金额
   bucket      TEXT,                          -- 资金配置类别 key（见 user_config.allocation_targets），可空
+  cost_basis  REAL,                          -- 总成本（用于收益率），空 = 没填
+  cost_currency TEXT,                        -- 成本币种，空 = JPY；或标的币种（如 USD）
   sort_order  INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL

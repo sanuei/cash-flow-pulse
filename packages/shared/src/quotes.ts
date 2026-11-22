@@ -24,6 +24,9 @@ export interface Holding {
   name: string;            // 添加时从行情源取回的名称，便于核对代码是否填对
   quantity: number;        // 股数 / 口数 / 份额；manual 为日元金额
   bucket: string | null;   // 资金配置类别 key（用于「闲置资金怎么投」），可空
+  cost_basis?: number | null;    // 总成本（买入时一共花了多少），空 = 没填，不算收益
+  cost_currency?: string | null; // 成本币种：空/JPY = 日元成本（含汇率损益，和日本券商的「評価損益」一致）；
+                                 // 填标的币种（如 USD）= 按外币算收益（和 moomoo 等外币账户显示一致）
   sort_order: number;
   created_at: number;
   updated_at: number;
@@ -152,4 +155,57 @@ export function valueHoldings(
     else total += v;
   }
   return { total: Math.round(total), complete };
+}
+
+export type HoldingReturn = {
+  cost: number;       // 成本（日元；外币成本按当前汇率折算）
+  value: number;      // 市值（日元）
+  gain: number;       // 收益（日元）
+  pct: number;        // 收益率 %（外币成本时按外币计算，不含汇率变化）
+};
+
+/**
+ * 单个持仓的收益。没填成本、行情/汇率缺失、manual 现金 → null。
+ *   成本是日元：收益 = 日元市值 − 成本（含汇率损益）
+ *   成本是外币（= 标的币种）：收益率按外币算；收益金额按当前汇率折成日元
+ */
+export function holdingReturn(
+  h: Pick<Holding, 'kind' | 'quantity' | 'cost_basis' | 'cost_currency'>,
+  quote: Pick<Quote, 'price' | 'currency'> | undefined,
+  fx: Record<string, number>,
+): HoldingReturn | null {
+  if (h.kind === 'manual' || h.cost_basis == null || !(h.cost_basis > 0)) return null;
+  const value = holdingValueJpy(h, quote, fx);
+  if (value == null) return null;
+  const cc = (h.cost_currency || 'JPY').toUpperCase();
+  if (cc === 'JPY') {
+    const gain = value - h.cost_basis;
+    return { cost: h.cost_basis, value, gain, pct: (gain / h.cost_basis) * 100 };
+  }
+  const qc = (quote?.currency || '').toUpperCase();
+  const rate = fx[cc];
+  if (cc !== qc || !rate) return null; // 成本币种和标的币种不一致：无法比较
+  const units = h.kind === 'jp_fund' ? h.quantity / 10000 : h.quantity;
+  const local = units * quote!.price!;
+  const gainLocal = local - h.cost_basis;
+  return { cost: h.cost_basis * rate, value, gain: gainLocal * rate, pct: (gainLocal / h.cost_basis) * 100 };
+}
+
+/** 多个持仓合计收益：只统计填了成本的；covered = 参与统计的市值，total = 全部可估市值（不含现金） */
+export function sumReturns(
+  holdings: Pick<Holding, 'kind' | 'symbol' | 'quantity' | 'cost_basis' | 'cost_currency'>[],
+  quotes: Map<string, Pick<Quote, 'price' | 'currency'>>,
+  fx: Record<string, number>,
+): { cost: number; gain: number; pct: number | null; covered: number; total: number; count: number; missing: number } {
+  let cost = 0, gain = 0, covered = 0, total = 0, count = 0, missing = 0;
+  for (const h of holdings) {
+    if (h.kind === 'manual') continue;
+    const q = quotes.get(quoteKey(h.kind, h.symbol));
+    const v = holdingValueJpy(h, q, fx);
+    if (v != null) total += v;
+    const r = holdingReturn(h, q, fx);
+    if (r) { cost += r.cost; gain += r.gain; covered += r.value; count++; }
+    else if (v != null) missing++;
+  }
+  return { cost, gain, pct: cost > 0 ? (gain / cost) * 100 : null, covered, total, count, missing };
 }
