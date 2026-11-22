@@ -59,14 +59,41 @@ export function AssetTrendCard() {
       label: p.date.slice(5).replace('-', '/'),
       total: p.cash + (p.invest ?? 0) + (p.other ?? 0),
     }));
-    const hasOther = pts.some((p) => (p.other ?? 0) > 0);
-    // 涨跌只在「投资已开始记录」的点之间比较，否则开始记录那天会凭空多出一大截
+    // 投资从 recorded_since 才开始记录：之前的点只有现金。把两段画在一张堆叠图里，
+    // 开始记录那天会凭空跳出一大截（而且只有 1 个点时投资面积根本画不出来，只剩一根被压扁的现金线）。
+    // → 有 ≥2 个完整点：只画完整区间的总资产；不足 2 个：画现金余额走势 + 当前资产构成。
     const full = pts.filter((p) => p.invest !== null);
+    const mode: 'total' | 'cash' = full.length >= 2 ? 'total' : 'cash';
+    const chartPts = mode === 'total' ? full : pts;
+    const hasOther = chartPts.some((p) => (p.other ?? 0) > 0);
     const first = full[0];
     const last = pts[pts.length - 1];
-    const change = first && last && full.length > 1 ? last.total - first.total : null;
+    const change = mode === 'total' && first && last ? last.total - first.total : null;
     const changePct = change !== null && first!.total > 0 ? (change / first!.total) * 100 : null;
-    return { pts, hasOther, last, change, changePct, firstFull: first };
+    // 当前构成（最新一个点）
+    const comp = last
+      ? [
+          { key: 'cash', label: '现金', v: last.cash },
+          { key: 'invest', label: '投资', v: last.invest ?? 0 },
+          { key: 'other', label: '其他', v: last.other ?? 0 },
+        ].filter((c) => c.v > 0)
+      : [];
+    // Y 轴按数据范围留白（不从 0 开始），否则几百万的总额上 1% 的波动看起来是一条平线
+    const key = mode === 'total' ? 'total' : 'cash';
+    const vals = chartPts.map((p) => p[key]);
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    const pad = Math.max((hi - lo) * 0.15, hi * 0.01, 1000);
+    // 整齐的刻度：步长取 1/2/2.5/5 × 10^n，约 4 格
+    const raw = (hi - lo + pad * 2) / 4;
+    const mag = 10 ** Math.floor(Math.log10(raw));
+    const step = ([1, 2, 2.5, 5, 10].find((m) => m * mag >= raw) ?? 10) * mag;
+    const dMin = Math.max(0, Math.floor((lo - pad) / step) * step);
+    const dMax = Math.ceil((hi + pad) / step) * step;
+    const domain: [number, number] = [dMin, dMax];
+    const ticks: number[] = [];
+    for (let v = dMin; v <= dMax + step / 2; v += step) ticks.push(Math.round(v));
+    return { pts, chartPts, mode, hasOther, last, change, changePct, comp, key, domain, ticks };
   }, [data, range]);
 
   return (
@@ -98,33 +125,58 @@ export function AssetTrendCard() {
             )}
           </div>
 
-          <div className="h-56 sm:h-64 -mx-2">
+          {/* 当前资产构成；图只画一条线（总资产，或投资记录不足 2 天时的现金余额），各自按数据范围缩放 */}
+          {view.comp.length > 1 && (
+            <div className="mb-4">
+              <div className="flex h-2 rounded-[var(--radius-pill)] overflow-hidden gap-[2px]">
+                {view.comp.map((c) => (
+                  <div key={c.key} style={{ width: `${(c.v / view.last!.total) * 100}%`, background: SERIES.find((x) => x.key === c.key)!.color, opacity: c.key === 'cash' ? 0.6 : 1 }} />
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11.5px]">
+                {view.comp.map((c) => (
+                  <span key={c.key} className="inline-flex items-center gap-1.5 text-notion-text-secondary">
+                    <span className="w-2 h-2 rounded-[2px]" style={{ background: SERIES.find((x) => x.key === c.key)!.color, opacity: c.key === 'cash' ? 0.6 : 1 }} />
+                    {c.label}
+                    <span className="font-numeric text-notion-text">{formatYen(Math.round(c.v))}</span>
+                    <span className="font-numeric text-notion-text-muted">{Math.round((c.v / view.last!.total) * 100)}%</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {view.mode === 'cash' && (
+            <div className="text-[12px] font-semibold text-notion-text-secondary mb-1">现金余额</div>
+          )}
+
+          <div className="h-48 sm:h-60 -mx-2">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={view.pts} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+              <AreaChart data={view.chartPts} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
                 <CartesianGrid vertical={false} stroke="var(--c-border)" />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={28} tickMargin={8} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }} tickFormatter={yenAxisTick} tickLine={false} axisLine={false} width={44} domain={['auto', 'auto']} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: 'var(--c-text-muted)' }} tickFormatter={yenAxisTick} tickLine={false} axisLine={false} width={44}
+                  domain={view.domain} ticks={view.ticks} interval={0} allowDataOverflow
+                />
                 <Tooltip content={<TrendTooltip hasOther={view.hasOther} />} cursor={{ stroke: 'var(--c-border-strong)', strokeWidth: 1 }} />
-                {SERIES.filter((s) => s.key !== 'other' || view.hasOther).map((s) => (
-                  <Area
-                    key={s.key} type="monotone" dataKey={s.key} name={s.label} stackId="a"
-                    stroke={s.color} strokeWidth={s.key === 'invest' ? 2 : 1.5} fill={s.color} fillOpacity={s.opacity}
-                    dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--c-bg-elev)' }} connectNulls={false} isAnimationActive={false}
-                  />
-                ))}
+                <defs>
+                  <linearGradient id="assetTrendFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={view.mode === 'total' ? 'var(--c-invest)' : 'var(--c-text-muted)'} stopOpacity={0.28} />
+                    <stop offset="100%" stopColor={view.mode === 'total' ? 'var(--c-invest)' : 'var(--c-text-muted)'} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone" dataKey={view.key} name={view.mode === 'total' ? '总资产' : '现金'}
+                  stroke={view.mode === 'total' ? 'var(--c-invest)' : 'var(--c-text-secondary)'} strokeWidth={2}
+                  fill="url(#assetTrendFill)" baseValue="dataMin"
+                  dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--c-bg-elev)' }} isAnimationActive={false}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-3">
-            <div className="flex gap-3 text-[11px] text-notion-text-secondary">
-              {SERIES.filter((s) => s.key !== 'other' || view.hasOther).map((s) => (
-                <span key={s.key} className="inline-flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: s.color, opacity: s.key === 'cash' ? 0.6 : 1 }} />
-                  {s.label}
-                </span>
-              ))}
-            </div>
+            <span />
             <div className="flex gap-1">
               {RANGES.map((r) => (
                 <button
@@ -140,7 +192,11 @@ export function AssetTrendCard() {
             </div>
           </div>
           {data?.recorded_since && view.pts.some((p) => p.invest === null) && (
-            <p className="text-[11px] text-notion-text-muted mt-2">投资资产从 {data.recorded_since.slice(5).replace('-', '/')} 开始记录，之前只显示现金余额。</p>
+            <p className="text-[11px] text-notion-text-muted mt-2">
+              {view.mode === 'cash'
+                ? <>投资资产从 {data.recorded_since.slice(5).replace('-', '/')} 开始记录，满 2 天后这里改为总资产走势。</>
+                : <>总资产从 {data.recorded_since.slice(5).replace('-', '/')} 开始记录（之前没有投资数据）。</>}
+            </p>
           )}
         </>
       )}

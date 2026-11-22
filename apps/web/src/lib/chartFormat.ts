@@ -3,7 +3,8 @@ export function yenAxisTick(v: number): string {
   const abs = Math.abs(v);
   if (abs >= 1_000_000) {
     const m = v / 1_000_000;
-    return `${Number.isInteger(m) ? m : m.toFixed(1)}M`;
+    return `${Number.isInteger(m) ? m : Number(m.toFixed(2))}M`;
   }
+  if (v === 0) return '0';
   return `${Math.round(v / 1000)}k`;
 }
