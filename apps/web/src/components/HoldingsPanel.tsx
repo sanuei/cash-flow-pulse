@@ -160,7 +160,7 @@ function HoldingRow({ h, q, value, fx, onChanged, onError }: {
   const save = async () => {
     const n = Number(qty.replace(/,/g, ''));
     if (!Number.isFinite(n) || n < 0) { onError('数量无效'); return; }
-    const c = h.kind === 'manual' ? null : resolveCost(cost, h.kind, n, q?.currency ?? 'JPY');
+    const c = h.kind === 'manual' ? null : resolveCost(cost, h.kind, n, q?.currency ?? 'JPY', makeValueIn(h.kind, n, q, fx));
     if (c === 'invalid') { onError('成本无效'); return; }
     setBusy(true);
     try {
@@ -227,7 +227,10 @@ function HoldingRow({ h, q, value, fx, onChanged, onError }: {
             />
           </Field>
           {h.kind !== 'manual' && (
-            <CostEditor kind={h.kind} quoteCurrency={q?.currency ?? 'JPY'} value={cost} onChange={setCost} />
+            <CostEditor
+              kind={h.kind} quoteCurrency={q?.currency ?? 'JPY'} quantity={Number(qty.replace(/,/g, '')) || 0}
+              valueIn={makeValueIn(h.kind, Number(qty.replace(/,/g, '')) || 0, q, fx)} value={cost} onChange={setCost}
+            />
           )}
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-ghost text-[12px]" onClick={() => setEditing(false)}>取消</button>
@@ -290,7 +293,7 @@ function AddHolding({ assetId, onDone, onCancel }: { assetId: string; onDone: ()
     setError(null);
     if (!(quantity >= 0) || qty.trim() === '') { setError(`请填写${meta.qtyLabel}`); return; }
     if (kind === 'manual' ? !name.trim() : !picked) { setError(kind === 'manual' ? '请填写名称' : '请先选择或查询一个代码'); return; }
-    const c = kind === 'manual' ? null : resolveCost(cost, kind, quantity, picked?.currency ?? 'JPY');
+    const c = kind === 'manual' ? null : resolveCost(cost, kind, quantity, picked?.currency ?? 'JPY', makeValueIn(kind, quantity, picked ?? undefined, fx));
     if (c === 'invalid') { setError('成本无效'); return; }
     setBusy(true);
     try {
@@ -357,7 +360,10 @@ function AddHolding({ assetId, onDone, onCancel }: { assetId: string; onDone: ()
       </Field>
 
       {kind !== 'manual' && picked && (
-        <CostEditor kind={kind} quoteCurrency={picked.currency} value={cost} onChange={setCost} />
+        <CostEditor
+          kind={kind} quoteCurrency={picked.currency} quantity={quantity || 0}
+          valueIn={makeValueIn(kind, quantity || 0, picked, fx)} value={cost} onChange={setCost}
+        />
       )}
 
       <p className="text-[11px] text-notion-text-muted leading-relaxed">{meta.hint}</p>
@@ -374,53 +380,99 @@ function AddHolding({ assetId, onDone, onCancel }: { assetId: string; onDone: ()
   );
 }
 
-// ── 成本：总成本 或 均价 × 数量；币种 = 日元 或 标的币种 ─────────────────────
-type CostState = { amount: string; mode: 'total' | 'avg'; currency: string };
+// ── 成本：总投入 / 均价 / 收益率 / 收益金额（后两种按当前市值反推）；币种 = 日元 或 标的币种 ─────
+type CostMode = 'total' | 'avg' | 'pct' | 'gain';
+type CostState = { amount: string; mode: CostMode; currency: string };
+/** 当前市值：JPY → 日元市值；外币 → 该币种市值（按当前行情） */
+type ValueIn = (currency: string) => number | null;
 
 function initCost(h: Holding): CostState {
   return { amount: h.cost_basis != null ? String(Math.round(h.cost_basis * 100) / 100) : '', mode: 'total', currency: h.cost_currency || 'JPY' };
 }
 
+function makeValueIn(kind: HoldingKind, quantity: number, quote: { price: number | null; currency: string | null } | undefined, fx: Record<string, number>): ValueIn {
+  return (cur) => {
+    if (!quote || quote.price == null || !(quantity > 0)) return null;
+    if (cur === 'JPY') return holdingValueJpy({ kind, quantity }, { price: quote.price, currency: quote.currency }, fx);
+    if ((quote.currency || '').toUpperCase() !== cur) return null;
+    return (kind === 'jp_fund' ? quantity / 10000 : quantity) * quote.price;
+  };
+}
+
 /** 空 → null（不填成本）；非法 → 'invalid' */
-function resolveCost(c: CostState, kind: HoldingKind, quantity: number, quoteCurrency: string): { total: number; currency: string } | null | 'invalid' {
-  const raw = c.amount.replace(/,/g, '').trim();
+function resolveCost(
+  c: CostState, kind: HoldingKind, quantity: number, quoteCurrency: string, valueIn: ValueIn,
+): { total: number; currency: string } | null | 'invalid' {
+  const raw = c.amount.replace(/[,%％+＋]/g, '').replace(/^[−–]/, '-').trim();
   if (raw === '') return null;
   const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return 'invalid';
-  const units = kind === 'jp_fund' ? quantity / 10000 : quantity;  // 投信的均价是每 1 万口
-  const total = c.mode === 'avg' ? n * units : n;
+  if (!Number.isFinite(n)) return 'invalid';
   // 只允许日元或标的本身的币种（换了标的后残留的旧币种按日元处理）
   const currency = quoteCurrency && quoteCurrency !== 'JPY' && c.currency === quoteCurrency ? quoteCurrency : 'JPY';
+  const units = kind === 'jp_fund' ? quantity / 10000 : quantity;  // 投信的均价是每 1 万口
+  let total: number;
+  if (c.mode === 'total') total = n;
+  else if (c.mode === 'avg') total = n * units;
+  else {
+    const value = valueIn(currency);
+    if (value == null) return 'invalid';
+    // 收益率：成本 = 市值 ÷ (1 + 收益率)；收益金额：成本 = 市值 − 收益
+    total = c.mode === 'pct' ? (n <= -100 ? NaN : value / (1 + n / 100)) : value - n;
+  }
+  if (!Number.isFinite(total) || total <= 0) return 'invalid';
   return { total: Math.round(total * 10000) / 10000, currency };
 }
 
-function CostEditor({ kind, quoteCurrency, value, onChange }: {
-  kind: HoldingKind; quoteCurrency: string; value: CostState; onChange: (v: CostState) => void;
+const MODE_OPTIONS: { value: CostMode; label: string }[] = [
+  { value: 'total', label: '总投入' },
+  { value: 'avg', label: '均价' },
+  { value: 'pct', label: '收益率' },
+  { value: 'gain', label: '收益额' },
+];
+
+function CostEditor({ kind, quoteCurrency, quantity, valueIn, value, onChange }: {
+  kind: HoldingKind; quoteCurrency: string; quantity: number; valueIn: ValueIn; value: CostState; onChange: (v: CostState) => void;
 }) {
   const foreign = quoteCurrency && quoteCurrency !== 'JPY' ? quoteCurrency : null;
-  const avgLabel = kind === 'jp_fund' ? '平均取得単価（每 1 万口）' : kind === 'cn_fund' ? '持仓成本价（每份）' : '均价（每股）';
+  const cur = foreign && value.currency === foreign ? foreign : 'JPY';
+  const curLabel = cur === 'JPY' ? '日元' : cur;
+  const placeholder = {
+    total: `买入时一共花了多少（${curLabel}）`,
+    avg: kind === 'jp_fund' ? '平均取得単価（每 1 万口）' : kind === 'cn_fund' ? '持仓成本价（每份）' : `均价（每股，${curLabel}）`,
+    pct: '券商显示的收益率，如 70.76 或 -19.98',
+    gain: `券商显示的收益金额（${curLabel}），亏损填负数`,
+  }[value.mode];
+  const resolved = value.amount.trim() ? resolveCost(value, kind, quantity, quoteCurrency, valueIn) : null;
+  const fmt = (v: number) => (cur === 'JPY' ? formatYen(Math.round(v)) : `${v.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${cur}`);
+  const now = valueIn(cur);
+
   return (
     <Field label="成本（可选，用于计算收益率）">
-      <div className={`grid gap-2 mb-1.5 ${foreign ? 'grid-cols-2' : 'grid-cols-1'}`}>
-        <Segmented
-          options={[{ value: 'total', label: '总投入' }, { value: 'avg', label: '均价' }]}
-          value={value.mode} onChange={(m) => onChange({ ...value, mode: m as CostState['mode'] })}
-        />
+      <div className="space-y-2 mb-1.5">
+        <Segmented options={MODE_OPTIONS} value={value.mode} onChange={(m) => onChange({ ...value, mode: m })} />
         {foreign && (
           <Segmented
-            options={[{ value: 'JPY', label: '日元' }, { value: foreign, label: foreign }]}
-            value={value.currency === foreign ? foreign : 'JPY'} onChange={(cur) => onChange({ ...value, currency: cur })}
+            options={[{ value: 'JPY', label: '按日元' }, { value: foreign, label: `按 ${foreign}` }]}
+            value={cur} onChange={(c) => onChange({ ...value, currency: c })}
           />
         )}
       </div>
       <input
-        className="input font-numeric" inputMode="decimal" value={value.amount} placeholder={value.mode === 'avg' ? avgLabel : '买入时一共花了多少'}
+        className="input font-numeric" inputMode="decimal" value={value.amount} placeholder={placeholder}
         onChange={(e) => onChange({ ...value, amount: e.target.value })}
       />
+      {(value.mode === 'pct' || value.mode === 'gain' || value.mode === 'avg') && resolved && resolved !== 'invalid' && (
+        <p className="text-[12px] text-notion-text-secondary mt-1">
+          → 成本 <span className="font-numeric text-notion-text">{fmt(resolved.total)}</span>
+          {now != null && <span className="text-notion-text-muted">（当前市值 {fmt(now)}）</span>}
+        </p>
+      )}
+      {resolved === 'invalid' && <p className="text-[12px] text-notion-warning mt-1">{now == null && (value.mode === 'pct' || value.mode === 'gain') ? '暂无行情，不能反推成本' : '数值无效'}</p>}
       <p className="text-[11px] text-notion-text-muted mt-1 leading-relaxed">
-        {!foreign || value.currency !== foreign
-          ? '日元成本：收益含汇率变化，和日本券商的「評価損益」一致。'
-          : `${value.currency} 成本：收益率按 ${value.currency} 计算（不含汇率变化），和 moomoo 等外币账户一致。`}
+        {(value.mode === 'pct' || value.mode === 'gain') && '按当前市值反推成本：最好照着券商 App 此刻显示的数字填（行情时点不同会有 1～2% 误差）。'}
+        {cur === 'JPY'
+          ? '日元：收益含汇率变化，和 PayPay 证券等日本券商的「評価損益」一致。'
+          : `${cur}：收益率按 ${cur} 计算（不含汇率变化），和 moomoo 等外币账户一致。`}
       </p>
     </Field>
   );
