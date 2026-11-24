@@ -105,6 +105,30 @@ export function parseYahooJpFundPage(html: string, code: string, today = new Dat
 }
 
 /**
+ * 日本経済新聞 投信页（www.nikkei.com/nkd/fund/?fcode={協会コード}）。
+ * 页面：<link rel="canonical" href="...?fcode={code}"> + 「基準価格(11/20)：</dt><dd ...>42,207<span>円」
+ * 代码不存在时 302 跳到别的页 → canonical 对不上 → 报错。
+ */
+export function parseNikkeiFundPage(html: string, code: string, today = new Date()): ParsedQuote {
+  const canon = html.match(/<link rel="canonical" href="[^"]*fcode=([0-9A-Z]+)"/);
+  if (!canon || canon[1] !== code) throw new Error('找不到该協会コード');
+  const m = html.match(/基準価格\((\d{1,2})\/(\d{1,2})\)：<\/dt>\s*<dd[^>]*>([\d,.]+)</);
+  if (!m) throw new Error('页面里没有基準価格');
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+  let year = today.getFullYear();
+  if (month > today.getMonth() + 1) year -= 1;   // 1 月初看到 12/30 → 去年
+  const h1 = html.match(/<h1 class="m-headlineLarge_text">([^<]+)<\/h1>/);
+  return {
+    price: toNum(m[3]),
+    currency: 'JPY',
+    name: h1 ? h1[1]!.normalize('NFKC').replace(/\s+/g, ' ').trim() : null,
+    priceDate: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    instrumentType: 'FUND',
+  };
+}
+
+/**
  * みんかぶ投資信託（itf.minkabu.jp/fund/{協会コード}）—— Yahoo!ファイナンス 拒绝 Cloudflare 出口（403）时的备用源。
  * 页面：<link rel="canonical" href=".../fund/{code}"> + 「基準価額 <time datetime="YYYY-MM-DD"> … <span class="text-4xl font-bold">42,207</span>」
  */

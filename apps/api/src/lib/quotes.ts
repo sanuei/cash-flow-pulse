@@ -7,7 +7,7 @@
  * - 有持仓的「其他资产」，价值 = 持仓市值合计（全部持仓都有行情时才覆盖）
  */
 import {
-  parseYahooChart, parseYahooJpFundPage, parseMinkabuFundPage, parseEastmoneyNav, fxSymbol, quoteKey, valueHoldings,
+  parseYahooChart, parseYahooJpFundPage, parseNikkeiFundPage, parseMinkabuFundPage, parseEastmoneyNav, fxSymbol, quoteKey, valueHoldings,
   type HoldingKind, type ParsedQuote, type Quote,
 } from '@cfp/shared';
 
@@ -53,19 +53,18 @@ export async function fetchQuote(kind: HoldingKind | 'fx', symbol: string): Prom
       return parseYahooChart(await res.json());
     }
     case 'jp_fund': {
-      // Yahoo!ファイナンス 有时对 Cloudflare 出口返回 403 → 换みんかぶ；两边都失败才报错
-      try {
-        const res = await get(`https://finance.yahoo.co.jp/quote/${encodeURIComponent(symbol)}`);
-        return parseYahooJpFundPage(await res.text(), symbol, jstNow());
-      } catch (e1: any) {
-        if (e1?.message === '找不到该代码') throw e1;
-        try {
-          const res = await get(`https://itf.minkabu.jp/fund/${encodeURIComponent(symbol)}`);
-          return parseMinkabuFundPage(await res.text(), symbol);
-        } catch (e2: any) {
-          throw new Error(`Yahoo: ${e1?.message || e1}；みんかぶ: ${e2?.message || e2}`);
-        }
+      // 依次试：Yahoo!ファイナンス → 日経 → みんかぶ（Yahoo、みんかぶ 会对 Cloudflare 出口返回 403）；全部失败才报错
+      const sources: [string, () => Promise<ParsedQuote>][] = [
+        ['Yahoo', async () => parseYahooJpFundPage(await (await get(`https://finance.yahoo.co.jp/quote/${encodeURIComponent(symbol)}`)).text(), symbol, jstNow())],
+        ['日経', async () => parseNikkeiFundPage(await (await get(`https://www.nikkei.com/nkd/fund/?fcode=${encodeURIComponent(symbol)}`)).text(), symbol, jstNow())],
+        ['みんかぶ', async () => parseMinkabuFundPage(await (await get(`https://itf.minkabu.jp/fund/${encodeURIComponent(symbol)}`)).text(), symbol)],
+      ];
+      const errors: string[] = [];
+      for (const [label, run] of sources) {
+        try { return await run(); }
+        catch (e: any) { errors.push(`${label}: ${e?.message || e}`); }
       }
+      throw new Error(errors.join('；'));
     }
     case 'cn_fund': {
       const res = await get(

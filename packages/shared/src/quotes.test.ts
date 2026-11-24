@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseYahooChart, parseYahooJpFundPage, parseEastmoneyNav, holdingValueJpy, valueHoldings, quoteKey, fxSymbol, holdingReturn, sumReturns, parseMinkabuFundPage } from './quotes';
-import { yahooChartTsla, eastmoneyLsjz018043, yahooJpFund03311187, minkabuFund03311187 } from './__fixtures__/quotes';
+import { parseYahooChart, parseYahooJpFundPage, parseEastmoneyNav, holdingValueJpy, valueHoldings, quoteKey, fxSymbol, holdingReturn, sumReturns, parseMinkabuFundPage, parseNikkeiFundPage } from './quotes';
+import { yahooChartTsla, eastmoneyLsjz018043, yahooJpFund03311187, minkabuFund03311187, nikkeiFund03311187 } from './__fixtures__/quotes';
 
 describe('行情解析（真实响应样本）', () => {
   it('Yahoo chart：价格、币种、名称、日期', () => {
@@ -137,5 +137,18 @@ describe('みんかぶ投信页（Yahoo 403 时的备用源）', () => {
   });
   it('代码与页面不一致 → 报错', () => {
     expect(() => parseMinkabuFundPage(minkabuFund03311187, '0331A211')).toThrow();
+  });
+});
+
+describe('日経投信页（备用源）', () => {
+  it('基準価格、日期、名称', () => {
+    const q = parseNikkeiFundPage(nikkeiFund03311187, '03311187', new Date(2026, 10, 24));
+    expect(q.price).toBe(42207);
+    expect(q.currency).toBe('JPY');
+    expect(q.priceDate).toBe('2026-11-20');
+    expect(q.name).toBe('eMAXIS Slim 米国株式(S&P500)');
+  });
+  it('代码与页面不一致 → 报错', () => {
+    expect(() => parseNikkeiFundPage(nikkeiFund03311187, '0331A211')).toThrow();
   });
 });
