@@ -9,7 +9,7 @@ import { useStore } from '../lib/store';
 
 /**
  * 首页「资产走势」：总资产 = 现金（账户余额）+ 投资（股票/基金/加密）+ 其他（房产等）。
- * 数据来自每天 9:00 / 16:00 / 21:00 统一更新时记录的 asset_history（当天保留最后一次）；开始记录之前的日子只有快照里的现金余额（投资为空）。
+ * 数据来自每天 9:00 / 16:00 / 22:00 统一更新时记录的 asset_history（当天保留最后一次）；开始记录之前的日子只有快照里的现金余额（投资为空）。
  */
 
 type Point = { date: string; cash: number; invest: number | null; other: number | null };

@@ -107,7 +107,7 @@ export function AssetStructureCard() {
       {updatedAt > 0 && (
         <p className="text-[10.5px] text-notion-text-muted mt-3">
           行情更新于 {new Date(updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-          {' '}· 每天 9:00 / 16:00 / 21:00 统一更新
+          {' '}· 每天 9:00 / 16:00 / 22:00 统一更新
         </p>
       )}
     </Card>

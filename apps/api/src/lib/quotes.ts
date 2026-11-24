@@ -2,7 +2,7 @@
  * 行情抓取 + 持仓估值（Worker 端）
  *
  * - 行情按 (kind, symbol) 全局缓存在 quotes 表；同一只股票多个用户只抓一次
- * - 每天 9:00 / 16:00 / 21:00（JST）cron 统一刷新全部行情（同一时刻更新，资产之间时间点一致）
+ * - 每天 9:00 / 16:00 / 22:00（JST）cron 统一刷新全部行情（同一时刻更新，资产之间时间点一致）
  * - 抓取失败保留上次价格，只记录 error，不把资产价值清零
  * - 有持仓的「其他资产」，价值 = 持仓市值合计（全部持仓都有行情时才覆盖）
  */
@@ -231,7 +231,7 @@ export async function revalueAssets(db: D1Database, quotes?: Map<string, Quote>,
 
 /**
  * 记录今天（日本时间）的资产：现金 = 现金账户余额合计；投资 = 股票/基金 + 加密货币；其他 = 房产等。
- * 每次统一更新时覆盖当天这一行，最终保留当天最后一次（21:00）的值。
+ * 每次统一更新时覆盖当天这一行，最终保留当天最后一次（22:00）的值。
  */
 export async function recordAssetHistory(db: D1Database, userId?: string) {
   const date = jstDateStr();

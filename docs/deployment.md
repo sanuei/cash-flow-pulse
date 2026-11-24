@@ -16,7 +16,7 @@
           │             未命中 → index.html    │
           │                                   │
           │  cron 0 15 * * * ──► 每日快照      │
-          │  cron 0 0,7,12 * * * ─► 行情/资产记录 │
+          │  cron 0 0,7,13 * * * ─► 行情/资产记录 │
           └───────────────────────────────────┘
 ```
 
@@ -27,7 +27,7 @@
 | `[assets] directory = "../web/dist"` | Vite 产物作为静态资源一起上传 |
 | `not_found_handling = "single-page-application"` | `/settings`、`/incomes` 等前端路由回退到 `index.html` |
 | `run_worker_first = ["/api/*"]` | `/api/*` 一律交给 Hono。**不能删**，否则 API 请求也会被回退成 `index.html` |
-| `[[d1_databases]]` / `[triggers]` | D1 绑定；cron：每日快照（`0 15 * * *`）、每天 9:00 / 16:00 / 21:00 JST 统一刷新全部股票/基金/汇率行情并记录当天资产（`0 0,7,12 * * *`，UTC） |
+| `[[d1_databases]]` / `[triggers]` | D1 绑定；cron：每日快照（`0 15 * * *`）、每天 9:00 / 16:00 / 22:00 JST 统一刷新全部股票/基金/汇率行情并记录当天资产（`0 0,7,13 * * *`，UTC） |
 
 前端与 API 同源，所以 session cookie 用 `SameSite=Lax`，前端请求不需要 CORS。
 
