@@ -190,10 +190,11 @@ export default {
       ctx.waitUntil(runDailySnapshot(env));
       return;
     }
-    // 每小时：刷新股票/基金行情 → 重算持仓资产价值 → 记录今天的资产（首页资产走势）
+    // 每天 9:00 / 16:00 / 21:00（JST）统一更新：全部行情一起刷新 → 重算持仓资产价值 → 记录今天的资产（首页资产走势）
+    // 所有资产同一时刻更新，时间点一致，不再按「过期时间」各自错开
     ctx.waitUntil((async () => {
       try {
-        const r = await refreshHoldings(env.DB);
+        const r = await refreshHoldings(env.DB, { all: true });
         console.log(`[cron] quotes refreshed: ${r.fetched}`);
       } catch (e) {
         console.error('[cron] quote refresh failed:', e);

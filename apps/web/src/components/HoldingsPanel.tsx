@@ -24,19 +24,19 @@ const KIND_META: Record<HoldingKind, { qtyLabel: string; symbolLabel: string; pl
     qtyLabel: '持有股数（可填小数）',
     symbolLabel: '代码或名称',
     placeholder: '如 Tesla / TSLA / 8306.T / BTC-JPY',
-    hint: '美股填代码（TSLA），日股加 .T（三菱UFJ = 8306.T），比特币填 BTC-JPY。按 Yahoo Finance 行情，每小时更新。',
+    hint: '美股填代码（TSLA），日股加 .T（三菱UFJ = 8306.T），比特币填 BTC-JPY。按 Yahoo Finance 行情，每天 9:00 / 16:00 / 21:00 统一更新。',
   },
   jp_fund: {
     qtyLabel: '保有口数',
     symbolLabel: '協会コード（8 位）',
     placeholder: '如 03311187',
-    hint: '在 Yahoo!ファイナンス 搜基金名，页面标题【】里的 8 位代码就是協会コード。如 eMAXIS Slim米国株式(S&P500) = 03311187。按每 1 万口基準価額计算，每天更新。',
+    hint: '在 Yahoo!ファイナンス 搜基金名，页面标题【】里的 8 位代码就是協会コード。如 eMAXIS Slim米国株式(S&P500) = 03311187。按每 1 万口基準価額计算，每天 9:00 / 16:00 / 21:00 统一更新（净值每天公布一次）。',
   },
   cn_fund: {
     qtyLabel: '持有份额',
     symbolLabel: '基金名称或 6 位代码',
     placeholder: '如 天弘纳斯达克100 / 018043',
-    hint: '支付宝里显示的是金额，份额在基金详情页「持有份额」。按天天基金单位净值（人民币）折算日元，每天更新。',
+    hint: '支付宝里显示的是金额，份额在基金详情页「持有份额」。按天天基金单位净值（人民币）折算日元，每天 9:00 / 16:00 / 21:00 统一更新。',
   },
   manual: {
     qtyLabel: '金额（日元）',
@@ -103,7 +103,7 @@ export function HoldingsPanel({ assetId }: { assetId: string }) {
             {holdings.length > 0
               ? <>合计 <span className="font-numeric text-notion-text-secondary">{formatYen(Math.round(total))}</span>
                   {lastFetched > 0 && <> · 行情更新于 {new Date(lastFetched).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</>}</>
-              : '添加持仓后，这个资产的价值按行情自动计算（股票每小时、基金每天更新）'}
+              : '添加持仓后，这个资产的价值按行情自动计算（每天 9:00 / 16:00 / 21:00 统一更新）'}
           </div>
           {ret.count > 0 && ret.missing === 0 && (
             <div className="text-[11.5px] text-notion-text-muted mt-0.5">持仓收益 <ReturnText gain={ret.gain} pct={ret.pct} /></div>

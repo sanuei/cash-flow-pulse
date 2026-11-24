@@ -2,7 +2,7 @@
  * 行情抓取 + 持仓估值（Worker 端）
  *
  * - 行情按 (kind, symbol) 全局缓存在 quotes 表；同一只股票多个用户只抓一次
- * - 每小时 cron 刷新（股票/汇率 50 分钟过期；基金每天才更新一次净值，3 小时过期）
+ * - 每天 9:00 / 16:00 / 21:00（JST）cron 统一刷新全部行情（同一时刻更新，资产之间时间点一致）
  * - 抓取失败保留上次价格，只记录 error，不把资产价值清零
  * - 有持仓的「其他资产」，价值 = 持仓市值合计（全部持仓都有行情时才覆盖）
  */
@@ -14,7 +14,7 @@ import {
 const UA = 'Mozilla/5.0 (compatible; CashFlowPulse/1.0; +https://cashflow.soniclab.cc)';
 const TIMEOUT_MS = 10_000;
 /** 每次运行最多抓多少个行情（Workers 免费版单次调用 50 个子请求上限，留余量给 D1） */
-const MAX_FETCH_PER_RUN = 35;
+const MAX_FETCH_PER_RUN = 45; // Workers 免费版每次调用最多 50 个外部请求
 
 const SYMBOL_RULES: Record<Exclude<HoldingKind, 'manual'> | 'fx', RegExp> = {
   market: /^[A-Za-z0-9.\-^=]{1,20}$/,
@@ -45,7 +45,8 @@ async function get(url: string, headers: Record<string, string> = {}): Promise<R
 }
 
 /** 抓一个行情（不写库） */
-export async function fetchQuote(kind: HoldingKind | 'fx', symbol: string): Promise<ParsedQuote> {
+export async function fetchQuote(kind: HoldingKind | 'fx', symbol: string, opts: { needName?: boolean } = {}): Promise<ParsedQuote> {
+  const needName = opts.needName ?? true;
   switch (kind) {
     case 'market':
     case 'fx': {
@@ -53,10 +54,10 @@ export async function fetchQuote(kind: HoldingKind | 'fx', symbol: string): Prom
       return parseYahooChart(await res.json());
     }
     case 'jp_fund': {
-      // 依次试：Yahoo!ファイナンス → 日経 → みんかぶ（Yahoo、みんかぶ 会对 Cloudflare 出口返回 403）；全部失败才报错
+      // 依次试：日経 → Yahoo!ファイナンス → みんかぶ（Yahoo、みんかぶ 对 Cloudflare 出口返回 403，日経 放第一个省请求）；全部失败才报错
       const sources: [string, () => Promise<ParsedQuote>][] = [
-        ['Yahoo', async () => parseYahooJpFundPage(await (await get(`https://finance.yahoo.co.jp/quote/${encodeURIComponent(symbol)}`)).text(), symbol, jstNow())],
         ['日経', async () => parseNikkeiFundPage(await (await get(`https://www.nikkei.com/nkd/fund/?fcode=${encodeURIComponent(symbol)}`)).text(), symbol, jstNow())],
+        ['Yahoo', async () => parseYahooJpFundPage(await (await get(`https://finance.yahoo.co.jp/quote/${encodeURIComponent(symbol)}`)).text(), symbol, jstNow())],
         ['みんかぶ', async () => parseMinkabuFundPage(await (await get(`https://itf.minkabu.jp/fund/${encodeURIComponent(symbol)}`)).text(), symbol)],
       ];
       const errors: string[] = [];
@@ -72,7 +73,8 @@ export async function fetchQuote(kind: HoldingKind | 'fx', symbol: string): Prom
         { Referer: 'https://fundf10.eastmoney.com/' },
       );
       const q = parseEastmoneyNav(await res.json());
-      if (!q.name) q.name = (await searchCnFunds(symbol)).find((r) => r.symbol === symbol)?.name ?? null;
+      // 净值接口不带名称：只在第一次（库里还没名称）时额外查一次，省外部请求
+      if (!q.name && needName) q.name = (await searchCnFunds(symbol)).find((r) => r.symbol === symbol)?.name ?? null;
       return q;
     }
     default:
@@ -115,14 +117,12 @@ export function jstDateStr(): string {
   return new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 }
 
-const staleAfter = (kind: string) => (kind === 'jp_fund' || kind === 'cn_fund' ? 3 : 50 / 60) * 3600_000;
-
 /** 抓取并写入一个行情；失败保留旧价格、记录 error。返回写入后的行 */
 export async function upsertQuote(db: D1Database, kind: HoldingKind | 'fx', symbol: string, prev?: Quote): Promise<Quote> {
   const ts = Date.now();
   let row: Quote;
   try {
-    const q = await fetchQuote(kind, symbol);
+    const q = await fetchQuote(kind, symbol, { needName: !prev?.name });
     row = {
       kind, symbol, name: q.name ?? prev?.name ?? null, price: q.price, currency: q.currency, price_date: q.priceDate,
       instrument_type: q.instrumentType ?? prev?.instrument_type ?? null, fetched_at: ts, error: null,
@@ -158,9 +158,11 @@ async function pool<T>(items: T[], limit: number, fn: (t: T) => Promise<unknown>
 
 /**
  * 刷新行情并重算资产价值。
- *   userId 省略 = 全部用户（cron）；force = 忽略过期时间（用户手动点刷新，仍有 2 分钟最小间隔）
+ *   userId 省略 = 全部用户（cron）
+ *   all   = 全部重新抓取（定时统一更新）
+ *   force = 用户手动点刷新：本人全部行情重新抓取，仍有 2 分钟最小间隔
  */
-export async function refreshHoldings(db: D1Database, opts: { userId?: string; force?: boolean } = {}) {
+export async function refreshHoldings(db: D1Database, opts: { userId?: string; force?: boolean; all?: boolean } = {}) {
   const now = Date.now();
   const holdingRows = await (opts.userId
     ? db.prepare("SELECT DISTINCT kind, symbol FROM holdings WHERE user_id = ? AND kind != 'manual'").bind(opts.userId)
@@ -170,9 +172,8 @@ export async function refreshHoldings(db: D1Database, opts: { userId?: string; f
 
   const isDue = (kind: string, symbol: string) => {
     const q = quotes.get(quoteKey(kind, symbol));
-    if (!q) return true;
-    const age = now - q.fetched_at;
-    return opts.force ? age > 2 * 60_000 : age > staleAfter(kind);
+    if (!q || opts.all) return true;
+    return now - q.fetched_at > 2 * 60_000;   // 手动刷新：2 分钟内刚抓过的不重复抓
   };
 
   // 1) 持仓行情（最久没更新的优先）
@@ -230,7 +231,7 @@ export async function revalueAssets(db: D1Database, quotes?: Map<string, Quote>,
 
 /**
  * 记录今天（日本时间）的资产：现金 = 现金账户余额合计；投资 = 股票/基金 + 加密货币；其他 = 房产等。
- * 每小时覆盖当天这一行，最终保留当天最后一次的值。
+ * 每次统一更新时覆盖当天这一行，最终保留当天最后一次（21:00）的值。
  */
 export async function recordAssetHistory(db: D1Database, userId?: string) {
   const date = jstDateStr();

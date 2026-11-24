@@ -54,6 +54,9 @@ export function AssetStructureCard() {
     [holdings, quotes, fx],
   );
 
+  // 行情统一更新时间（所有行情同一时刻刷新，取最近一次）
+  const updatedAt = quotes.reduce((m, q) => Math.max(m, q.fetched_at ?? 0), 0);
+
   if (st.total <= 0) return null;
   const investPct = Math.round((st.invest / st.total) * 1000) / 10;
 
@@ -101,6 +104,12 @@ export function AssetStructureCard() {
         </>
       )}
       {tab === 'top' && <TopView top={st.top} />}
+      {updatedAt > 0 && (
+        <p className="text-[10.5px] text-notion-text-muted mt-3">
+          行情更新于 {new Date(updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          {' '}· 每天 9:00 / 16:00 / 21:00 统一更新
+        </p>
+      )}
     </Card>
   );
 }
