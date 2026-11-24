@@ -104,6 +104,25 @@ export function parseYahooJpFundPage(html: string, code: string, today = new Dat
   };
 }
 
+/**
+ * みんかぶ投資信託（itf.minkabu.jp/fund/{協会コード}）—— Yahoo!ファイナンス 拒绝 Cloudflare 出口（403）时的备用源。
+ * 页面：<link rel="canonical" href=".../fund/{code}"> + 「基準価額 <time datetime="YYYY-MM-DD"> … <span class="text-4xl font-bold">42,207</span>」
+ */
+export function parseMinkabuFundPage(html: string, code: string): ParsedQuote {
+  const canon = html.match(/<link rel="canonical" href="[^"]*\/fund\/([0-9A-Z]+)"/);
+  if (!canon || canon[1] !== code) throw new Error('找不到该協会コード');
+  const m = html.match(/基準価額<\/p>\s*<p>\s*<time datetime="(\d{4}-\d{2}-\d{2})">[\s\S]*?<span class="text-4xl font-bold">([\d,.]+)<\/span>/);
+  if (!m) throw new Error('页面里没有基準価額');
+  const h1 = html.match(/<h1[^>]*>([^<]+)<\/h1>/);
+  return {
+    price: toNum(m[2]),
+    currency: 'JPY',
+    name: h1 ? h1[1]!.normalize('NFKC').trim() : null,   // 全角 → 半角（ｅＭＡＸＩＳ → eMAXIS）
+    priceDate: m[1]!,
+    instrumentType: 'FUND',
+  };
+}
+
 /** 东方财富历史净值（api.fund.eastmoney.com/f10/lsjz?fundCode=…&pageSize=1）：最新一条的单位净值 */
 export function parseEastmoneyNav(json: any): ParsedQuote {
   const row = json?.Data?.LSJZList?.[0];

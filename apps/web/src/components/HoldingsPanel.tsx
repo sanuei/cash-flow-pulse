@@ -105,10 +105,12 @@ export function HoldingsPanel({ assetId }: { assetId: string }) {
                   {lastFetched > 0 && <> · 行情更新于 {new Date(lastFetched).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</>}</>
               : '添加持仓后，这个资产的价值按行情自动计算（股票每小时、基金每天更新）'}
           </div>
-          {ret.count > 0 && (
+          {ret.count > 0 && ret.missing === 0 && (
+            <div className="text-[11.5px] text-notion-text-muted mt-0.5">持仓收益 <ReturnText gain={ret.gain} pct={ret.pct} /></div>
+          )}
+          {ret.missing > 0 && (
             <div className="text-[11.5px] text-notion-text-muted mt-0.5">
-              持仓收益 <ReturnText gain={ret.gain} pct={ret.pct} />
-              {ret.missing > 0 && <> · {ret.missing} 个未填成本</>}
+              合计收益：还差 {ret.missing} 个持仓的成本（点持仓上的「填成本」）
             </div>
           )}
         </div>

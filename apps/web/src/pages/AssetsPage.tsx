@@ -217,12 +217,12 @@ export function AssetsPage() {
                     {formatYen(otherAssets.reduce((s, a) => s + a.value, 0))}
                   </span>
                 </div>
-                {r.count > 0 && (
+                {r.count + r.missing > 0 && (
                   <div className="flex items-center justify-between text-[11.5px]">
-                    <span className="text-notion-text-muted">
-                      持仓收益{r.missing > 0 ? `（${r.missing} 个持仓未填成本，未计入）` : ''}
-                    </span>
-                    <ReturnText gain={r.gain} pct={r.pct} />
+                    <span className="text-notion-text-muted">持仓收益</span>
+                    {r.missing === 0
+                      ? <ReturnText gain={r.gain} pct={r.pct} />
+                      : <span className="text-notion-text-muted">还有 {r.missing} 个持仓没填成本，填完后显示</span>}
                   </div>
                 )}
               </div>
@@ -239,8 +239,7 @@ export function AssetsPage() {
               title={a.name}
               subtitle={(() => {
                 const n = holdings.filter((h) => h.asset_id === a.id).length;
-                const miss = n > 0 ? assetReturn(a.id).missing : 0;
-                const auto = n > 0 ? ` · ${n} 个持仓 · 自动估值${miss > 0 ? ` · ${miss} 个未填成本` : ''}` : (a.category === 'stock' || a.category === 'crypto') ? ' · 编辑可添加持仓自动估值' : '';
+                const auto = n > 0 ? ` · ${n} 个持仓 · 自动估值` : (a.category === 'stock' || a.category === 'crypto') ? ' · 编辑可添加持仓自动估值' : '';
                 return `${CATEGORY_LABEL[a.category]}${auto}${a.note ? ' · ' + a.note : ''}`;
               })()}
               money={(() => {
@@ -248,7 +247,11 @@ export function AssetsPage() {
                 return (
                   <div>
                     <Money amount={a.value} size="md" sign="neutral" />
-                    {r.count > 0 && <div className="text-[11px] mt-0.5"><ReturnText gain={r.gain} pct={r.pct} /></div>}
+                    {/* 合计收益只在所有持仓都填了成本时显示，否则数字只代表一部分持仓，容易误读 */}
+                    {r.count > 0 && r.missing === 0 && <div className="text-[11px] mt-0.5"><ReturnText gain={r.gain} pct={r.pct} /></div>}
+                    {r.missing > 0 && r.count + r.missing > 0 && (
+                      <div className="text-[11px] mt-0.5 text-notion-text-muted">收益：还差 {r.missing} 个成本</div>
+                    )}
                   </div>
                 );
               })()}

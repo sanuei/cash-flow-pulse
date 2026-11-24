@@ -88,7 +88,8 @@ export function AssetStructureCard() {
         </div>
         <div className="text-right text-[12px] text-notion-text-muted">
           <div>投资 <span className="font-numeric text-notion-text-secondary">{formatYen(st.invest)}</span>（{investPct}%）</div>
-          {ret.count > 0 && <div className="mt-0.5">持仓收益 <ReturnText gain={ret.gain} pct={ret.pct} /></div>}
+          {ret.count > 0 && ret.missing === 0 && <div className="mt-0.5">持仓收益 <ReturnText gain={ret.gain} pct={ret.pct} /></div>}
+          {ret.missing > 0 && <div className="mt-0.5">持仓收益：还差 {ret.missing} 个成本</div>}
         </div>
       </div>
 
